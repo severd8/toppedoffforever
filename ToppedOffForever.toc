@@ -3,7 +3,7 @@
 ## Notes: Reminds you when a buff, weapon enhancement, reagent, ammo or durability runs low. Click the icon to fix it.
 ## Author: Tyler
 ## Version: @project-version@
-## IconTexture: Interface\Icons\INV_Misc_Bag_08
+## IconTexture: Interface\AddOns\ToppedOffForever\Media\Icon
 ## SavedVariables: ToppedOffForeverDB
 ## SavedVariablesPerCharacter: ToppedOffForeverCharDB
 ## X-License: MIT

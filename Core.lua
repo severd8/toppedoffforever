@@ -8,8 +8,18 @@ local TO = {}
 ns.TO = TO
 _G.ToppedOffForever = TO
 
-local PREFIX = "|cff33ccffToppedOff|r: "
-local function Print(msg) print(PREFIX .. msg) end
+-- Colors from the logo: gold ring, deep navy, dark purple, crimson banner, cyan drop
+TO.COLORS = {
+    gold      = { 1.00, 0.85, 0.40 },   -- #ffd966 text
+    goldDark  = { 0.85, 0.65, 0.19 },   -- #d9a531 borders
+    navy      = { 0.06, 0.14, 0.23 },   -- #10243a panels
+    purple    = { 0.07, 0.05, 0.11 },   -- #120d1c window background
+    crimson   = { 0.55, 0.12, 0.12 },   -- #8b1e1e title banner
+    cyan      = { 0.16, 0.71, 0.91 },   -- #28b6e8 highlights
+}
+TO.GOLD_HEX, TO.CYAN_HEX = "ffd966", "28b6e8"
+local PREFIX = "|cffffd966ToppedOff|r: "
+local function Print(msg) print((TO.LOGO_TEXT or "") .. " " .. PREFIX .. msg) end
 TO.Print = Print
 
 -- Forever hands some values to addons as "secret". Comparing, doing math on or
@@ -155,8 +165,10 @@ TO.ICONS = {
     durability = "Interface\\Icons\\Trade_BlackSmithing",
     ammo = "Interface\\Icons\\INV_Ammo_Arrow_02",
     unknown = "Interface\\Icons\\INV_Misc_QuestionMark",
-    addon = "Interface\\Icons\\INV_Misc_Bag_08",
+    addon = "Interface\\AddOns\\ToppedOffForever\\Media\\Icon",   -- the ToppedOff logo
 }
+-- Logo as inline chat/tooltip text
+TO.LOGO_TEXT = "|T" .. TO.ICONS.addon .. ":0|t"
 
 ---------------------------------------------------------------------------
 -- Saved variables
@@ -622,13 +634,44 @@ function TO:BuildReminders()
 end
 
 ---------------------------------------------------------------------------
+-- Skin helpers (plain textures, so they work without Backdrop templates)
+---------------------------------------------------------------------------
+function TO:AddBorder(f, color, size)
+    size = size or 1
+    local edges = {
+        { "TOPLEFT", "TOPRIGHT", nil, size },
+        { "BOTTOMLEFT", "BOTTOMRIGHT", nil, size },
+        { "TOPLEFT", "BOTTOMLEFT", size, nil },
+        { "TOPRIGHT", "BOTTOMRIGHT", size, nil },
+    }
+    f.borders = {}
+    for _, e in ipairs(edges) do
+        local t = f:CreateTexture(nil, "BORDER")
+        t:SetColorTexture(color[1], color[2], color[3], 1)
+        t:SetPoint(e[1])
+        t:SetPoint(e[2])
+        if e[3] then t:SetWidth(e[3]) else t:SetHeight(e[4]) end
+        table.insert(f.borders, t)
+    end
+end
+
+-- Fills a frame with a color and gives it a border
+function TO:SkinFrame(f, bg, border, alpha, size)
+    local t = f:CreateTexture(nil, "BACKGROUND")
+    t:SetAllPoints()
+    t:SetColorTexture(bg[1], bg[2], bg[3], alpha or 0.95)
+    f.skinBg = t
+    self:AddBorder(f, border or self.COLORS.goldDark, size or 2)
+end
+
+---------------------------------------------------------------------------
 -- Reminder icons
 ---------------------------------------------------------------------------
 local function Button_OnEnter(self)
     local r = self.reminder
     if not r then return end
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:AddLine(r.label)
+    GameTooltip:AddLine(r.label, unpack(TO.COLORS.gold))
     if r.detail then GameTooltip:AddLine(r.detail, 1, 1, 1, true) end
     if r.action and r.action.spell then
         GameTooltip:AddLine("Click to cast " .. r.action.spell, 0.4, 1, 0.4)
@@ -648,7 +691,8 @@ function TO:CreateButton(i)
     b.border = b:CreateTexture(nil, "BACKGROUND")
     b.border:SetPoint("TOPLEFT", -1, 1)
     b.border:SetPoint("BOTTOMRIGHT", 1, -1)
-    b.border:SetColorTexture(0, 0, 0, 1)
+    local gd = self.COLORS.goldDark
+    b.border:SetColorTexture(gd[1], gd[2], gd[3], 1)
     b.text = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     b.text:SetPoint("BOTTOMRIGHT", -1, 2)
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
@@ -796,10 +840,17 @@ function TO:BuildFrames()
     mover:RegisterForDrag("LeftButton")
     mover.bg = mover:CreateTexture(nil, "BACKGROUND")
     mover.bg:SetAllPoints()
-    mover.bg:SetColorTexture(0.2, 0.8, 1, 0.25)
+    local cy = self.COLORS.cyan
+    mover.bg:SetColorTexture(cy[1], cy[2], cy[3], 0.25)
+    self:AddBorder(mover, self.COLORS.goldDark, 1)
     mover.text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    mover.text:SetPoint("TOP", 0, -3)
+    mover.text:SetPoint("TOP", 7, -3)
     mover.text:SetText("ToppedOff")
+    mover.text:SetTextColor(unpack(self.COLORS.gold))
+    mover.logo = mover:CreateTexture(nil, "OVERLAY")
+    mover.logo:SetSize(14, 14)
+    mover.logo:SetPoint("RIGHT", mover.text, "LEFT", -2, 0)
+    mover.logo:SetTexture(self.ICONS.addon)
     mover:SetScript("OnDragStart", function()
         if InCombatLockdown() then return end
         main:StartMoving()
@@ -813,7 +864,7 @@ function TO:BuildFrames()
     end)
     mover:SetScript("OnEnter", function(f)
         GameTooltip:SetOwner(f, "ANCHOR_TOP")
-        GameTooltip:AddLine("ToppedOff Forever")
+        GameTooltip:AddLine(TO.LOGO_TEXT .. " ToppedOff Forever")
         GameTooltip:AddLine("Drag to move", 1, 1, 1)
         GameTooltip:AddLine("Right-click for options", 1, 1, 1)
         GameTooltip:AddLine("Lock it in the options or with /topoff lock", 1, 1, 1)
@@ -858,9 +909,9 @@ function TO:BuildMinimapButton()
     b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
     local icon = b:CreateTexture(nil, "BACKGROUND")
-    icon:SetSize(20, 20)
+    icon:SetSize(22, 22)
     icon:SetTexture(self.ICONS.addon)
-    icon:SetPoint("TOPLEFT", 7, -5)
+    icon:SetPoint("TOPLEFT", 5, -4)
 
     local border = b:CreateTexture(nil, "OVERLAY")
     border:SetSize(53, 53)
@@ -883,7 +934,7 @@ function TO:BuildMinimapButton()
     b:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:AddLine("ToppedOff Forever")
+        GameTooltip:AddLine(TO.LOGO_TEXT .. " ToppedOff Forever")
         GameTooltip:AddLine("Left-click: options", 1, 1, 1)
         GameTooltip:AddLine("Right-click: show/hide reminders", 1, 1, 1)
         GameTooltip:AddLine("Drag: move this button", 1, 1, 1)
@@ -1098,7 +1149,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_LOGIN" then
         TO:ScanSpellbook()
         TO:RunOutOfCombat(function() TO:BuildFrames() end)
-        print("|cff33ccffToppedOff Forever|r loaded. Type /topoff for options.")
+        print(TO.LOGO_TEXT .. " |cffffd966ToppedOff Forever|r loaded. Type /topoff for options.")
     elseif event == "PLAYER_REGEN_ENABLED" then
         TO:FlushPending()
         TO:RequestUpdate()

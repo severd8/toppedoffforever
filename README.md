@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/severd8/toppedoffforever/main/art/logo.png" width="160" alt="ToppedOff Forever logo"></p>
+
 # ToppedOff Forever
 
 **Never pull with a missing buff, empty reagents or a bare weapon again.**

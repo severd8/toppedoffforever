@@ -293,6 +293,10 @@ mm.__scripts.OnEnter(mm)
 TO.db.minimap = false TO:ApplySettings()
 assertEq(mm.__shown, false, "minimap button hidden")
 
+assert(TO.config.logo.__texture:find("Media\\Icon"), "options window shows the logo")
+assert(TO.mover.logo.__texture:find("Media\\Icon"), "mover shows the logo")
+assert(lastLog("Media\\Icon"), "chat lines carry the logo")
+
 step("tooltips")
 TO.db.shown = true TO:ApplySettings()
 for _, b in ipairs(TO.buttons) do if b.reminder then b.__scripts.OnEnter(b) end end

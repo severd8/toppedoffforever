@@ -19,6 +19,13 @@ local function Label(parent, text, x, y, template)
     return fs
 end
 
+-- Section heading in the logo's gold
+local function Heading(parent, text, x, y)
+    local fs = Label(parent, text, x, y, "GameFontNormal")
+    fs:SetTextColor(unpack(TO.COLORS.gold))
+    return fs
+end
+
 local function CheckBox(parent, text, x, y, getter, setter, tip)
     local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     cb:SetSize(24, 24)
@@ -69,7 +76,8 @@ local function Slider(parent, text, x, y, key, min, max, suffix)
         s:SetBackdrop(BACKDROP_SLIDER_8_8)
     else
         local track = s:CreateTexture(nil, "BACKGROUND")
-        track:SetColorTexture(0, 0, 0, 0.6)
+        local n = TO.COLORS.navy
+        track:SetColorTexture(n[1], n[2], n[3], 1)
         track:SetHeight(6)
         track:SetPoint("LEFT")
         track:SetPoint("RIGHT")
@@ -81,7 +89,7 @@ local function Slider(parent, text, x, y, key, min, max, suffix)
 
     s:SetScript("OnValueChanged", function(_, v)
         v = math.floor(v + 0.5)
-        title:SetText(text .. ": |cffffd100" .. v .. suffix .. "|r")
+        title:SetText(text .. ": |cff" .. TO.GOLD_HEX .. v .. suffix .. "|r")
         if TO.db[key] ~= v then
             TO.db[key] = v
             TO:ApplySettings()
@@ -89,7 +97,7 @@ local function Slider(parent, text, x, y, key, min, max, suffix)
     end)
     AddRefresher(function()
         s:SetValue(TO.db[key])
-        title:SetText(text .. ": |cffffd100" .. TO.db[key] .. suffix .. "|r")
+        title:SetText(text .. ": |cff" .. TO.GOLD_HEX .. TO.db[key] .. suffix .. "|r")
     end)
     return s
 end
@@ -159,7 +167,7 @@ function TO:BuildChecksList()
 
     local function header(text)
         y = y - 6
-        Label(c, text, 0, y, "GameFontNormal")
+        Heading(c, text, 0, y)
         y = y - 20
     end
     local function note(text)
@@ -291,8 +299,9 @@ end
 -- Window
 ---------------------------------------------------------------------------
 function TO:BuildConfig()
-    local f = CreateFrame("Frame", "ToppedOffForeverOptions", UIParent, "BasicFrameTemplateWithInset")
-    f:SetSize(620, 470)
+    local f = CreateFrame("Frame", "ToppedOffForeverOptions", UIParent)
+    f:SetSize(620, 484)
+    TO:SkinFrame(f, TO.COLORS.purple, TO.COLORS.goldDark, 0.96, 2)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetMovable(true)
@@ -304,18 +313,37 @@ function TO:BuildConfig()
     f:Hide()
     table.insert(UISpecialFrames, "ToppedOffForeverOptions")   -- Escape closes it
 
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    title:SetPoint("TOP", 0, -6)
+    -- Crimson title banner with gold edges, like the logo's ribbon
+    local banner = CreateFrame("Frame", nil, f)
+    banner:SetPoint("TOPLEFT", 2, -2)
+    banner:SetPoint("TOPRIGHT", -2, -2)
+    banner:SetHeight(28)
+    TO:SkinFrame(banner, TO.COLORS.crimson, TO.COLORS.goldDark, 1, 1)
+    local title = banner:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("CENTER")
     title:SetText("ToppedOff Forever")
+    title:SetTextColor(unpack(TO.COLORS.gold))
+    f.banner = banner
+
+    local close = CreateFrame("Button", nil, banner, "UIPanelCloseButton")
+    close:SetPoint("RIGHT", 2, 0)
+    close:SetScript("OnClick", function() f:Hide() end)
     self.config = f
 
+    -- Logo in the top-left corner
+    local logo = f:CreateTexture(nil, "OVERLAY")
+    logo:SetSize(60, 60)
+    logo:SetPoint("TOPLEFT", -18, 18)
+    logo:SetTexture(TO.ICONS.addon)
+    f.logo = logo
+
     -- Left column: display
-    local x, y = 16, -34
-    Label(f, "Display", x, y, "GameFontNormal")
+    local x, y = 16, -46
+    Heading(f, "Display", x + 30, y)
     y = y - 22
     SettingCheck(f, "Show reminders", x, y, "shown")
     y = y - 24
-    SettingCheck(f, "Lock position", x, y, "locked", "Unlock to drag the reminders with the blue box.")
+    SettingCheck(f, "Lock position", x, y, "locked", "Unlock to drag the reminders with the highlighted box.")
     y = y - 24
     SettingCheck(f, "Hide in combat", x, y, "hideInCombat",
         "Reminders can only change out of combat, so hiding them in combat keeps things tidy.")
@@ -330,7 +358,7 @@ function TO:BuildConfig()
     y = y - 46
     Slider(f, "Durability warning below", x + 4, y, "durabilityPct", 5, 75, "%")
     y = y - 44
-    Label(f, "Chat reminders", x, y, "GameFontNormal")
+    Heading(f, "Chat reminders", x, y)
     y = y - 22
     SettingCheck(f, "On ready check", x, y, "readyCheck", "Lists anything missing in chat when a ready check starts.")
     y = y - 24
@@ -344,10 +372,15 @@ function TO:BuildConfig()
     PanelButton(f, "Check spells", 110, x + 126, y, function() TO:Check() end)
 
     -- Right column: checks
-    Label(f, "What to check (this character)", 262, -34, "GameFontNormal")
+    Heading(f, "What to check (this character)", 262, -46)
+    -- Navy panel behind the checks list
+    local panel = CreateFrame("Frame", nil, f)
+    panel:SetPoint("TOPLEFT", 252, -66)
+    panel:SetPoint("BOTTOMRIGHT", -8, 8)
+    TO:SkinFrame(panel, TO.COLORS.navy, TO.COLORS.goldDark, 0.9, 1)
     local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 258, -56)
-    scroll:SetPoint("BOTTOMRIGHT", -32, 12)
+    scroll:SetPoint("TOPLEFT", 258, -72)
+    scroll:SetPoint("BOTTOMRIGHT", -30, 12)
     local child = CreateFrame("Frame", nil, scroll)
     child:SetSize(330, 10)
     scroll:SetScrollChild(child)

@@ -11,3 +11,4 @@ ignore:
   - .github
   - tests
   - DEVNOTES.md
+  - art
