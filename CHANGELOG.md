@@ -4,6 +4,7 @@
 - Fixed: clicking a reminder icon did nothing while the reminders were unlocked. The drag box covered the icons.
 - New: a "ToppedOff" header bar above the icons, in the logo's colors. Drag it to move the icons while unlocked; right-click it for options. Turn it off with "Show header with reminders".
 - Icons are a bit bigger by default (40 instead of 36), and their counts and timers are centered so they fit.
+- Options window: the logo is no longer hidden behind the title bar, and crowded rows are tidied up.
 - Author name is now severd8.
 
 ## 1.0.0 — Initial release

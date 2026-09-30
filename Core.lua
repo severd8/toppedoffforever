@@ -128,7 +128,7 @@ TO.CLASS_REAGENTS = {
         { id = "feather", label = "Light Feather", items = { "Light Feather" }, min = 5, requires = { "Levitate" } },
     },
     DRUID = {
-        { id = "gotw", label = "Gift of the Wild reagent", items = { "Wild Thornroot", "Wild Berries" }, min = 10,
+        { id = "gotw", label = "Gift of the Wild herbs", items = { "Wild Thornroot", "Wild Berries" }, min = 10,
           requires = { "Gift of the Wild" } },
         { id = "seed", label = "Rebirth seed", items = { "Ironwood Seed", "Hornbeam Seed", "Ashwood Seed",
           "Stranglethorn Seed", "Maple Seed" }, min = 2, requires = { "Rebirth" } },

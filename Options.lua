@@ -221,7 +221,7 @@ function TO:BuildChecksList()
             end)
             y = y - ROW
         end
-        note("Item to use, e.g. Wizard Oil or Sharpening Stone. Blank = off.")
+        note("Item to use, like Wizard Oil. Blank = off.")
     end
 
     -- Reagents
@@ -229,7 +229,7 @@ function TO:BuildChecksList()
     local showAmmo = self.AMMO_CLASSES[class] or class == "WARRIOR" or class == "ROGUE"
     header("Reagents and ammo")
     local function minBox(id, default)
-        EditBox(c, 40, 280, y - 2, tostring(TO:ReagentMin(id, default)), true, function(text)
+        EditBox(c, 40, 288, y - 2, tostring(TO:ReagentMin(id, default)), true, function(text)
             local n = tonumber(text)
             if n and n >= 0 then TO.char.mins[id] = math.floor(n) TO:RequestUpdate() end
         end)
@@ -238,7 +238,7 @@ function TO:BuildChecksList()
         local id = "reagent:" .. rg.id
         local cb = toggle(id, rg.label, true)
         if not self:FirstKnown(rg.requires) then
-            cb.label:SetText(rg.label .. " |cff808080(spell not learned)|r")
+            cb.label:SetText(rg.label .. " |cff808080(not learned)|r")
         end
         minBox(id, rg.min)
         y = y - ROW
@@ -331,7 +331,11 @@ function TO:BuildConfig()
     self.config = f
 
     -- Logo in the top-left corner
-    local logo = f:CreateTexture(nil, "OVERLAY")
+    -- Its own frame, drawn above the title banner so the banner doesn't cover it
+    local logoFrame = CreateFrame("Frame", nil, f)
+    logoFrame:SetAllPoints(f)
+    logoFrame:SetFrameLevel(banner:GetFrameLevel() + 5)
+    local logo = logoFrame:CreateTexture(nil, "OVERLAY")
     logo:SetSize(60, 60)
     logo:SetPoint("TOPLEFT", -18, 18)
     logo:SetTexture(TO.ICONS.addon)

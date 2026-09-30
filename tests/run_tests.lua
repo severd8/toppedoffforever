@@ -304,6 +304,7 @@ mm.__scripts.OnEnter(mm)
 TO.db.minimap = false TO:ApplySettings()
 assertEq(mm.__shown, false, "minimap button hidden")
 
+assert(TO.config.logo.__parent ~= TO.config, "logo sits in its own frame above the banner")
 assert(TO.config.logo.__texture:find("Media\\Icon"), "options window shows the logo")
 assert(TO.header.logo.__texture:find("Media\\Icon"), "header shows the logo")
 assert(lastLog("Media\\Icon"), "chat lines carry the logo")
