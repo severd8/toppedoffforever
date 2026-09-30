@@ -1,3 +1,14 @@
+## 1.4.0
+
+- New: **party buffs**. See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild or Divine Spirit, and click to buff the next one in range.
+- New: **elixirs and flasks**. Tick the ones in your bags to be reminded when the buff is missing or running out. Click to drink. Dungeons and raids only by default.
+- New: **pet reminders**. Hunters and Warlocks see when their pet isn't out or is dead (click to call, revive or summon; pick your demon). Hunters also see when their pet isn't happy: set a pet food and one click feeds it, with a reminder when the food runs low. Not shown while mounted or resting in town.
+- New: **Soulstone** (Warlocks). Reminds you when nobody in the group has one. Click to put yours on the healer, or make one. Dungeons and raids only by default.
+- New: **bag space**. Warns when you have fewer than 3 free bag slots. Click to open your bags.
+- New: **poison charges** (Rogues). Warns when a poison drops below 10 charges.
+- New: **Icons per row** setting (default 8). Long rows wrap instead of stretching the frame.
+- The options window is reorganized into three tabs: **Buffs**, **Supplies**, and **Pet & gear**, with aligned Min columns and small X buttons to remove your own items.
+
 ## 1.3.0
 
 - New: **Well Fed reminder**. Shows when your stat food buff is missing or running out (orange, then red, like other buffs). Click it to eat your stat food. Not shown while you're eating. On by default in dungeons and raids only; change it under "Stat food buff" in the options.

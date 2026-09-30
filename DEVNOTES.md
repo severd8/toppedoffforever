@@ -50,6 +50,8 @@ Run from the repo root before every commit:
 
 It loads the addon against the fake WoW API and covers every class's checks, buffs missing/expiring, group buffs, preferred spells, reagents, custom items, weapon items and spells, shields skipped, ammo, durability, combat lockdown (fails if a protected frame is touched in combat), visibility, instance-only mode, chat reminders, secret-value mode, slash commands, the options window, minimap button and tooltips. Add a scenario to `tests/run_tests.lua` for any new feature. The stub can't detect truth-tests on secret values, so review those by hand.
 
+Visual check of the layout: `lua5.1 tests/render.lua out.json && python3 tests/render.py out.json outdir` draws the reminder frame and every options tab (for several classes) as PNG images. It's an approximation of the game's look (plain colors instead of icons) for catching overlaps, alignment and text running past the edge. Needs Python with Pillow.
+
 Only testable in game: Forever's exact spell and item names, real clicking of the secure icons, the weapon-enhancement replace prompt, and Forever's exact secret-value rules.
 
 ## Releasing

@@ -54,21 +54,21 @@ end
 TO.CLASS_BUFFS = {
     MAGE = {
         { id = "intellect", label = "Arcane Intellect", cast = { "Arcane Intellect" },
-          auras = { "Arcane Intellect", "Arcane Brilliance" } },
+          auras = { "Arcane Intellect", "Arcane Brilliance" }, party = true },
         { id = "armor", label = "Armor", cast = { "Ice Armor", "Frost Armor", "Mage Armor" } },
     },
     PRIEST = {
         { id = "fortitude", label = "Power Word: Fortitude", cast = { "Power Word: Fortitude" },
-          auras = { "Power Word: Fortitude", "Prayer of Fortitude" } },
+          auras = { "Power Word: Fortitude", "Prayer of Fortitude" }, party = true },
         { id = "innerfire", label = "Inner Fire", cast = { "Inner Fire" } },
         { id = "spirit", label = "Divine Spirit", cast = { "Divine Spirit" },
-          auras = { "Divine Spirit", "Prayer of Spirit" } },
+          auras = { "Divine Spirit", "Prayer of Spirit" }, party = true },
         { id = "shadowprot", label = "Shadow Protection", cast = { "Shadow Protection" },
-          auras = { "Shadow Protection", "Prayer of Shadow Protection" }, off = true },
+          auras = { "Shadow Protection", "Prayer of Shadow Protection" }, off = true, party = true },
     },
     DRUID = {
         { id = "motw", label = "Mark of the Wild", cast = { "Mark of the Wild" },
-          auras = { "Mark of the Wild", "Gift of the Wild" } },
+          auras = { "Mark of the Wild", "Gift of the Wild" }, party = true },
         { id = "thorns", label = "Thorns", cast = { "Thorns" } },
         { id = "omen", label = "Omen of Clarity", cast = { "Omen of Clarity" } },
     },
@@ -168,6 +168,10 @@ TO.ICONS = {
     ammo = "Interface\\Icons\\INV_Ammo_Arrow_02",
     unknown = "Interface\\Icons\\INV_Misc_QuestionMark",
     wellFed = "Interface\\Icons\\Spell_Misc_Food",
+    bags = "Interface\\Icons\\INV_Misc_Bag_08",
+    pet = "Interface\\Icons\\Ability_Hunter_BeastCall",
+    happy = "Interface\\Icons\\Ability_Hunter_BeastTraining",
+    soulstone = "Interface\\Icons\\Spell_Shadow_SoulGem",
     addon = "Interface\\AddOns\\ToppedOffForever\\Media\\Icon",   -- the ToppedOff logo
 }
 -- Logo as inline chat/tooltip text
@@ -185,6 +189,7 @@ local DEFAULTS = {            -- account-wide: display
     onlyInInstance = false,
     warnMinutes = 3,
     durabilityPct = 25,
+    iconsPerRow = 8,
     readyCheck = true,
     instanceReminder = true,
     sound = false,
@@ -203,6 +208,10 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     auto = {},                -- auto-tracked best items: slot -> { name, id, score, min }
     statFocus = nil,          -- stat food override ("str", "agi", ...); nil = class default
     wellFedInstanceOnly = true, -- Well Fed reminder only in dungeons and raids
+    elixirs = {},             -- tracked elixirs/flasks: { name = , auras = { ... } }
+    elixirInstanceOnly = true,
+    soulstoneInstanceOnly = true,
+    petFood = "",             -- Hunter pet food item name ("" = not set)
 }
 
 local function FillDefaults(dst, src)
@@ -317,6 +326,27 @@ function TO:KnownOptions(list)
 end
 
 -- Your buffs, keyed by lowercase name -> seconds left (0 = doesn't expire)
+-- Buff names on any unit (lowercase -> seconds left). nil if the game hides them.
+function TO:UnitBuffs(unit)
+    local buffs = {}
+    local now = GetTime()
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+    for i = 1, 40 do
+        local a = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        if a == nil then break end
+        if IsSecret(a) or type(a) ~= "table" then return nil end
+        local name = a.name
+        if IsSecret(name) then return nil end
+        name = Str(name)
+        if name then
+            local left, exp = 0, Num(a.expirationTime)
+            if exp and exp > 0 then left = math.max(0, exp - now) end
+            buffs[name:lower()] = left
+        end
+    end
+    return buffs
+end
+
 function TO:ScanBuffs()
     local buffs = {}
     local now = GetTime()
@@ -507,17 +537,21 @@ end
 
 function TO:CheckWeapons(list)
     local cfg = self:WeaponConfig()
-    local hasMH, mhExp, _, _, hasOH, ohExp = GetWeaponEnchantInfo()
+    local hasMH, mhExp, mhCharges, _, hasOH, ohExp, ohCharges = GetWeaponEnchantInfo()
+    local minCharges = self:ReagentMin("charges", self.CHARGES_DEFAULT_MIN)
     local warn = self.db.warnMinutes * 60
     local hands = {
-        { key = "mh", slot = 16, label = "Main hand", has = hasMH, exp = mhExp },
-        { key = "oh", slot = 17, label = "Off hand", has = hasOH, exp = ohExp },
+        { key = "mh", slot = 16, label = "Main hand", has = hasMH, exp = mhExp, charges = Num(mhCharges) },
+        { key = "oh", slot = 17, label = "Off hand", has = hasOH, exp = ohExp, charges = Num(ohCharges) },
     }
     for _, h in ipairs(hands) do
         local id = "weapon:" .. h.key
         if self:IsEnabled(id, true) and HasWeapon(h.slot) and not IsSecret(h.has) then
             local left = h.has and (Num(h.exp) or 0) / 1000 or nil
-            local needs = (not h.has) or (left and left > 0 and left < warn)
+            -- Poisons also run out of charges
+            local lowCharges = h.has and cfg.kind == "item" and h.charges and h.charges > 0
+                and h.charges < minCharges and self:IsEnabled("charges", true)
+            local needs = (not h.has) or (left and left > 0 and left < warn) or lowCharges
             if needs then
                 local r = { id = id, slot = h.slot }
                 if cfg.kind == "spell" then
@@ -542,7 +576,11 @@ function TO:CheckWeapons(list)
                     end
                 end
                 if r.label then
-                    if h.has then
+                    if lowCharges then
+                        r.text = h.charges .. "c"
+                        r.detail = h.charges .. " charges left (want " .. minCharges .. ")"
+                        r.urgentNow = true
+                    elseif h.has then
                         r.text = FormatTime(left)
                         r.detail = "Runs out in " .. FormatTime(left)
                         r.expires = left
@@ -759,6 +797,273 @@ function TO:SetStatFocus(focus)
     self:RequestUpdate()
 end
 
+---------------------------------------------------------------------------
+-- Group, pet, elixir, soulstone and bag checks
+---------------------------------------------------------------------------
+TO.CHARGES_DEFAULT_MIN = 10   -- poison charges
+TO.BAGS_DEFAULT_MIN = 3       -- free bag slots
+TO.PET_FOOD_DEFAULT_MIN = 20
+TO.PET_CLASSES = { HUNTER = true, WARLOCK = true }
+TO.WARLOCK_PETS = { "Summon Imp", "Summon Voidwalker", "Summon Succubus", "Summon Felhunter" }
+TO.HAPPINESS = { "unhappy", "content", "happy" }
+TO.SOULSTONE_SPELLS = { "Create Soulstone (Major)", "Create Soulstone (Greater)", "Create Soulstone",
+    "Create Soulstone (Lesser)", "Create Soulstone (Minor)" }
+
+-- A value the game let us read, or nil when it's hidden (secret)
+local function Plain(v)
+    if IsSecret(v) then return nil end
+    return v
+end
+
+-- Your party (your own subgroup in a raid): party1 to party4
+local function PartyUnits()
+    local out = {}
+    if not IsInGroup() then return out end
+    for i = 1, 4 do
+        local u = "party" .. i
+        if Plain(UnitExists(u)) then out[#out + 1] = u end
+    end
+    return out
+end
+
+local function HasAnyAura(buffs, names)
+    for _, n in ipairs(names) do
+        if buffs[n:lower()] then return true end
+    end
+    return false
+end
+
+-- Party members missing one of your group buffs. Click buffs the next one in range.
+function TO:CheckPartyBuffs(list)
+    local units = PartyUnits()
+    if #units == 0 then return end
+    for _, buff in ipairs(self.CLASS_BUFFS[self:PlayerClass()] or {}) do
+        local id = "party:" .. buff.id
+        local spell = buff.party and self:BuffPreference(buff)
+        if spell and self:IsEnabled(id, not buff.off) then
+            local names, target = {}, nil
+            for _, u in ipairs(units) do
+                local usable = Plain(UnitIsConnected(u)) ~= false and Plain(UnitIsDeadOrGhost(u)) ~= true
+                    and Plain(UnitIsVisible(u)) ~= false
+                local b = usable and self:UnitBuffs(u)
+                if b and not HasAnyAura(b, buff.auras or buff.cast) then
+                    names[#names + 1] = Str(UnitName(u)) or u
+                    if not target and Plain(UnitInRange(u)) ~= false then target = u end
+                end
+            end
+            if #names > 0 then
+                local r = { id = id, label = buff.label .. " (party)", icon = SpellIcon(spell),
+                    text = tostring(#names), detail = "Missing on: " .. table.concat(names, ", ") }
+                if target then
+                    r.action = { spell = spell, unit = target }
+                    r.clickText = "Click to cast " .. spell .. " on " .. (Str(UnitName(target)) or "them")
+                else
+                    r.detail = r.detail .. "\nNobody missing it is in range"
+                end
+                list[#list + 1] = r
+            end
+        end
+    end
+end
+
+-- Elixirs and flasks: the ones you picked in the options, tracked like buffs
+function TO:BagElixirs()
+    local out = {}
+    for _, e in pairs(self.bag or {}) do
+        local n = e.name:lower()
+        if n:find("elixir", 1, true) or n:find("flask", 1, true) then out[#out + 1] = e end
+    end
+    table.sort(out, function(a, b) return a.name < b.name end)
+    return out
+end
+
+-- Buff names an elixir can give: its own name, its spell's name, and "Flask of X" -> "X"
+function TO:ElixirAuras(name, id)
+    local auras = { name }
+    if id and C_Item and C_Item.GetItemSpell then
+        local spell = Str((C_Item.GetItemSpell(id)))
+        if spell and spell:lower() ~= name:lower() then auras[#auras + 1] = spell end
+    end
+    local short = name:match("^Flask of (.+)$") or name:match("^Elixir of (.+)$")
+    if short then auras[#auras + 1] = short end
+    return auras
+end
+
+function TO:IsElixirTracked(name)
+    for i, el in ipairs(self.char.elixirs) do
+        if el.name:lower() == name:lower() then return true, i end
+    end
+    return false
+end
+
+function TO:TrackElixir(name, on)
+    local tracked, i = self:IsElixirTracked(name)
+    if on and not tracked then
+        local e = self.bag and self.bag[name:lower()]
+        table.insert(self.char.elixirs, { name = name, id = e and e.id, auras = self:ElixirAuras(name, e and e.id) })
+    elseif not on and tracked then
+        table.remove(self.char.elixirs, i)
+    end
+    self:RequestUpdate()
+end
+
+function TO:CheckElixirs(list)
+    if #self.char.elixirs == 0 then return end
+    if self.char.elixirInstanceOnly and not self:InInstance() then return end
+    local warn = self.db.warnMinutes * 60
+    for _, el in ipairs(self.char.elixirs) do
+        local left
+        for _, aura in ipairs(el.auras or { el.name }) do
+            local l = self.buffs[aura:lower()]
+            if l and (not left or l == 0 or l > left) then left = l end
+        end
+        if not left or (left > 0 and left < warn) then
+            local r = { id = "elixir:" .. el.name:lower(), label = el.name,
+                detail = left and ("Runs out in " .. FormatTime(left)) or "Missing" }
+            if left then r.text, r.expires = FormatTime(left), left end
+            local e = self.bag and self.bag[el.name:lower()]
+            if e then
+                r.icon = e.icon or ItemIcon(e.id)
+                r.action = { use = "item:" .. e.id, useName = e.name }
+                r.detail = r.detail .. "\n" .. e.count .. " in your bags"
+            else
+                r.icon = (el.id and ItemIcon(el.id)) or self.ICONS.unknown
+                r.noItem = el.name
+                r.detail = r.detail .. "\nNo " .. el.name .. " in your bags"
+            end
+            list[#list + 1] = r
+        end
+    end
+end
+
+-- Pets: Hunter and Warlock pet out (and alive); Hunter pet happiness and food
+function TO:PetSummonSpell()
+    if self:PlayerClass() == "HUNTER" then return self:Knows("Call Pet") and "Call Pet" or nil end
+    local known = self:KnownOptions(self.WARLOCK_PETS)
+    for _, n in ipairs(known) do
+        if n == self.char.prefs.pet then return n end
+    end
+    return known[1]
+end
+
+function TO:CheckPet(list)
+    local class = self:PlayerClass()
+    if not self.PET_CLASSES[class] then return end
+    if (IsMounted and Plain(IsMounted())) or (UnitOnTaxi and Plain(UnitOnTaxi("player")))
+        or Plain(UnitIsDeadOrGhost("player")) then return end
+    local exists = Plain(UnitExists("pet")) and true or false
+    local dead = exists and Plain(UnitIsDead("pet")) and true or false
+
+    local resting = IsResting and Plain(IsResting())
+    if (not exists or dead) and not resting and self:IsEnabled("pet:summon", true) then
+        local spell = self:PetSummonSpell()
+        if spell then
+            local r = { id = "pet:summon", label = dead and "Pet is dead" or "No pet", detail = "Missing" }
+            if class == "HUNTER" then
+                r.icon = SpellIcon(dead and "Revive Pet" or "Call Pet")
+                r.action = { macro = "/cast [@pet,dead] Revive Pet; [nopet] Call Pet" }
+                r.clickText = dead and "Click to cast Revive Pet" or "Click to cast Call Pet"
+                r.detail = dead and "Your pet is dead" or "Your pet isn't out"
+            else
+                r.label = dead and "Demon is dead" or "No demon"
+                r.icon = SpellIcon(spell)
+                r.action = { spell = spell }
+                r.detail = "Your demon isn't out"
+            end
+            list[#list + 1] = r
+        end
+    end
+
+    if class ~= "HUNTER" then return end
+    local foodName = self.char.petFood or ""
+    local food = foodName ~= "" and self:FindBagItem(foodName) or nil
+    if exists and not dead and GetPetHappiness and self:IsEnabled("pet:happy", true) then
+        local h = Num(GetPetHappiness())
+        if h and h < 3 then
+            local r = { id = "pet:happy", label = "Pet is " .. (self.HAPPINESS[h] or "hungry"), icon = self.ICONS.happy,
+                text = h == 1 and "!" or nil, urgentNow = h == 1,
+                detail = "Feed your pet to make it happy again" }
+            if food then
+                r.icon = food.icon or r.icon
+                r.action = { macro = "/cast Feed Pet\n/use " .. food.name }
+                r.clickText = "Click to feed it " .. food.name
+            else
+                r.action = { macro = "/cast Feed Pet" }
+                r.clickText = "Click to cast Feed Pet, then click the food. Set a pet food in the options to feed in one click."
+            end
+            list[#list + 1] = r
+        end
+    end
+    if foodName ~= "" and self:IsEnabled("pet:food", true) then
+        local have = food and food.count or 0
+        local min = self:ReagentMin("pet:food", self.PET_FOOD_DEFAULT_MIN)
+        if have < min then
+            list[#list + 1] = { id = "pet:food", label = "Pet food: " .. (food and food.name or foodName),
+                icon = food and food.icon or self:ItemIconByName(foodName), text = have .. "/" .. min, low = true,
+                detail = ("%d in your bags (want %d)"):format(have, min) }
+        end
+    end
+end
+
+-- Warlock: nobody in the group has a Soulstone
+function TO:CheckSoulstone(list)
+    if self:PlayerClass() ~= "WARLOCK" or not IsInGroup() then return end
+    if not self:IsEnabled("soulstone", true) then return end
+    if self.char.soulstoneInstanceOnly and not self:InInstance() then return end
+    local create = self:FirstKnown(self.SOULSTONE_SPELLS)
+    if not create then return end
+    if (self.buffs or {})["soulstone resurrection"] then return end
+    local healer
+    for _, u in ipairs(PartyUnits()) do
+        local b = self:UnitBuffs(u)
+        if not b then return end   -- hidden: can't tell, so don't nag
+        if b["soulstone resurrection"] then return end
+        if not healer and Plain(UnitGroupRolesAssigned and UnitGroupRolesAssigned(u)) == "HEALER" then healer = u end
+    end
+    local r = { id = "soulstone", label = "Soulstone", icon = self.ICONS.soulstone,
+        detail = "Nobody in your group has a Soulstone" }
+    local stone = self:FindBagItem("Soulstone")
+    if stone then
+        local who = healer or "target"
+        r.icon = stone.icon or r.icon
+        r.action = { macro = "/use [@" .. who .. ",help,nodead] " .. stone.name }
+        r.clickText = healer and ("Click to put " .. stone.name .. " on " .. (Str(UnitName(healer)) or "your healer"))
+            or ("Click to use " .. stone.name .. " on your friendly target")
+    else
+        r.action = { spell = create }
+        r.clickText = "Click to cast " .. create
+        r.detail = r.detail .. "\nNo Soulstone in your bags"
+    end
+    list[#list + 1] = r
+end
+
+-- Free bag slots (ordinary bags only, not quivers or soul bags)
+function TO:FreeBagSlots()
+    local free = 0
+    for b = 0, NUM_BAG_SLOTS or 4 do
+        local n, family
+        if C_Container and C_Container.GetContainerNumFreeSlots then
+            n, family = C_Container.GetContainerNumFreeSlots(b)
+        elseif GetContainerNumFreeSlots then
+            n, family = GetContainerNumFreeSlots(b)
+        end
+        n, family = Num(n), Num(family)
+        if n and (not family or family == 0) then free = free + n end
+    end
+    return free
+end
+
+function TO:CheckBags(list)
+    if not self:IsEnabled("bags", true) then return end
+    local free = self:FreeBagSlots()
+    local min = self:ReagentMin("bags", self.BAGS_DEFAULT_MIN)
+    if free < min then
+        list[#list + 1] = { id = "bags", label = "Bag space", icon = self.ICONS.bags, text = tostring(free),
+            detail = ("%d free bag slots (want %d)"):format(free, min), openBags = true,
+            clickText = "Click to open your bags", urgentNow = free == 0, low = true }
+    end
+end
+
 -- Well Fed: the stat buff from food. Click the icon to eat your stat food.
 TO.WELL_FED_AURAS = { "well fed", "increased agility", "increased intellect", "increased stamina",
     "increased strength", "increased spirit", "mana regeneration" }
@@ -876,13 +1181,20 @@ function TO:BuildReminders()
     self:ScanBuffs()
     self:ScanBags()
     local list = {}
-    self:CheckBuffs(list)
-    self:CheckWeapons(list)
     self:UpdateAutoItems()
+    -- Row 1: buffs
+    self:CheckBuffs(list)
+    self:CheckPartyBuffs(list)
+    self:CheckWeapons(list)
     self:CheckWellFed(list)
+    self:CheckElixirs(list)
+    self:CheckPet(list)
+    self:CheckSoulstone(list)
+    -- Row 2: things to top off
     self:CheckReagents(list)
     self:CheckAutoItems(list)
     self:CheckAmmo(list)
+    self:CheckBags(list)
     self:CheckDurability(list)
     return list
 end
@@ -927,7 +1239,9 @@ local function Button_OnEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:AddLine(r.label, unpack(TO.COLORS.gold))
     if r.detail then GameTooltip:AddLine(r.detail, 1, 1, 1, true) end
-    if r.action and r.action.spell then
+    if r.clickText then
+        GameTooltip:AddLine(r.clickText, 0.4, 1, 0.4)
+    elseif r.action and r.action.spell then
         GameTooltip:AddLine("Click to cast " .. r.action.spell, 0.4, 1, 0.4)
     elseif r.action and r.action.use then
         GameTooltip:AddLine("Click to use " .. r.action.useName, 0.4, 1, 0.4)
@@ -959,6 +1273,14 @@ function TO:CreateButton(i)
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     b:SetScript("OnEnter", Button_OnEnter)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- Not a spell or item: the bag space icon opens your bags (once per click)
+    b:HookScript("PostClick", function(self, _, down)
+        if down then return end
+        local r = self.reminder
+        if r and r.openBags then
+            if ToggleAllBags then ToggleAllBags() elseif OpenAllBags then OpenAllBags() end
+        end
+    end)
     b:Hide()
     self.buttons[i] = b
     return b
@@ -967,8 +1289,10 @@ end
 -- Secure attributes for a reminder. Casts on yourself, or uses the item on the weapon.
 function TO:ActionAttributes(r)
     local a = r.action
-    if a and a.spell then
-        return { type = "spell", spell = a.spell, unit = "player" }
+    if a and a.macro then
+        return { type = "macro", macrotext = a.macro }
+    elseif a and a.spell then
+        return { type = "spell", spell = a.spell, unit = a.unit or "player" }
     elseif a and a.item then
         return { type = "macro", macrotext = "/use " .. a.item .. "\n/use " .. a.slot }
     elseif a and a.use then
@@ -991,7 +1315,9 @@ function TO:ApplyButton(b, r)
     -- Running out: orange border at the warning time, red in its last 20%
     local warn = self.db.warnMinutes * 60
     local color, thick = self.COLORS.goldDark, 1
-    if r.expires and r.expires > 0 then
+    if r.urgentNow then
+        color, thick = self.COLORS.urgent, 3
+    elseif r.expires and r.expires > 0 then
         if r.expires <= warn * self.URGENT_SHARE then
             color, thick = self.COLORS.urgent, 3
         else
@@ -1024,8 +1350,19 @@ function TO:Layout(list)
     shownList = {}
     for _, r in ipairs(top) do shownList[#shownList + 1] = r end
     for _, r in ipairs(bottom) do shownList[#shownList + 1] = r end
-    local twoRows = #top > 0 and #bottom > 0
-    local rowStep = size + self.DIVIDER_SPACE
+    -- Each group wraps after "Icons per row"
+    local perRow = math.max(1, self.db.iconsPerRow or 8)
+    local lines = {}
+    local function addGroup(group)
+        for i = 1, #group, perRow do
+            local line = {}
+            for j = i, math.min(i + perRow - 1, #group) do line[#line + 1] = group[j] end
+            lines[#lines + 1] = line
+        end
+    end
+    addGroup(top)
+    local split = (#top > 0 and #bottom > 0) and #lines or nil   -- divider after this line
+    addGroup(bottom)
 
     if not self.divider then
         self.divider = self.bar:CreateTexture(nil, "ARTWORK")
@@ -1033,24 +1370,34 @@ function TO:Layout(list)
         self.divider:SetColorTexture(g[1], g[2], g[3], 0.8)
         self.divider:SetHeight(2)
     end
-    for i, r in ipairs(shownList) do
-        local b = self.buttons[i] or self:CreateButton(i)
-        self:ApplyButton(b, r)
-        b:SetSize(size, size)
-        b:ClearAllPoints()
-        local col, rowY = i - 1, 0
-        if twoRows and i > #top then col, rowY = i - #top - 1, -rowStep end
-        b:SetPoint("TOPLEFT", self.bar, "TOPLEFT", col * (size + gap), rowY)
-        b:Show()
+    local idx, y, cols = 0, 0, 0
+    for n, line in ipairs(lines) do
+        for col, r in ipairs(line) do
+            idx = idx + 1
+            local b = self.buttons[idx] or self:CreateButton(idx)
+            self:ApplyButton(b, r)
+            b:SetSize(size, size)
+            b:ClearAllPoints()
+            b:SetPoint("TOPLEFT", self.bar, "TOPLEFT", (col - 1) * (size + gap), y)
+            b:Show()
+        end
+        cols = math.max(cols, #line)
+        if n < #lines then
+            if n == split then
+                self.divider.y = y - size - math.floor(self.DIVIDER_SPACE / 2) + 1
+                y = y - size - self.DIVIDER_SPACE
+            else
+                y = y - size - gap
+            end
+        end
     end
-    local cols = twoRows and math.max(#top, #bottom) or #shownList
+    local height = #lines > 0 and (-y + size) or size
     local slots = math.max(cols, self.MIN_SLOTS)
     local width = math.max(slots * (size + gap) - gap, self.HEADER_MIN_WIDTH)
     self.divider:ClearAllPoints()
-    if twoRows then
-        local y = -(size + math.floor(self.DIVIDER_SPACE / 2) - 1)
-        self.divider:SetPoint("TOPLEFT", self.bar, "TOPLEFT", 0, y)
-        self.divider:SetPoint("TOPRIGHT", self.bar, "TOPRIGHT", 0, y)
+    if split then
+        self.divider:SetPoint("TOPLEFT", self.bar, "TOPLEFT", 0, self.divider.y)
+        self.divider:SetPoint("TOPRIGHT", self.bar, "TOPRIGHT", 0, self.divider.y)
         self.divider:Show()
     else
         self.divider:Hide()
@@ -1063,7 +1410,7 @@ function TO:Layout(list)
     end
     -- Always room for at least two icons, so the frame keeps one tidy size and only
     -- grows once a third reminder shows up. A second row makes it taller.
-    self.main:SetSize(width, twoRows and (size + rowStep) or size)
+    self.main:SetSize(width, height)
     self.bar:SetAllPoints(self.main)
     self.bar:SetShown(#shownList > 0)
     self.shownCount = #shownList
@@ -1142,9 +1489,14 @@ TO.MIN_SLOTS = 2           -- the frame is always at least two icons wide
 TO.DIVIDER_SPACE = 10      -- room between the buff row and the top-off row
 
 -- Buffs (row 1) vs things to top off (row 2)
+local BUFF_ROW = { "^buff:", "^party:", "^weapon:", "^elixir:", "^wellfed$", "^pet:summon$", "^pet:happy$",
+    "^soulstone$" }
 function TO:IsBuffReminder(r)
     local id = r.id or ""
-    return id:find("^buff:") ~= nil or id:find("^weapon:") ~= nil or id == "wellfed"
+    for _, pat in ipairs(BUFF_ROW) do
+        if id:find(pat) then return true end
+    end
+    return false
 end
 TO.URGENT_SHARE = 0.2      -- red border in the last 20% of the warning time
 
@@ -1516,6 +1868,10 @@ events:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
 events:RegisterEvent("READY_CHECK")
 events:RegisterUnitEvent("UNIT_AURA", "player")
 events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+events:RegisterEvent("GROUP_ROSTER_UPDATE")
+-- Pet events; guarded in case this client doesn't have them
+pcall(events.RegisterUnitEvent, events, "UNIT_PET", "player")
+pcall(events.RegisterUnitEvent, events, "UNIT_HAPPINESS", "pet")
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == ADDON then
         ToppedOffForeverDB = ToppedOffForeverDB or {}

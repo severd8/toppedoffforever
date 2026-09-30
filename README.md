@@ -6,7 +6,7 @@
 
 ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It watches your own character and shows a small icon only when something needs topping off: a buff that's missing or about to run out, a weapon without its poison or oil, low reagents, low ammo, or worn-out gear. Click the icon and it's fixed.
 
-Icons sit in two rows: **buffs** on top (class buffs, weapon enhancements, Well Fed), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, repairs).
+Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhancements, Well Fed, elixirs, pet, Soulstone), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, bag space, repairs). Long rows wrap after 8 icons (change it with "Icons per row").
 
 ---
 
@@ -14,9 +14,14 @@ Icons sit in two rows: **buffs** on top (class buffs, weapon enhancements, Well 
 
 - **Only shows what's wrong.** No icons when you're topped off. An icon appears when something runs low and disappears once it's fixed.
 - **Class buffs for every class.** Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
+- **Party buffs.** See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild or Divine Spirit. **Click to buff the next one in range.**
 - **Group buffs count.** Arcane Brilliance covers Arcane Intellect, Prayer of Fortitude covers Fortitude, and a buff from another player counts too.
 - **Choose your spell.** For Blessings, Auras, Aspects, Armors and Shaman weapon buffs, pick which one the icon casts.
-- **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and any oil or sharpening stone you choose. **Click to apply it to your weapon.** Your best rank in your bags is used automatically.
+- **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and any oil or sharpening stone you choose. **Click to apply it to your weapon.** Your best rank in your bags is used automatically. Rogues are also warned when poison charges run low.
+- **Elixirs and flasks.** Tick the ones in your bags you want to keep up. You're reminded when the buff is missing or running out, and a click drinks it. On by default in dungeons and raids only.
+- **Pets.** Hunters and Warlocks are reminded when their pet isn't out or is dead (click to call, revive or summon). Hunters also see when their pet isn't happy: set a pet food and one click feeds it, with a reminder when the food runs low.
+- **Soulstone.** Warlocks are reminded when nobody in the group has a Soulstone. Click to put yours on the healer, or to make one.
+- **Bag space.** Warns when you're down to a few free bag slots. Click to open your bags.
 - **Reagents and class items.** Soul Shards, teleport and portal runes, Arcane Powder, candles, Light Feathers, Symbols of Kings and Divinity, Ankhs, totems, Flash Powder and more. Checked only once you've learned a spell that needs them. Set your own minimums.
 - **Ammo** for Hunters.
 - **Low durability** warning before your gear breaks.
@@ -46,7 +51,11 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 | Side | What's there |
 |---|---|
 | **Display** (left) | Show reminders, lock, hide in combat, only in dungeons and raids, show header, minimap button, icon size, warning time for buffs, durability warning %, chat reminders and sound |
-| **What to check** (right) | Every check for your class with on/off, which spell to cast, weapon items, minimum counts, and your own items. Saved per character. |
+| **Buffs** tab (right) | Your buffs and which spell to cast, party buffs, weapon enhancements, Well Fed, elixirs and flasks |
+| **Supplies** tab | Auto-tracked food, water, bandages and potions, stat food choice, your own items, reagents and ammo |
+| **Pet & gear** tab | Pet, Soulstone (Warlocks), durability and bag space |
+
+Everything on the right is saved per character. Display settings on the left (including **Icons per row**) are shared by all your characters.
 
 ### Keybindings
 

@@ -177,8 +177,8 @@ do
     assert(firstBottom and firstBottom > lastTop, "top-off items come after buffs")
     assertEq(TO.divider.__shown, true, "divider shown between rows")
 end
-LOG = {}; TO:Remind("Ready check")
-assert(not lastLog("Conjured Water"), "topped-off items aren't reported as missing")
+local mark = #LOG; TO:Remind("Ready check")
+for i = mark + 1, #LOG do assert(not LOG[i]:find("Conjured Water"), "topped-off items aren't reported as missing") end
 TO.char.customAlways = false; refresh()
 assertEq(ids()["custom:conjured water"], nil, "hidden again when stocked")
 SlashCmdList.TOPPEDOFFFOREVER("add 20 Conjured Water"); refresh()
@@ -220,6 +220,15 @@ refresh()
 r = ids()
 assertEq(r["weapon:mh"], nil, "fresh poison fine")
 assertEq(r["weapon:oh"].text, "1m", "expiring poison")
+-- Poison charges
+STATE.charges = { mh = 6, oh = 30 }
+refresh()
+r = ids()
+assertEq(r["weapon:mh"] and r["weapon:mh"].text, "6c", "low poison charges")
+assertEq(r["weapon:mh"].urgentNow, true, "low charges get the red border")
+TO.char.mins.charges = 5; refresh()
+assertEq(ids()["weapon:mh"], nil, "above your charge minimum")
+TO.char.mins.charges = nil; STATE.charges = nil
 STATE.bags = {}
 STATE.enchant = {}
 refresh()
@@ -305,8 +314,10 @@ assert(TO.config.__shown, "options open")
 for _, class in ipairs({ "MAGE", "PRIEST", "DRUID", "WARLOCK", "PALADIN", "HUNTER", "WARRIOR", "SHAMAN", "ROGUE" }) do
     STATE.class = class
     TO:AddCustom("Healing Potion", 3)
-    TO:BuildChecksList()
+    for _, t in ipairs(TO.OPTION_TABS) do TO:ShowOptionsTab(t.key) end
 end
+assertEq(TO.optionsTab, "more", "last tab shown")
+TO:ShowOptionsTab("supplies")
 -- Click every checkbox and button in the checks list, and commit every edit box
 for _, f in ipairs(ALL_FRAMES) do
     if f.__kind == "CheckButton" and f.__scripts.OnClick then
@@ -325,6 +336,9 @@ end
 tick()
 TO:OpenConfig()
 assertEq(TO.config.__shown, false, "options toggle closed")
+-- The walk above flipped settings; put the defaults back for later steps
+TO.char.wellFedInstanceOnly, TO.char.elixirInstanceOnly, TO.char.soulstoneInstanceOnly = true, true, true
+TO.char.customAlways = false
 
 step("minimap button")
 local mm = TO.minimapButton
@@ -477,4 +491,127 @@ TO:SetEnabled("wellfed", false); refresh()
 assertEq(ids().wellfed, nil, "turned off")
 TO:SetEnabled("wellfed", true); TO.char.wellFedInstanceOnly = true
 STATE.class = "MAGE"; TO.char.auto = {}; STATE.level = nil; refresh()
+step("party buffs")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Power Word: Fortitude", "Inner Fire", "Divine Spirit"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.db.onlyInInstance = false; STATE.bags = {}
+STATE.buffs = { ["Power Word: Fortitude"] = 1800, ["Inner Fire"] = 600, ["Divine Spirit"] = 1800 }
+STATE.party = { "party1", "party2", "party3" }
+STATE.partyBuffs = { party1 = { ["Power Word: Fortitude"] = 900, ["Divine Spirit"] = 900 },
+    party2 = { ["Prayer of Fortitude"] = 900 }, party3 = {} }
+STATE.outOfRange = { party3 = true }
+refresh()
+local pf = ids()["party:fortitude"]
+assertEq(pf and pf.text, "1", "one party member missing Fortitude")
+assertEq(pf.action, nil, "the one missing it is out of range: no click")
+STATE.outOfRange = {}; refresh()
+pf = ids()["party:fortitude"]
+assertEq(pf.action.unit, "party3", "click buffs the member missing it")
+local pbtn
+for _, b in ipairs(TO.buttons) do if b.reminder == pf then pbtn = b end end
+assertEq(pbtn.__attrs.unit, "party3", "secure button targets that member")
+assertEq(pbtn.__attrs.spell, "Power Word: Fortitude", "and casts the buff")
+assertEq(ids()["party:spirit"].text, "2", "Divine Spirit missing on two")
+assertEq(TO:IsBuffReminder(pf), true, "party buffs on the buff row")
+STATE.hiddenAuras = { party3 = true }; refresh()
+assertEq(ids()["party:fortitude"], nil, "hidden auras: can't tell, don't nag")
+STATE.hiddenAuras = {}
+TO:SetEnabled("party:fortitude", false); refresh()
+assertEq(ids()["party:fortitude"], nil, "party check turned off")
+TO:SetEnabled("party:fortitude", true)
+STATE.party = {}; refresh()
+assertEq(ids()["party:spirit"], nil, "solo: no party check")
+
+step("elixirs and flasks")
+STATE.buffs = { ["Power Word: Fortitude"] = 1800, ["Inner Fire"] = 600, ["Divine Spirit"] = 1800 }
+STATE.bags = { { id = 301, name = "Elixir of the Mongoose", count = 3, spell = "Elixir of the Mongoose" },
+    { id = 302, name = "Flask of Distilled Wisdom", count = 1, spell = "Distilled Wisdom" },
+    { id = 303, name = "Heavy Linen Bandage", count = 10 } }
+refresh()
+local found = TO:BagElixirs()
+assertEq(#found, 2, "elixirs and flasks in bags found")
+TO.char.elixirs = {}
+TO:TrackElixir("Flask of Distilled Wisdom", true)
+STATE.instance = true; refresh()
+local fl = ids()["elixir:flask of distilled wisdom"]
+assert(fl, "tracked flask missing")
+assertEq(fl.action.use, "item:302", "click drinks the flask")
+STATE.buffs["Distilled Wisdom"] = 3600; refresh()
+assertEq(ids()["elixir:flask of distilled wisdom"], nil, "flask buff found by its spell name")
+STATE.buffs["Distilled Wisdom"] = 60; refresh()
+assertEq(ids()["elixir:flask of distilled wisdom"].expires, 60, "flask running out")
+STATE.instance = false; refresh()
+assertEq(ids()["elixir:flask of distilled wisdom"], nil, "only in dungeons by default")
+TO:TrackElixir("Flask of Distilled Wisdom", false)
+assertEq(#TO.char.elixirs, 0, "untracked")
+
+step("pets")
+STATE.class = "HUNTER"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Call Pet", "Revive Pet", "Feed Pet"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.buffs = {}; STATE.bags = {}; STATE.pet = nil
+refresh()
+local ps = ids()["pet:summon"]
+assert(ps, "no pet out")
+assertEq(ps.action.macro, "/cast [@pet,dead] Revive Pet; [nopet] Call Pet", "calls or revives")
+STATE.resting = true; refresh()
+assertEq(ids()["pet:summon"], nil, "not in towns and inns")
+STATE.resting = false; STATE.mounted = true; refresh()
+assertEq(ids()["pet:summon"], nil, "not while mounted")
+STATE.mounted = false; STATE.pet = "dead"; refresh()
+assertEq(ids()["pet:summon"].label, "Pet is dead", "dead pet")
+STATE.pet = "alive"; STATE.happiness = 3; refresh()
+assertEq(ids()["pet:summon"], nil, "pet out")
+assertEq(ids()["pet:happy"], nil, "happy pet")
+STATE.happiness = 1; refresh()
+local ph = ids()["pet:happy"]
+assertEq(ph.label, "Pet is unhappy", "unhappy pet")
+assertEq(ph.action.macro, "/cast Feed Pet", "no food set: just Feed Pet")
+TO.char.petFood = "Roasted Quail"
+STATE.bags = { { id = 401, name = "Roasted Quail", count = 4 } }
+refresh()
+assertEq(ids()["pet:happy"].action.macro, "/cast Feed Pet\n/use Roasted Quail", "one-click feeding")
+assertEq(ids()["pet:food"].text, "4/20", "pet food count")
+assertEq(TO:IsBuffReminder(ids()["pet:food"]), false, "pet food on the top-off row")
+TO.char.petFood = ""; STATE.happiness = nil; STATE.pet = nil
+STATE.class = "WARLOCK"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Summon Imp", "Summon Voidwalker", "Drain Soul", "Create Soulstone (Lesser)", "Demon Skin"); fire("SPELLS_CHANGED")
+refresh()
+assertEq(ids()["pet:summon"].action.spell, "Summon Imp", "warlock summons first demon")
+TO.char.prefs.pet = "Summon Voidwalker"; refresh()
+assertEq(ids()["pet:summon"].action.spell, "Summon Voidwalker", "preferred demon")
+
+step("soulstone")
+STATE.pet = "alive"; STATE.party = { "party1", "party2" }
+STATE.partyBuffs = { party1 = {}, party2 = {} }; STATE.roles = { party2 = "HEALER" }
+STATE.instance = true
+STATE.bags = { { id = 501, name = "Lesser Soulstone", count = 1 } }
+refresh()
+local ss = ids().soulstone
+assert(ss, "no soulstone in group")
+assertEq(ss.action.macro, "/use [@party2,help,nodead] Lesser Soulstone", "soulstone on the healer")
+STATE.partyBuffs.party2 = { ["Soulstone Resurrection"] = 1800 }; refresh()
+assertEq(ids().soulstone, nil, "healer has one")
+STATE.partyBuffs.party2 = {}; STATE.bags = {}; refresh()
+assertEq(ids().soulstone.action.spell, "Create Soulstone (Lesser)", "none in bags: make one")
+STATE.instance = false; refresh()
+assertEq(ids().soulstone, nil, "only in dungeons by default")
+STATE.party = {}; STATE.roles = {}; STATE.pet = nil
+
+step("bag space")
+STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
+STATE.freeSlots = 2; refresh()
+local bs = ids().bags
+assertEq(bs and bs.text, "2", "low bag space")
+assertEq(TO:IsBuffReminder(bs), false, "bag space on the top-off row")
+local bb
+for _, b in ipairs(TO.buttons) do if b.reminder == bs then bb = b end end
+local opened = false
+ToggleAllBags = function() opened = true end
+bb.__scripts.PostClick(bb, "LeftButton", true)
+assertEq(opened, false, "not on the key-down half of a click")
+bb.__scripts.PostClick(bb, "LeftButton", false)
+assertEq(opened, true, "click opens your bags")
+STATE.freeSlots = 10; refresh()
+assertEq(ids().bags, nil, "enough space")
+STATE.freeSlots = nil
 print("ALL TESTS PASSED")

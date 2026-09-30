@@ -25,6 +25,7 @@ local PROTECTED_WHEN_COMBAT = { SetPoint = true, ClearAllPoints = true, SetSize 
 
 local ObjMT = {}
 local Methods = {}
+STUB_METHODS = Methods   -- tests/render.lua adds layout tracking
 ObjMT.__index = function(t, k)
     if Methods[k] then return Methods[k] end
     if type(k) == "string" and k:match("^%u") then
@@ -142,6 +143,28 @@ STATE = {
 }
 function UnitClass(u) return "Mage", STATE.class end
 function UnitLevel(u) return STATE.level or 60 end
+-- Group: STATE.party = { "party1", ... } present; STATE.partyBuffs[unit] = { [name] = left }
+-- STATE.hiddenAuras[unit] = true makes that unit's auras secret; STATE.roles[unit] = "HEALER"
+STATE.party, STATE.partyBuffs, STATE.hiddenAuras, STATE.roles, STATE.outOfRange = {}, {}, {}, {}, {}
+function IsInGroup() return #STATE.party > 0 end
+function IsInRaid() return false end
+local function inParty(u) for _, p in ipairs(STATE.party) do if p == u then return true end end return false end
+function UnitExists(u)
+    if u == "player" then return true end
+    if u == "pet" then return STATE.pet ~= nil end
+    return inParty(u)
+end
+function UnitName(u) if u == "player" then return "Me" end return "Name_" .. u end
+function UnitIsConnected(u) return true end
+function UnitIsDeadOrGhost(u) return u == "player" and STATE.playerDead or false end
+function UnitIsDead(u) if u == "pet" then return STATE.pet == "dead" end return false end
+function UnitIsVisible(u) return true end
+function UnitInRange(u) return not STATE.outOfRange[u], true end
+function UnitGroupRolesAssigned(u) return STATE.roles[u] or "NONE" end
+function IsMounted() return STATE.mounted or false end
+function UnitOnTaxi() return false end
+function IsResting() return STATE.resting or false end
+function GetPetHappiness() return STATE.happiness end
 -- Tooltips: a bag entry's `tip` field is its tooltip text (lines split on "\n")
 C_TooltipInfo = { GetItemByID = function(id)
     for _, e in ipairs(STATE.bags) do
@@ -201,7 +224,12 @@ function IsPlayerSpell(id) for _, n in ipairs(SPELLBOOK) do if SPELLS[n].id == i
 C_UnitAuras = {
     GetAuraDataByIndex = function(unit, i, filter)
         local list = {}
-        for n, left in pairs(STATE.buffs) do list[#list + 1] = { n, left } end
+        local src = STATE.buffs
+        if unit ~= "player" then
+            if STATE.hiddenAuras[unit] then return { name = secret("x") } end
+            src = STATE.partyBuffs[unit] or {}
+        end
+        for n, left in pairs(src) do list[#list + 1] = { n, left } end
         table.sort(list, function(a, b) return a[1] < b[1] end)
         local e = list[i]
         if not e then return nil end
@@ -213,6 +241,11 @@ C_UnitAuras = {
 -- Bags: STATE.bags = { { id = 1, name = "Soul Shard", count = 3 }, ... } (one stack per slot)
 C_Container = {
     GetContainerNumSlots = function(bag) if bag == 0 then return 16 end return 0 end,
+    GetContainerNumFreeSlots = function(bag)
+        if bag ~= 0 then return 0, 0 end
+        if STATE.freeSlots then return STATE.freeSlots, 0 end
+        return 16 - #STATE.bags, 0
+    end,
     GetContainerItemInfo = function(bag, slot)
         local e = STATE.bags[slot]
         if bag ~= 0 or not e then return nil end
@@ -223,6 +256,7 @@ local function itemById(id) for _, e in ipairs(STATE.bags) do if e.id == id then
 C_Item = {
     GetItemNameByID = function(id) local e = itemById(id) return e and e.name end,
     GetItemIconByID = function(id) return "item:" .. tostring(id) end,
+    GetItemSpell = function(id) local e = itemById(id) return e and e.spell, e and 1 end,
     GetItemInfoInstant = function(id)
         if id == 900 then return id, "Weapon", "Dagger", "INVTYPE_WEAPON" end
         return id, "Armor", "Shield", "INVTYPE_SHIELD"
@@ -241,7 +275,8 @@ end
 function GetInventoryItemCount(unit, slot) if slot == 0 then return STATE.ammoCount end return 0 end
 function GetWeaponEnchantInfo()
     local mh, oh = STATE.enchant.mh, STATE.enchant.oh
-    return mh ~= nil, mh, 0, 1, oh ~= nil, oh, 0, 2
+    return mh ~= nil, mh, STATE.charges and STATE.charges.mh or 0, 1, oh ~= nil, oh,
+        STATE.charges and STATE.charges.oh or 0, 2
 end
 function GetInventoryItemDurability(slot)
     local d = STATE.durability[slot]
