@@ -1,5 +1,6 @@
 ## 1.5.2
 
+- The divider between buffs and things to top off is bolder: a thicker gold line with dark edges that runs the full width of the frame, with a bit more space around it.
 - Right-clicking the "ToppedOff" header now opens a menu with **Lock** and **Settings**, like TauntMaster Forever.
 
 ## 1.5.1

@@ -1846,11 +1846,21 @@ function TO:Layout(list)
     local split = (#top > 0 and #bottom > 0) and #lines or nil   -- divider after this line
     addGroup(bottom)
 
+    -- The divider: a bold gold bar with a dark edge above and below, running
+    -- the full width of the frame like the header's bottom line
     if not self.divider then
-        self.divider = self.bar:CreateTexture(nil, "ARTWORK")
-        local g = self.COLORS.gold
-        self.divider:SetColorTexture(g[1], g[2], g[3], 0.8)
-        self.divider:SetHeight(2)
+        local d = self.bar:CreateTexture(nil, "ARTWORK")
+        local g = self.COLORS.goldDark
+        d:SetColorTexture(g[1], g[2], g[3], 1)
+        d:SetHeight(self.DIVIDER_THICKNESS)
+        d.edges = {}
+        for i = 1, 2 do
+            local e = self.bar:CreateTexture(nil, "BORDER")
+            e:SetColorTexture(0, 0, 0, 0.8)
+            e:SetHeight(1)
+            d.edges[i] = e
+        end
+        self.divider = d
     end
     local idx, y, cols = 0, 0, 0
     for n, line in ipairs(lines) do
@@ -1866,7 +1876,7 @@ function TO:Layout(list)
         cols = math.max(cols, #line)
         if n < #lines then
             if n == split then
-                self.divider.y = y - size - math.floor(self.DIVIDER_SPACE / 2) + 1
+                self.divider.y = y - size - math.floor((self.DIVIDER_SPACE - self.DIVIDER_THICKNESS) / 2)
                 y = y - size - self.DIVIDER_SPACE
             else
                 y = y - size - gap
@@ -1876,13 +1886,22 @@ function TO:Layout(list)
     local height = #lines > 0 and (-y + size) or size
     local slots = math.max(cols, self.MIN_SLOTS)
     local width = math.max(slots * (size + gap) - gap, self.HEADER_MIN_WIDTH)
-    self.divider:ClearAllPoints()
+    local d = self.divider
+    d:ClearAllPoints()
+    for _, e in ipairs(d.edges) do e:ClearAllPoints() end
     if split then
-        self.divider:SetPoint("TOPLEFT", self.bar, "TOPLEFT", 0, self.divider.y)
-        self.divider:SetPoint("TOPRIGHT", self.bar, "TOPRIGHT", 0, self.divider.y)
-        self.divider:Show()
+        local inset = self.FRAME_PAD - 1   -- reach the frame's border on both sides
+        d:SetPoint("TOPLEFT", self.bar, "TOPLEFT", -inset, d.y)
+        d:SetPoint("TOPRIGHT", self.bar, "TOPRIGHT", inset, d.y)
+        d.edges[1]:SetPoint("BOTTOMLEFT", d, "TOPLEFT")
+        d.edges[1]:SetPoint("BOTTOMRIGHT", d, "TOPRIGHT")
+        d.edges[2]:SetPoint("TOPLEFT", d, "BOTTOMLEFT")
+        d.edges[2]:SetPoint("TOPRIGHT", d, "BOTTOMRIGHT")
+        d:Show()
+        for _, e in ipairs(d.edges) do e:Show() end
     else
-        self.divider:Hide()
+        d:Hide()
+        for _, e in ipairs(d.edges) do e:Hide() end
     end
     for i = #shownList + 1, #self.buttons do
         local b = self.buttons[i]
@@ -1986,7 +2005,8 @@ TO.HEADER_HEIGHT = 22      -- header strip at the top of the frame
 TO.HEADER_MIN_WIDTH = 84   -- room for the logo and "ToppedOff"
 TO.FRAME_PAD = 4           -- space between the frame's edge and the icons
 TO.MIN_SLOTS = 2           -- the frame is always at least two icons wide
-TO.DIVIDER_SPACE = 10      -- room between the buff row and the top-off row
+TO.DIVIDER_SPACE = 14      -- room between the buff row and the top-off row
+TO.DIVIDER_THICKNESS = 4   -- the gold divider line
 
 -- Buffs (row 1) vs things to top off (row 2)
 local BUFF_ROW = { "^buff:", "^party:", "^weapon:", "^elixir:", "^wellfed$", "^pet:summon$", "^pet:happy$",
