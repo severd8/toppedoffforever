@@ -1,5 +1,6 @@
 ## 1.0.2
 
+- Fixed: clicking a reminder icon (or pressing its keybinding) did nothing when "Cast action keybinds on key down" was turned on.
 - Fixed: clicking a reminder icon did nothing while the reminders were unlocked. The drag box covered the icons; it's now a "ToppedOff" tab above them, so icons can be clicked whether locked or not.
 - Author name is now severd8.
 

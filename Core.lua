@@ -684,7 +684,10 @@ end
 
 function TO:CreateButton(i)
     local b = CreateFrame("Button", "ToppedOffForeverButton" .. i, self.bar, "SecureActionButtonTemplate")
-    b:RegisterForClicks("AnyUp")
+    -- Register for both up and down: the secure template acts on only one of them,
+    -- chosen by the "Cast action keybinds on key down" setting. With only "AnyUp",
+    -- nothing happens when that setting is on.
+    b:RegisterForClicks("AnyUp", "AnyDown")
     b.icon = b:CreateTexture(nil, "ARTWORK")
     b.icon:SetAllPoints()
     b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)

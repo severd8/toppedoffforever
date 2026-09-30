@@ -39,6 +39,7 @@ Forever runs the modern (Midnight 12.x-style) addon API, not the Classic one.
   - Scanning is skipped in combat, which avoids most secrets. Chat reminders in combat use the last out-of-combat result.
 - **Combat lockdown.** The reminder icons are `SecureActionButtonTemplate` buttons inside secure frames (`TO.main`, `TO.bar`). Never move, resize, show/hide or change their attributes in combat. Use `TO:RunOutOfCombat(fn)`; `TO:Layout()` bails out in combat. Combat visibility is handled by a state driver (`[combat] hide; show`).
 - **No automation.** Every cast or item use comes from the player's click or keypress. Never auto-buy, auto-cast or auto-use.
+- **Secure action buttons** must be registered for `"AnyUp", "AnyDown"`. The template acts on only one phase, picked by the `ActionButtonUseKeyDown` setting (and the `useOnKeyDown` attribute); with only `AnyUp`, clicks do nothing when that setting is on.
 - **Missing APIs seen on Forever:** `Slider:SetObeyStepsOnDrag` doesn't exist (guarded). Guard any newer API the same way.
 
 ## Testing
