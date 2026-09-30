@@ -196,6 +196,7 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     mins = {},                -- reagent/ammo id -> minimum count
     weapon = {},              -- mh / oh -> item name, spell -> preferred weapon spell
     custom = {},              -- { name = "Conjured Crystal Water", min = 20 }
+    customAlways = false,     -- show your own items even when you have enough
 }
 
 local function FillDefaults(dst, src)
@@ -569,9 +570,16 @@ function TO:CheckReagents(list)
         local id = "custom:" .. c.name:lower()
         if self:IsEnabled(id, true) then
             local have, icon = self:BagCount({ c.name })
-            if have < c.min then
-                list[#list + 1] = { id = id, label = c.name, icon = icon or self:ItemIconByName(c.name),
-                    text = have .. "/" .. c.min, detail = ("%d in your bags (want %d)"):format(have, c.min) }
+            local low = have < c.min
+            if low or self.char.customAlways then
+                local r = { id = id, label = c.name, icon = icon or self:ItemIconByName(c.name),
+                    text = have .. "/" .. c.min, low = low, stocked = not low,
+                    detail = low and ("%d in your bags (want %d)"):format(have, c.min)
+                        or ("%d in your bags. Topped off."):format(have) }
+                -- Click to use it (food, drink, potions, bandages on yourself)
+                local e = self.bag[c.name:lower()]
+                if e then r.action = { use = "item:" .. e.id, useName = e.name } end
+                list[#list + 1] = r
             end
         end
     end
@@ -676,6 +684,8 @@ local function Button_OnEnter(self)
     if r.detail then GameTooltip:AddLine(r.detail, 1, 1, 1, true) end
     if r.action and r.action.spell then
         GameTooltip:AddLine("Click to cast " .. r.action.spell, 0.4, 1, 0.4)
+    elseif r.action and r.action.use then
+        GameTooltip:AddLine("Click to use " .. r.action.useName, 0.4, 1, 0.4)
     elseif r.action and r.action.item then
         GameTooltip:AddLine("Click to use " .. r.action.item .. " on your " ..
             (r.action.slot == 17 and "off hand" or "main hand"), 0.4, 1, 0.4)
@@ -716,6 +726,8 @@ function TO:ActionAttributes(r)
         return { type = "spell", spell = a.spell, unit = "player" }
     elseif a and a.item then
         return { type = "macro", macrotext = "/use " .. a.item .. "\n/use " .. a.slot }
+    elseif a and a.use then
+        return { type = "item", item = a.use, unit = "player" }
     end
     return { type = nil }
 end
@@ -727,9 +739,12 @@ function TO:ApplyButton(b, r)
     b:SetAttribute("spell", attrs.spell)
     b:SetAttribute("unit", attrs.unit)
     b:SetAttribute("macrotext", attrs.macrotext)
+    b:SetAttribute("item", attrs.item)
     b.icon:SetTexture(r.icon or self.ICONS.unknown)
     if b.icon.SetDesaturated then b.icon:SetDesaturated(r.noItem ~= nil) end
     b.text:SetText(r.text or "")
+    -- Your own items: red count when you're low, white when topped off
+    if r.low then b.text:SetTextColor(1, 0.35, 0.3) else b.text:SetTextColor(1, 1, 1) end
 end
 
 -- Places the icons in a row. Must run out of combat (the icons are secure buttons).
@@ -1010,6 +1025,10 @@ function TO:Remind(reason)
     -- In combat your buffs may be hidden from addons, so use the last check
     local list = self.reminders or {}
     if not InCombatLockdown() then list = self:BuildReminders() end
+    -- Items shown only because "always show" is on aren't missing
+    local missing = {}
+    for _, r in ipairs(list) do if not r.stocked then missing[#missing + 1] = r end end
+    list = missing
     if #list == 0 then return end
     Print((reason and (reason .. " — ") or "") .. "missing: " .. self:ReminderSummary(list))
     if self.db.sound and PlaySound and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING) end

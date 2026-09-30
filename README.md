@@ -18,7 +18,7 @@ ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It wat
 - **Reagents and class items.** Soul Shards, teleport and portal runes, Arcane Powder, candles, Light Feathers, Symbols of Kings and Divinity, Ankhs, totems, Flash Powder and more. Checked only once you've learned a spell that needs them. Set your own minimums.
 - **Ammo** for Hunters.
 - **Low durability** warning before your gear breaks.
-- **Your own items.** Add anything, like food, water or potions, with a minimum count.
+- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). Turn on "Always show these, with counts" to keep them on screen even when you're stocked up; the count turns red when you're low.
 - **Chat reminders.** Lists anything missing when a ready check starts or when you enter a dungeon or raid.
 - **Keybindings.** Fix the first three reminders from the keyboard or a controller.
 
@@ -33,7 +33,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 ## Using it
 
 - **Move the icons.** They start unlocked, inside a frame with a "ToppedOff" header. Drag the header to move them, then lock it in the options or with `/topoff lock`. Clicking the icons works whether they're locked or not.
-- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Buffs are cast on you. Poisons, oils and stones are used on your weapon.
+- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Buffs are cast on you. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you).
 - **Open the options.** Type `/topoff`, left-click the minimap button, or right-click the "ToppedOff" header.
 - **Show or hide.** Right-click the minimap button, or type `/topoff toggle`.
 
@@ -71,7 +71,7 @@ Go to **Options → Keybindings → ToppedOff Forever**:
 
 WoW: Forever runs on the modern addon system, which limits what addons can do in combat. ToppedOff Forever is built around those rules:
 
-- **It never acts on its own.** Every buff and weapon enhancement is your click. It never buys, casts or uses anything by itself.
+- **It never acts on its own.** Every buff, weapon enhancement and item use is your click. It never buys, casts or uses anything by itself.
 - **Reminders update out of combat.** WoW doesn't let addons change clickable icons during combat, so the icons are hidden in combat by default and refresh as soon as it ends.
 - **Replacing a weapon enhancement** that hasn't run out yet makes WoW ask you to confirm. That's the game's normal prompt.
 - **Spell and item names** are the Classic ones. If something isn't found in Forever, `/topoff check` shows it in yellow. Please report it.

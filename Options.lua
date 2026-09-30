@@ -283,6 +283,10 @@ function TO:BuildChecksList()
     end)
     y = y - ROW
     note("Food, water, potions, anything. Exact item name.")
+    CheckBox(c, "Always show these, with counts", 0, y, function() return TO.char.customAlways end,
+        function(v) TO.char.customAlways = v TO:RequestUpdate() end,
+        "Show your own items even when you have enough. Click an icon to use the item.")
+    y = y - ROW
 
     c:SetHeight(-y + 10)
     frame.scrollChild:SetHeight(-y + 10)

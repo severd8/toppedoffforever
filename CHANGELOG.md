@@ -1,3 +1,8 @@
+## 1.1.0
+
+- New: click one of your own items' icons to use it: food, drink, potions, and bandages (on yourself).
+- New option: "Always show these, with counts" under Your own items. Your items stay on screen even when you have enough; the count is red when you're low and white when you're topped off. Topped-off items aren't listed as missing in chat reminders.
+
 ## 1.0.3
 
 - New: the icons sit in a tidy frame with a "ToppedOff" header, in the logo's colors. It's always at least two icons wide and grows as more reminders show up. Drag the header to move it while unlocked; right-click it for options. Turn it off with "Show header and frame".

@@ -154,6 +154,25 @@ SlashCmdList.TOPPEDOFFFOREVER("add 3 conjured water")
 assertEq(#TO.char.custom, 1, "re-adding updates instead of duplicating")
 refresh()
 assertEq(ids()["custom:conjured water"], nil, "5 >= 3")
+-- Always show, even when stocked; click uses the item
+assertEq(TO.char.customAlways, false, "always show off by default")
+TO.char.customAlways = true; refresh()
+local w = ids()["custom:conjured water"]
+assertEq(w and w.text, "5/3", "stocked item shown with count")
+assertEq(w.stocked, true, "marked as topped off")
+local wb
+for _, b in ipairs(TO.buttons) do if b.reminder == w then wb = b end end
+assertEq(wb.__attrs.type, "item", "click uses the item")
+assertEq(wb.__attrs.item, "item:4", "uses it by item ID")
+assertEq(wb.__attrs.unit, "player", "on yourself (bandages)")
+LOG = {}; TO:Remind("Ready check")
+assert(not lastLog("Conjured Water"), "topped-off items aren't reported as missing")
+TO.char.customAlways = false; refresh()
+assertEq(ids()["custom:conjured water"], nil, "hidden again when stocked")
+SlashCmdList.TOPPEDOFFFOREVER("add 20 Conjured Water"); refresh()
+local lb
+for _, b in ipairs(TO.buttons) do if b.reminder and b.reminder.id == "custom:conjured water" then lb = b end end
+assertEq(lb.__attrs.item, "item:4", "low item is clickable too")
 SlashCmdList.TOPPEDOFFFOREVER("remove Conjured Water")
 assertEq(#TO.char.custom, 0, "custom item removed")
 SlashCmdList.TOPPEDOFFFOREVER("add banana")
