@@ -4,7 +4,7 @@ A reminder addon for **World of Warcraft: Forever** (interface 16001, client 1.6
 
 - Author: Tyler (GitHub `severd8`). New to GitHub — explain Git steps plainly when he needs to do anything himself.
 - Commits authored as `severd8 <44451903+severd8@users.noreply.github.com>`. No AI co-author or session lines in commit messages.
-- CurseForge project ID: **not created yet**. Once it exists, add `## X-Curse-Project-ID: <id>` to the `.toc`.
+- CurseForge project ID: **1718878** (in the `.toc` as `X-Curse-Project-ID`).
 - License: MIT. Sister addon: TauntMaster Forever (`severd8/tauntmasterforever`), which this project's setup mirrors.
 - Name note: an unrelated Classic addon called "Topped Off" (by Cupz, auto-buys reagents) exists on CurseForge. Tyler chose to keep this name.
 
@@ -59,4 +59,4 @@ Only testable in game: Forever's exact spell and item names, real clicking of th
 3. Tyler creates the tag himself in GitHub Desktop (History tab → right-click the commit → Create Tag → e.g. `v1.0.1` → Push origin). Tell him exactly which commit and version. Tags containing `beta` or `alpha` upload as Beta/Alpha files.
 4. The **Package and release** workflow runs the tests again, then uploads to CurseForge. Tyler checks the Actions tab for a green check and the CurseForge Files page (new files go through CurseForge review).
 
-Before the first release: create the CurseForge project, add its ID to the `.toc`, and add `CF_API_KEY` to this repo's secrets.
+Before the first release: add `CF_API_KEY` to this repo's secrets.
