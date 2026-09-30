@@ -1,3 +1,11 @@
+## 1.2.0
+
+- New: **auto-tracked items**. ToppedOff picks the best food, water, bandage, healing potion and mana potion in your bags, plus the best stat food for your class, and reminds you when you're low (Min 20 for food, water and bandages, 10 for stat food, 5 for potions). Better items take over automatically as you level, and your Min is kept. An item stays tracked when you run out, so you know to restock.
+- Stat food follows your class: Strength (Warrior), Agility (Rogue, Hunter), Intellect (Mage, Warlock), mana regen (Priest, Shaman), Stamina (Druid, Paladin). Change it with "Stat food for" in the options.
+- Water and mana potions are only tracked for classes that use mana.
+- Uncheck an auto-tracked item to stop tracking it. Items you've added yourself aren't shown twice.
+- New: buffs and weapon enhancements that are running out get an orange border at your warning time, and a red border in the last 20% of it.
+
 ## 1.1.1
 
 - The frame now stays pinned by its top-left corner. When a reminder goes away, the icons to its right slide left and the header stays where it is, instead of the whole frame shifting.

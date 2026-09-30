@@ -364,4 +364,89 @@ assertEq(TO.db.point[4], 500, "top edge kept")
 assertEq(TO.main.__point, "TOPLEFT", "frame anchored top-left")
 TO.main.__left = 320; TO:SavePosition()
 assertEq(TO.db.point[3], 320, "drag saves the top-left corner")
+step("auto-tracked best items")
+STATE.class = "WARRIOR"; STATE.level = 30; STATE.buffs = {}
+TO.char.custom = {}; TO.char.auto = {}; TO.char.statFocus = nil; TO.char.customAlways = false; TO.char.checks = {}
+local EAT = " Must remain seated while eating."
+STATE.bags = {
+    { id = 101, name = "Tough Jerky", count = 4, tip = "Use: Restores 61 health over 18 sec." .. EAT },
+    { id = 102, name = "Mutton Chop", count = 30, tip = "Requires Level 25\nUse: Restores 552 health over 21 sec." .. EAT },
+    { id = 103, name = "Roasted Quail", count = 5, tip = "Requires Level 35\nUse: Restores 874 health over 24 sec." .. EAT },
+    { id = 104, name = "Spiced Wolf Meat", count = 3, tip = "Requires Level 5\nUse: Restores 61 health over 15 sec." .. EAT
+        .. " If you spend at least 10 seconds eating you will become well fed and gain 2 Stamina and Spirit for 15 min." },
+    { id = 105, name = "Smoked Desert Dumplings", count = 2, tip = "Requires Level 25\nUse: Restores 1392 health over 27 sec." .. EAT
+        .. " If you spend at least 10 seconds eating you will become well fed and gain 20 Strength for 15 min." },
+    { id = 106, name = "Melon Juice", count = 8, tip = "Requires Level 15\nUse: Restores 835 mana over 27 sec. Must remain seated while drinking." },
+    { id = 107, name = "Heavy Linen Bandage", count = 12, tip = "Requires First Aid (40)\nUse: Heals 114 damage over 6 sec." },
+    { id = 108, name = "Wool Bandage", count = 2, tip = "Requires First Aid (80)\nUse: Heals 161 damage over 7 sec." },
+    { id = 109, name = "Lesser Healing Potion", count = 1, tip = "Requires Level 3\nUse: Restores 140 to 180 health." },
+    { id = 110, name = "Healing Potion", count = 2, tip = "Requires Level 12\nUse: Restores 280 to 360 health." },
+    { id = 111, name = "Mana Potion", count = 3, tip = "Requires Level 14\nUse: Restores 280 to 360 mana." },
+    { id = 112, name = "Rejuvenation Potion", count = 1, tip = "Use: Restores 70 to 90 mana and health." },
+}
+refresh()
+local A = TO.char.auto
+assertEq(A.food and A.food.name, "Mutton Chop", "best food you can eat (Quail needs 35)")
+assertEq(A.statfood and A.statfood.name, "Smoked Desert Dumplings", "warrior stat food: Strength")
+assertEq(A.bandage and A.bandage.name, "Wool Bandage", "best bandage")
+assertEq(A.healing and A.healing.name, "Healing Potion", "best healing potion")
+assertEq(A.water, nil, "warriors don't track water")
+assertEq(A.mana, nil, "warriors don't track mana potions")
+assertEq(A.food.min, 20, "food min 20"); assertEq(A.statfood.min, 10, "stat food min 10"); assertEq(A.healing.min, 5, "potion min 5")
+local R = ids()
+assertEq(R["auto:food"], nil, "30 Mutton Chop >= 20: topped off")
+assertEq(R["auto:bandage"].text, "2/20", "bandage count")
+assertEq(R["auto:healing"].ownItem, true, "auto items sit with your own items")
+-- Stat focus override
+TO:SetStatFocus("sta"); refresh()
+assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Stamina focus picks the Stamina food")
+TO:SetStatFocus(nil); refresh()
+assertEq(TO.char.auto.statfood.name, "Smoked Desert Dumplings", "back to class default")
+-- Run out: still tracked
+A = TO.char.auto
+local woolIdx
+for i, e in ipairs(STATE.bags) do if e.id == 108 then woolIdx = i end end
+table.remove(STATE.bags, woolIdx); refresh()
+assertEq(A.bandage.name, "Wool Bandage", "kept when you run out")
+assertEq(ids()["auto:bandage"].text, "0/20", "shows 0 so you restock")
+-- Level up: better food takes over, custom Min kept
+A.food.min = 40
+STATE.level = 35; refresh()
+assertEq(A.food.name, "Roasted Quail", "better food replaces the old one")
+assertEq(A.food.min, 40, "your Min is kept")
+-- Uncheck = stop tracking
+TO:SetEnabled("auto:healing", false); refresh()
+assertEq(ids()["auto:healing"], nil, "unchecked slot hidden")
+TO:SetEnabled("auto:healing", true)
+-- Items you added yourself aren't shown twice
+TO:AddCustom("Healing Potion", 5); refresh()
+local n = 0
+for _, r in ipairs(TO.reminders) do if r.label == "Healing Potion" then n = n + 1 end end
+assertEq(n, 1, "no duplicate icon")
+TO:RemoveCustom("Healing Potion")
+-- Mana users track water and mana potions
+STATE.class = "PRIEST"; TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.water.name, "Melon Juice", "priest water")
+assertEq(TO.char.auto.mana.name, "Mana Potion", "priest mana potion (rejuvenation skipped)")
+assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "priest has no mp5/int food here: best of the rest")
+-- Options window lists them
+TO:OpenConfig()
+TO:BuildChecksList()
+STATE.class = "MAGE"; TO.char.auto = {}; STATE.bags = {}; STATE.level = nil; refresh()
+step("expiring buff borders")
+STATE.class = "MAGE"; TO.char.checks = {}; TO.db.warnMinutes = 5
+LEARN("Arcane Intellect"); fire("SPELLS_CHANGED"); TO.db.onlyInInstance = false
+local function aiButton()
+    for _, b in ipairs(TO.buttons) do
+        if b.reminder and b.reminder.id == "buff:intellect" then return b end
+    end
+end
+STATE.buffs = { ["Arcane Intellect"] = 200 }; refresh()      -- 3:20 left, warn at 5:00
+assert(aiButton(), "expiring buff shown")
+assertEq(aiButton().urgency, "expiring", "orange at the warning time")
+STATE.buffs = { ["Arcane Intellect"] = 50 }; refresh()       -- under 20% of 5:00 (60 s)
+assertEq(aiButton().urgency, "urgent", "red in the last 20%")
+STATE.buffs = {}; refresh()
+assertEq(aiButton().urgency, nil, "missing buff: normal border")
+TO.db.warnMinutes = 3
 print("ALL TESTS PASSED")

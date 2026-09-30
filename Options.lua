@@ -257,6 +257,64 @@ function TO:BuildChecksList()
 
     -- Your own items
     header("Your own items")
+    local function subheading(text)
+        Label(c, text, 4, y - 2, "GameFontNormalSmall")
+        y = y - 18
+    end
+
+    -- Auto-tracked: the best of each kind in your bags
+    subheading("Auto-tracked (best in your bags)")
+    self:UpdateAutoItems()
+    local hasMana = self.MANA_CLASSES[class]
+    local autoLabels = {}
+    local function slotText(slot)
+        local a = self.char.auto[slot.key]
+        return slot.label .. ": " .. (a and a.name or "|cff808080none in your bags yet|r")
+    end
+    for _, slot in ipairs(self.AUTO_SLOTS) do
+        if not slot.mana or hasMana then
+            local a = self.char.auto[slot.key]
+            local cb = toggle("auto:" .. slot.key, slotText(slot), true)
+            autoLabels[slot.key] = { cb = cb, slot = slot }
+            cb.label:SetWidth(196)
+            cb.label:SetWordWrap(false)
+            cb.label:SetJustifyH("LEFT")
+            if a then
+                EditBox(c, 40, 230, y - 2, tostring(a.min or slot.min), true, function(t)
+                    local n = tonumber(t)
+                    if n and n >= 1 then a.min = math.floor(n) TO:RequestUpdate() end
+                end)
+            end
+            y = y - ROW
+        end
+    end
+    -- Which stats the stat food should give
+    Label(c, "Stat food for", 28, y - 4, "GameFontHighlightSmall")
+    local focusKeys = { false }
+    for _, k in ipairs(self.STAT_KEYS) do focusKeys[#focusKeys + 1] = k end
+    local function focusLabel(k)
+        if not k then
+            local base = (self.CLASS_STATS[class] or { "sta" })[1]
+            return "Class default (" .. self.STAT_LABELS[base] .. ")"
+        end
+        return self.STAT_LABELS[k]
+    end
+    local focusBtn = PanelButton(c, focusLabel(self.char.statFocus), 190, 110, y)
+    focusBtn:SetScript("OnClick", function(b)
+        local cur, nextIdx = self.char.statFocus or false, 1
+        for i, k in ipairs(focusKeys) do
+            if k == cur then nextIdx = (i % #focusKeys) + 1 break end
+        end
+        TO:SetStatFocus(focusKeys[nextIdx] or nil)
+        TO:UpdateAutoItems()
+        b:SetText(focusLabel(TO.char.statFocus))
+        local row = autoLabels.statfood
+        if row then row.cb.label:SetText(slotText(row.slot)) end
+    end)
+    y = y - ROW
+    note("Better items replace these automatically. Uncheck one to stop tracking it.")
+
+    subheading("Added by you")
     for _, item in ipairs(self.char.custom) do
         local name = item.name
         toggle("custom:" .. name:lower(), name, true)

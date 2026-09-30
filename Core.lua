@@ -16,6 +16,8 @@ TO.COLORS = {
     purple    = { 0.07, 0.05, 0.11 },   -- #120d1c window background
     crimson   = { 0.55, 0.12, 0.12 },   -- #8b1e1e title banner
     cyan      = { 0.16, 0.71, 0.91 },   -- #28b6e8 highlights
+    expiring  = { 1.00, 0.55, 0.00 },   -- #ff8c00 buff running out
+    urgent    = { 1.00, 0.13, 0.13 },   -- #ff2121 buff almost gone
 }
 TO.GOLD_HEX, TO.CYAN_HEX = "ffd966", "28b6e8"
 local PREFIX = "|cffffd966ToppedOff|r: "
@@ -197,6 +199,8 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     weapon = {},              -- mh / oh -> item name, spell -> preferred weapon spell
     custom = {},              -- { name = "Conjured Crystal Water", min = 20 }
     customAlways = false,     -- show your own items even when you have enough
+    auto = {},                -- auto-tracked best items: slot -> { name, id, score, min }
+    statFocus = nil,          -- stat food override ("str", "agi", ...); nil = class default
 }
 
 local function FillDefaults(dst, src)
@@ -493,7 +497,7 @@ function TO:CheckBuffs(list)
                     detail = "Missing", action = { spell = spell } }
             elseif left > 0 and left < warn then
                 list[#list + 1] = { id = id, label = buff.label, icon = SpellIcon(spell), text = FormatTime(left),
-                    detail = "Runs out in " .. FormatTime(left), action = { spell = spell } }
+                    detail = "Runs out in " .. FormatTime(left), action = { spell = spell }, expires = left }
             end
         end
     end
@@ -539,6 +543,7 @@ function TO:CheckWeapons(list)
                     if h.has then
                         r.text = FormatTime(left)
                         r.detail = "Runs out in " .. FormatTime(left)
+                        r.expires = left
                     else
                         r.detail = "No weapon enhancement"
                     end
@@ -578,6 +583,198 @@ function TO:CheckReagents(list)
                         or ("%d in your bags. Topped off."):format(have) }
                 -- Click to use it (food, drink, potions, bandages on yourself)
                 local e = self.bag[c.name:lower()]
+                if e then r.action = { use = "item:" .. e.id, useName = e.name } end
+                list[#list + 1] = r
+            end
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- Auto-tracked items: the best food, water, stat food, bandage, healing potion
+-- and mana potion in your bags. Items are recognized from their tooltip text
+-- ("Restores 294 health over 21 sec... while eating"), and the biggest one you're
+-- high enough level for wins. Once picked, an item stays tracked even when you
+-- run out (that's when you need the reminder), until something better shows up.
+---------------------------------------------------------------------------
+TO.AUTO_SLOTS = {
+    { key = "food",     label = "Food",           min = 20 },
+    { key = "water",    label = "Water",          min = 20, mana = true },
+    { key = "statfood", label = "Stat food",      min = 10 },
+    { key = "bandage",  label = "Bandage",        min = 20 },
+    { key = "healing",  label = "Healing potion", min = 5 },
+    { key = "mana",     label = "Mana potion",    min = 5, mana = true },
+}
+TO.MANA_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PRIEST = true,
+    SHAMAN = true, WARLOCK = true }
+
+-- Stat food: which Well Fed stats matter, best first
+TO.STAT_KEYS = { "str", "agi", "sta", "int", "spi", "mp5" }
+TO.STAT_LABELS = { str = "Strength", agi = "Agility", sta = "Stamina", int = "Intellect",
+    spi = "Spirit", mp5 = "Mana regen" }
+TO.CLASS_STATS = {
+    WARRIOR = { "str", "sta", "agi" },
+    ROGUE   = { "agi", "str", "sta" },
+    HUNTER  = { "agi", "int", "mp5", "sta" },
+    MAGE    = { "int", "mp5", "spi", "sta" },
+    WARLOCK = { "int", "sta", "spi", "mp5" },
+    PRIEST  = { "mp5", "int", "spi", "sta" },
+    SHAMAN  = { "mp5", "int", "sta", "str" },
+    PALADIN = { "sta", "str", "mp5", "int" },
+    DRUID   = { "sta", "agi", "str", "int" },
+}
+local STAT_WORDS = { strength = "str", agility = "agi", stamina = "sta", intellect = "int", spirit = "spi" }
+
+function TO:StatPriority()
+    local base = self.CLASS_STATS[self:PlayerClass()] or { "sta", "spi" }
+    local focus = self.char.statFocus
+    if not focus then return base end
+    local list = { focus }
+    for _, k in ipairs(base) do if k ~= focus then list[#list + 1] = k end end
+    return list
+end
+
+-- The whole tooltip of an item as lowercase text (nil if the game hasn't loaded it yet)
+local scanTip
+local function TooltipText(id)
+    local lines = {}
+    if C_TooltipInfo and C_TooltipInfo.GetItemByID then
+        local ok, data = pcall(C_TooltipInfo.GetItemByID, id)
+        if ok and type(data) == "table" and type(data.lines) == "table" then
+            for _, l in ipairs(data.lines) do
+                local t = Str(l.leftText)
+                if t then lines[#lines + 1] = t end
+            end
+        end
+    end
+    if #lines == 0 and CreateFrame and GameTooltip then
+        scanTip = scanTip or CreateFrame("GameTooltip", "ToppedOffForeverScanTip", nil, "GameTooltipTemplate")
+        pcall(function()
+            scanTip:SetOwner(UIParent, "ANCHOR_NONE")
+            scanTip:ClearLines()
+            scanTip:SetHyperlink("item:" .. id)
+            for i = 1, (Num(scanTip:NumLines()) or 0) do
+                local fs = _G["ToppedOffForeverScanTipTextLeft" .. i]
+                local t = fs and Str(fs:GetText())
+                if t then lines[#lines + 1] = t end
+            end
+        end)
+    end
+    if #lines == 0 then return nil end
+    return table.concat(lines, "\n"):lower()
+end
+
+-- What an item is good for: { food = amount, water = ..., bandage = ..., healing = ...,
+-- mana = ..., stats = { sta = 6, spi = 6 } (stat food), level = required level }
+local itemKinds = {}
+function TO:ItemKind(id)
+    if itemKinds[id] then return itemKinds[id] end
+    local text = TooltipText(id)
+    if not text then return nil end   -- not loaded yet; try again next scan
+    local k = { level = tonumber(text:match("requires level (%d+)")) or 0 }
+    local wellFed = text:match("well fed(.*)")
+    if wellFed then
+        local stats, any = {}, false
+        for n, a, b in wellFed:gmatch("(%d+) (%a+) and (%a+)") do
+            if STAT_WORDS[a] and STAT_WORDS[b] then
+                stats[STAT_WORDS[a]], stats[STAT_WORDS[b]] = tonumber(n), tonumber(n); any = true
+            end
+        end
+        for n, w in wellFed:gmatch("(%d+) (%a+)") do
+            if STAT_WORDS[w] and not stats[STAT_WORDS[w]] then stats[STAT_WORDS[w]] = tonumber(n); any = true end
+        end
+        local mp5 = wellFed:match("(%d+) mana every 5") or wellFed:match("(%d+) mana per 5")
+        if mp5 then stats.mp5 = tonumber(mp5); any = true end
+        if any then k.stats = stats end
+    end
+    local hp = text:match("restores (%d+) health over")
+    local mp = text:match("restores (%d+) mana over")
+    if hp and text:find("eating", 1, true) and not k.stats then k.food = tonumber(hp) end
+    if mp and text:find("drinking", 1, true) then k.water = tonumber(mp) end
+    local bandage = text:match("heals (%d+) damage over")
+    if bandage then k.bandage = tonumber(bandage) end
+    -- Potions: "Restores 140 to 180 health." Rejuvenation-style potions (both) are skipped.
+    local hLo, hHi = text:match("restores (%d+) to (%d+) health")
+    local mLo, mHi = text:match("restores (%d+) to (%d+) mana")
+    if hLo and not mLo then k.healing = (tonumber(hLo) + tonumber(hHi)) / 2 end
+    if mLo and not hLo then k.mana = (tonumber(mLo) + tonumber(mHi)) / 2 end
+    itemKinds[id] = k
+    return k
+end
+
+-- How good an item is for a slot (nil = not that kind of item)
+function TO:AutoScore(slot, k)
+    if slot == "statfood" then
+        if not k.stats then return nil end
+        local prio = self:StatPriority()
+        for i, stat in ipairs(prio) do
+            if k.stats[stat] then return (#prio - i + 1) * 1000 + k.stats[stat] end
+        end
+        return 0
+    end
+    return k[slot]
+end
+
+-- Picks the best item in your bags for each slot; better items replace worse ones
+function TO:UpdateAutoItems()
+    local level = Num(UnitLevel("player")) or 60
+    local hasMana = self.MANA_CLASSES[self:PlayerClass()]
+    for _, slot in ipairs(self.AUTO_SLOTS) do
+        if not slot.mana or hasMana then
+            local best, bestScore
+            for _, e in pairs(self.bag or {}) do
+                local k = self:ItemKind(e.id)
+                if k and k.level <= level then
+                    local score = self:AutoScore(slot.key, k)
+                    if score and (not bestScore or score > bestScore
+                        or (score == bestScore and e.id > best.id)) then
+                        best, bestScore = e, score
+                    end
+                end
+            end
+            local cur = self.char.auto[slot.key]
+            if best and (not cur or cur.id ~= best.id) and (not cur or bestScore > (cur.score or 0)
+                or not self:StillGood(cur, level)) then
+                self.char.auto[slot.key] = { name = best.name, id = best.id, score = bestScore,
+                    min = cur and cur.min or slot.min }
+            elseif cur and best and cur.id == best.id then
+                cur.score = bestScore
+            end
+        end
+    end
+end
+
+-- A tracked item you've outgrown (or can no longer use) gives way to anything in your bags
+function TO:StillGood(cur, level)
+    local k = itemKinds[cur.id]
+    return not k or k.level <= level
+end
+
+-- Stat focus changed: pick the stat food again
+function TO:SetStatFocus(focus)
+    self.char.statFocus = focus
+    self.char.auto.statfood = nil
+    self:RequestUpdate()
+end
+
+function TO:CheckAutoItems(list)
+    local hasMana = self.MANA_CLASSES[self:PlayerClass()]
+    local own = {}
+    for _, c in ipairs(self.char.custom) do own[c.name:lower()] = true end
+    for _, slot in ipairs(self.AUTO_SLOTS) do
+        local a = self.char.auto[slot.key]
+        local id = "auto:" .. slot.key
+        -- Skip items you've also added yourself, so they don't show twice
+        if a and (not slot.mana or hasMana) and self:IsEnabled(id, true) and not own[a.name:lower()] then
+            local have, icon = self:BagCount({ a.name })
+            local min = a.min or slot.min
+            local low = have < min
+            if low or self.char.customAlways then
+                local r = { id = id, label = a.name, icon = icon or ItemIcon(a.id) or self:ItemIconByName(a.name),
+                    text = have .. "/" .. min, low = low, stocked = not low, ownItem = true,
+                    detail = (low and ("%d in your bags (want %d)"):format(have, min)
+                        or ("%d in your bags. Topped off."):format(have)) .. "\nAuto-tracked: best " .. slot.label:lower() }
+                local e = self.bag[a.name:lower()]
                 if e then r.action = { use = "item:" .. e.id, useName = e.name } end
                 list[#list + 1] = r
             end
@@ -637,6 +834,8 @@ function TO:BuildReminders()
     self:CheckBuffs(list)
     self:CheckWeapons(list)
     self:CheckReagents(list)
+    self:UpdateAutoItems()
+    self:CheckAutoItems(list)
     self:CheckAmmo(list)
     self:CheckDurability(list)
     return list
@@ -743,6 +942,21 @@ function TO:ApplyButton(b, r)
     b.icon:SetTexture(r.icon or self.ICONS.unknown)
     if b.icon.SetDesaturated then b.icon:SetDesaturated(r.noItem ~= nil) end
     b.text:SetText(r.text or "")
+    -- Running out: orange border at the warning time, red in its last 20%
+    local warn = self.db.warnMinutes * 60
+    local color, thick = self.COLORS.goldDark, 1
+    if r.expires and r.expires > 0 then
+        if r.expires <= warn * self.URGENT_SHARE then
+            color, thick = self.COLORS.urgent, 3
+        else
+            color, thick = self.COLORS.expiring, 3
+        end
+    end
+    b.border:SetColorTexture(color[1], color[2], color[3], 1)
+    b.border:ClearAllPoints()
+    b.border:SetPoint("TOPLEFT", -thick, thick)
+    b.border:SetPoint("BOTTOMRIGHT", thick, -thick)
+    b.urgency = (color == self.COLORS.urgent and "urgent") or (color == self.COLORS.expiring and "expiring") or nil
     -- Your own items: red count when you're low, white when topped off
     if r.low then b.text:SetTextColor(1, 0.35, 0.3) else b.text:SetTextColor(1, 1, 1) end
 end
@@ -878,6 +1092,7 @@ TO.HEADER_MIN_WIDTH = 84   -- room for the logo and "ToppedOff"
 TO.FRAME_PAD = 4           -- space between the frame's edge and the icons
 TO.MIN_SLOTS = 2           -- the frame is always at least two icons wide
 TO.SEPARATOR_SPACE = 10    -- extra room between buff icons and your own items
+TO.URGENT_SHARE = 0.2      -- red border in the last 20% of the warning time
 
 -- The frame (header + box around the icons) shows while unlocked, so it can be
 -- dragged, or whenever there are reminders if "Show header and frame" is on.

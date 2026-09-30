@@ -141,6 +141,18 @@ STATE = {
     durability = {}, instance = false,
 }
 function UnitClass(u) return "Mage", STATE.class end
+function UnitLevel(u) return STATE.level or 60 end
+-- Tooltips: a bag entry's `tip` field is its tooltip text (lines split on "\n")
+C_TooltipInfo = { GetItemByID = function(id)
+    for _, e in ipairs(STATE.bags) do
+        if e.id == id then
+            local lines = { { leftText = e.name } }
+            for l in (e.tip or ""):gmatch("[^\n]+") do lines[#lines + 1] = { leftText = l } end
+            return { lines = lines }
+        end
+    end
+    return nil
+end }
 function InCombatLockdown() return COMBAT end
 FAKE_TIME = 1000
 function GetTime() return FAKE_TIME end

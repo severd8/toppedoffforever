@@ -11,13 +11,14 @@ ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It wat
 ## Features
 
 - **Only shows what's wrong.** No icons when you're topped off. An icon appears when something runs low and disappears once it's fixed.
-- **Class buffs for every class.** Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield and more. You're warned when a buff is missing or about to run out. **Click the icon to cast it on yourself.**
+- **Class buffs for every class.** Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
 - **Group buffs count.** Arcane Brilliance covers Arcane Intellect, Prayer of Fortitude covers Fortitude, and a buff from another player counts too.
 - **Choose your spell.** For Blessings, Auras, Aspects, Armors and Shaman weapon buffs, pick which one the icon casts.
 - **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and any oil or sharpening stone you choose. **Click to apply it to your weapon.** Your best rank in your bags is used automatically.
 - **Reagents and class items.** Soul Shards, teleport and portal runes, Arcane Powder, candles, Light Feathers, Symbols of Kings and Divinity, Ankhs, totems, Flash Powder and more. Checked only once you've learned a spell that needs them. Set your own minimums.
 - **Ammo** for Hunters.
 - **Low durability** warning before your gear breaks.
+- **Food, water, bandages and potions, picked for you.** ToppedOff finds the best food, water, bandage, healing potion and mana potion in your bags, plus the right **stat food for your class** (Strength for Warriors, Agility for Rogues and Hunters, Intellect for Mages and Warlocks, mana regen for Priests and Shamans, Stamina for Druids and Paladins; change it in the options). When something better lands in your bags, it takes over. Water and mana potions are only tracked for mana users.
 - **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). Turn on "Always show these, with counts" to keep them on screen even when you're stocked up; the count turns red when you're low. They sit on the right of the frame, after a separator, with buffs and other reminders on the left.
 - **Chat reminders.** Lists anything missing when a ready check starts or when you enter a dungeon or raid.
 - **Keybindings.** Fix the first three reminders from the keyboard or a controller.
