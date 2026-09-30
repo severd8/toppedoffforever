@@ -257,6 +257,8 @@ Class("HUNTER", { "Call Pet", "Revive Pet", "Feed Pet", "Aspect of the Hawk", "A
 Class("WARLOCK", { "Summon Imp", "Summon Voidwalker", "Demon Skin", "Demon Armor", "Drain Soul", "Create Soulstone (Lesser)" }, { "buffs", "more" })
 Class("ROGUE", { "Vanish", "Blind" }, { "buffs", "supplies" })
 Class("PRIEST", { "Power Word: Fortitude", "Inner Fire", "Divine Spirit", "Prayer of Fortitude", "Levitate" }, { "buffs" })
+Class("PALADIN", { "Blessing of Might", "Blessing of Wisdom", "Blessing of Kings", "Devotion Aura", "Retribution Aura",
+    "Righteous Fury" }, { "buffs" })
 
 local f = assert(io.open(arg and arg[1] or "tests/render-out.json", "w"))
 f:write("[" .. table.concat(out, ",\n") .. "]")

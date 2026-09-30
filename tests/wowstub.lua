@@ -141,7 +141,14 @@ STATE = {
     class = "MAGE", buffs = {}, bags = {}, mh = nil, oh = nil, ammo = nil, ammoCount = 0,
     durability = {}, instance = false,
 }
-function UnitClass(u) return "Mage", STATE.class end
+function UnitClass(u)
+    if u ~= "player" and STATE.partyClass and STATE.partyClass[u] then
+        local c = STATE.partyClass[u]
+        if c == "hidden" then return secret("x"), secret("x") end
+        return c, c
+    end
+    return "Mage", STATE.class
+end
 function UnitLevel(u) return STATE.level or 60 end
 -- Group: STATE.party = { "party1", ... } present; STATE.partyBuffs[unit] = { [name] = left }
 -- STATE.hiddenAuras[unit] = true makes that unit's auras secret; STATE.roles[unit] = "HEALER"

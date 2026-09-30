@@ -212,6 +212,7 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     elixirInstanceOnly = true,
     soulstoneInstanceOnly = true,
     petFood = "",             -- Hunter pet food item name ("" = not set)
+    blessings = {},           -- Paladin: class -> "Kings" / "Might" / "Wisdom" / ... / "none"
 }
 
 local function FillDefaults(dst, src)
@@ -950,6 +951,55 @@ function TO:CheckPartyBuffs(list)
     end
 end
 
+-- Paladin: the blessing each class in your party should have
+TO.BLESSING_CLASSES = { "WARRIOR", "ROGUE", "HUNTER", "DRUID", "SHAMAN", "PALADIN", "PRIEST", "MAGE", "WARLOCK" }
+TO.CLASS_PLURALS = { WARRIOR = "Warriors", ROGUE = "Rogues", HUNTER = "Hunters", DRUID = "Druids",
+    SHAMAN = "Shamans", PALADIN = "Paladins", PRIEST = "Priests", MAGE = "Mages", WARLOCK = "Warlocks" }
+TO.BLESSING_NAMES = { "Kings", "Might", "Wisdom", "Salvation", "Light", "Sanctuary" }
+-- Might for melee, Wisdom for mana users (Might doesn't help a Hunter's ranged attacks)
+TO.BLESSING_DEFAULTS = { WARRIOR = "Might", ROGUE = "Might" }
+
+-- The blessing spell for a class, or nil for none. Falls back if yours isn't learned.
+function TO:BlessingFor(class)
+    local pick = self.char.blessings[class]
+    if pick == "none" then return nil end
+    local want = pick or self.BLESSING_DEFAULTS[class] or "Wisdom"
+    for _, b in ipairs({ want, self.BLESSING_DEFAULTS[class] or "Wisdom", "Might", "Wisdom" }) do
+        if self:Knows("Blessing of " .. b) then return "Blessing of " .. b end
+    end
+    return nil
+end
+
+function TO:CheckPartyBlessings(list)
+    if self:PlayerClass() ~= "PALADIN" or not self:IsEnabled("party:blessing", true) then return end
+    local units = PartyUnits()
+    if #units == 0 then return end
+    local names, target, targetSpell, anySpell = {}, nil, nil, nil
+    for _, u in ipairs(units) do
+        local usable = Plain(UnitIsConnected(u)) ~= false and Plain(UnitIsDeadOrGhost(u)) ~= true
+            and Plain(UnitIsVisible(u)) ~= false
+        local _, cls = UnitClass(u)
+        cls = usable and Str(cls)   -- hidden class: can't tell which blessing, skip
+        local spell = cls and self:BlessingFor(cls)
+        local b = spell and self:UnitBuffs(u)
+        if b and not (b[spell:lower()] or b[("Greater " .. spell):lower()]) then
+            anySpell = anySpell or spell
+            names[#names + 1] = (Str(UnitName(u)) or u) .. " (" .. spell:gsub("^Blessing of ", "") .. ")"
+            if not target and Plain(UnitInRange(u)) ~= false then target, targetSpell = u, spell end
+        end
+    end
+    if #names == 0 then return end
+    local r = { id = "party:blessing", label = "Blessings (party)", icon = SpellIcon(targetSpell or anySpell),
+        text = tostring(#names), detail = "Missing: " .. table.concat(names, ", ") }
+    if target then
+        r.action = { spell = targetSpell, unit = target }
+        r.clickText = "Click to cast " .. targetSpell .. " on " .. (Str(UnitName(target)) or "them")
+    else
+        r.detail = r.detail .. "\nNobody missing one is in range"
+    end
+    list[#list + 1] = r
+end
+
 -- Elixirs and flasks: the ones you picked in the options, tracked like buffs
 function TO:BagElixirs()
     local out = {}
@@ -1269,6 +1319,7 @@ function TO:BuildReminders()
     -- Row 1: buffs
     self:CheckBuffs(list)
     self:CheckPartyBuffs(list)
+    self:CheckPartyBlessings(list)
     self:CheckWeapons(list)
     self:CheckWellFed(list)
     self:CheckElixirs(list)

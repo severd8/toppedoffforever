@@ -239,6 +239,43 @@ local function NotLearned(cb, text)
     cb.label:SetText(text .. " |cff808080(not learned)|r")
 end
 
+-- A button that opens a list to pick from (steps through the choices if menus
+-- aren't available). choices = { { value = , text = }, ... }
+local function Dropdown(parent, x, y, width, choices, getter, setter, tip)
+    local b = PanelButton(parent, "", width, x, y)
+    local function label()
+        local cur = getter()
+        for _, ch in ipairs(choices) do if ch.value == cur then return ch.text end end
+        return choices[1] and choices[1].text or ""
+    end
+    b:SetText(label())
+    b:SetScript("OnClick", function(self)
+        local function pick(v) setter(v) self:SetText(label()) end
+        if MenuUtil and MenuUtil.CreateContextMenu then
+            MenuUtil.CreateContextMenu(self, function(_, root)
+                for _, ch in ipairs(choices) do
+                    root:CreateRadio(ch.text, function() return getter() == ch.value end, function() pick(ch.value) end)
+                end
+            end)
+        else
+            local cur, nextIdx = getter(), 1
+            for i, ch in ipairs(choices) do
+                if ch.value == cur then nextIdx = (i % #choices) + 1 break end
+            end
+            pick(choices[nextIdx].value)
+        end
+    end)
+    if tip then
+        b:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(tip, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+    return b
+end
+
 -- Small red X that removes a row
 local function RemoveButton(parent, x, y, onClick)
     local b = CreateFrame("Button", nil, parent, "UIPanelCloseButton")
@@ -288,6 +325,33 @@ local function BuildBuffsTab(self, ctx, class)
             end
             ctx.note("Shows how many party members are missing it. Click to buff the next one in range.")
         end
+    end
+
+    -- Paladin: which blessing each class in your party gets
+    if class == "PALADIN" then
+        ctx.header("Party blessings")
+        ctx.toggle("party:blessing", "Bless your party", true)
+        ctx.row()
+        local choices = {}
+        for _, b in ipairs(self.BLESSING_NAMES) do
+            if self:Knows("Blessing of " .. b) then choices[#choices + 1] = { value = b, text = "Blessing of " .. b } end
+        end
+        choices[#choices + 1] = { value = "none", text = "None" }
+        for _, cls in ipairs(self.BLESSING_CLASSES) do
+            local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[cls]
+            local name = Label(c, self.CLASS_PLURALS[cls], 26, ctx.y - 5, "GameFontHighlight")
+            if color then name:SetTextColor(color.r, color.g, color.b) end
+            Dropdown(c, CYCLE_X, ctx.y, CYCLE_W, choices,
+                function()
+                    local spell = TO:BlessingFor(cls)
+                    return spell and spell:gsub("^Blessing of ", "") or "none"
+                end,
+                function(v) TO.char.blessings[cls] = v TO:RequestUpdate() end,
+                "Blessing to give " .. self.CLASS_PLURALS[cls] .. " in your party")
+            ctx.row()
+        end
+        ctx.note("Shows how many party members are missing their blessing. Click to bless the next one in range. "
+            .. "A Greater Blessing, or the same blessing from another Paladin, counts.")
     end
 
     -- Weapon enhancement

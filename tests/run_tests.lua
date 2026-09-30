@@ -674,4 +674,36 @@ assertEq(TO:StatPriority()[1], "str", "Strength food first")
 fbtn.__scripts.OnClick(fbtn); menu.radios[1].onSel()
 assertEq(TO.char.statFocus, nil, "back to Automatic")
 TO:OpenConfig(); MenuUtil = nil; STATE.talents = nil
+step("party blessings")
+STATE.class = "PALADIN"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Blessing of Might", "Blessing of Wisdom", "Blessing of Kings", "Devotion Aura"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.char.blessings = {}; STATE.bags = {}
+STATE.buffs = { ["Blessing of Kings"] = 300, ["Devotion Aura"] = 0 }
+STATE.party = { "party1", "party2", "party3", "party4" }
+STATE.partyClass = { party1 = "WARRIOR", party2 = "MAGE", party3 = "HUNTER", party4 = "ROGUE" }
+STATE.partyBuffs = { party1 = {}, party2 = { ["Blessing of Wisdom"] = 300 }, party3 = {},
+    party4 = { ["Greater Blessing of Might"] = 900 } }
+refresh()
+local pb = ids()["party:blessing"]
+assertEq(pb and pb.text, "2", "warrior and hunter missing their blessings")
+assertEq(pb.action.spell, "Blessing of Might", "warrior gets Might")
+assertEq(pb.action.unit, "party1", "on the warrior")
+assertEq(TO:BlessingFor("HUNTER"), "Blessing of Wisdom", "hunters default to Wisdom")
+-- Per-class choice
+TO.char.blessings.WARRIOR = "Kings"; refresh()
+assertEq(ids()["party:blessing"].action.spell, "Blessing of Kings", "warriors set to Kings")
+TO.char.blessings.WARRIOR = "none"; refresh()
+assertEq(ids()["party:blessing"].action.spell, "Blessing of Wisdom", "warriors skipped: hunter next")
+assertEq(ids()["party:blessing"].action.unit, "party3", "on the hunter")
+TO.char.blessings.HUNTER = "Kings"; STATE.partyBuffs.party3 = { ["Blessing of Kings"] = 300 }; refresh()
+assertEq(ids()["party:blessing"], nil, "everyone blessed")
+-- Not learned: falls back
+TO.char.blessings.MAGE = "Salvation"
+assertEq(TO:BlessingFor("MAGE"), "Blessing of Wisdom", "unlearned choice falls back to Wisdom")
+-- Hidden class: skipped
+STATE.partyClass.party1 = "hidden"; TO.char.blessings.WARRIOR = nil; refresh()
+assertEq(ids()["party:blessing"], nil, "hidden class skipped")
+-- Options rows
+TO:OpenConfig(); TO:ShowOptionsTab("buffs"); TO:OpenConfig()
+STATE.party = {}; STATE.partyClass = {}; TO.char.blessings = {}
 print("ALL TESTS PASSED")

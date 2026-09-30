@@ -1,5 +1,6 @@
 ## 1.4.1
 
+- New: **party blessings** for Paladins. Shows how many party members are missing their blessing, and a click blesses the next one in range. Choose the blessing for each class on the Buffs tab (Might for Warriors and Rogues, Wisdom for everyone else by default, or Kings, or none). A Greater Blessing or the same blessing from another Paladin counts.
 - Stat food now recognizes **spell power** and **healing** foods, in case Forever adds them. Both are also in the "Stat food for" choices.
 - Stat food now follows **your role**, not just your class. Priests, Shamans, Druids and Paladins get food for what they do, read from the talent tree with the most points (or your group role): healers get healing then mana regen, casters (Shadow, Elemental, Balance) get spell power then Intellect, Enhancement and Retribution get Strength, and tanks get Stamina. Mages and Warlocks get spell power then Intellect. The "Stat food for" button shows what was picked, like "Caster: Spell power".
 - "Stat food for" is now a dropdown list: keep **Automatic**, or pick any stat yourself (for example Strength for a Protection Paladin). Your pick is saved per character.
