@@ -88,6 +88,7 @@ local function load_file(path)
 end
 load_file("Core.lua")
 load_file("Options.lua")
+load_file("Vendor.lua")
 local TO = ns.TO
 local function fire(event, ...)
     for _, f in ipairs(ALL_FRAMES) do
@@ -259,6 +260,37 @@ Class("ROGUE", { "Vanish", "Blind" }, { "buffs", "supplies" })
 Class("PRIEST", { "Power Word: Fortitude", "Inner Fire", "Divine Spirit", "Prayer of Fortitude", "Levitate" }, { "buffs" })
 Class("PALADIN", { "Blessing of Might", "Blessing of Wisdom", "Blessing of Kings", "Devotion Aura", "Retribution Aura",
     "Righteous Fury" }, { "buffs" })
+
+Class("MAGE", { "Arcane Intellect", "Ice Armor", "Conjure Water", "Conjure Food", "Conjure Mana Jade",
+    "Teleport: Stormwind", "Slow Fall" }, { "supplies" })
+Class("WARLOCK", { "Demon Skin", "Create Healthstone (Lesser)", "Drain Soul", "Summon Imp" }, { "supplies" })
+
+-- Profiles tab with another character, and the "Editing" choice on a check tab
+TO.db.chars["Aeri - Forever"] = { class = "PRIEST", settings = {} }
+TO.db.chars["Grunt - Forever"] = { class = "WARRIOR", settings = {} }
+STATE.class = "DRUID"
+SPELLBOOK, FUTURE = {}, {}
+LEARN("Mark of the Wild", "Thorns", "Omen of Clarity")
+fire("SPELLS_CHANGED")
+TO:ShowOptionsTab("profiles")
+Dump("options-druid-profiles", TO.config)
+TO.char.splitProfiles = true
+TO:ShowOptionsTab("buffs")
+Dump("tab-druid-buffs-split", TO.config.scrollChild, true)
+TO.char.splitProfiles = false
+
+-- Vendor panel
+STATE.class = "PRIEST"
+SPELLBOOK, FUTURE = {}, {}
+LEARN("Prayer of Fortitude", "Levitate")
+fire("SPELLS_CHANGED")
+STATE.bags = { { id = 801, name = "Sacred Candle", count = 4 } }
+STATE.merchant = { { name = "Sacred Candle", price = 500 }, { name = "Light Feather", price = 10 },
+    { name = "Morning Glory Dew", price = 400, stack = 5 } }
+TO:AddCustom("Morning Glory Dew", 20)
+STATE.repairCost = 12345
+fire("MERCHANT_SHOW")
+Dump("vendor", TO.vendor)
 
 local f = assert(io.open(arg and arg[1] or "tests/render-out.json", "w"))
 f:write("[" .. table.concat(out, ",\n") .. "]")

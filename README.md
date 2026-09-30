@@ -23,6 +23,12 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 - **Pets.** Hunters and Warlocks are reminded when their pet isn't out or is dead (click to call, revive or summon). Hunters also see when their pet isn't happy: set a pet food and one click feeds it, with a reminder when the food runs low.
 - **Soulstone.** Warlocks are reminded when nobody in the group has a Soulstone. Click to put yours on the healer, or to make one.
 - **Bag space.** Warns when you're down to a few free bag slots. Click to open your bags.
+- **Mage conjures.** Conjured water and food below your Min, and a missing mana gem. Click to conjure your best rank.
+- **Healthstones.** Warlocks are reminded to make one. Everyone else is reminded in dungeons when a Warlock is in the group.
+- **One-click restock at vendors.** Beside the vendor window, a list of everything you're short on that the vendor sells (reagents, food, water, potions, your own items, ammo, pet food), with the cost. Untick anything you don't want, then click **Restock**. Nothing is bought until you click.
+- **Repair button.** At a vendor who repairs, "Repair all" shows the cost. One click.
+- **Separate checks outside dungeons.** Keep a lighter set of checks while questing, and everything on in dungeons and raids.
+- **Copy another character.** Copy one character's checks, Min counts, items and choices to an alt.
 - **Reagents and class items.** Soul Shards, teleport and portal runes, Arcane Powder, candles, Light Feathers, Symbols of Kings and Divinity, Ankhs, totems, Flash Powder and more. Checked only once you've learned a spell that needs them. Set your own minimums.
 - **Ammo** for Hunters.
 - **Low durability** warning before your gear breaks.
@@ -52,9 +58,10 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 | Side | What's there |
 |---|---|
 | **Display** (left) | Show reminders, lock, hide in combat, only in dungeons and raids, show header, minimap button, icon size, warning time for buffs, durability warning %, chat reminders and sound |
-| **Buffs** tab (right) | Your buffs and which spell to cast, party buffs, weapon enhancements, Well Fed, elixirs and flasks |
-| **Supplies** tab | Auto-tracked food, water, bandages and potions, stat food choice, your own items, reagents and ammo |
+| **Buffs** tab (right) | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, elixirs and flasks |
+| **Supplies** tab | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
 | **Pet & gear** tab | Pet, Soulstone (Warlocks), durability and bag space |
+| **Profiles** tab | Separate checks outside dungeons, copy another character |
 
 Everything on the right is saved per character. Display settings on the left (including **Icons per row**) are shared by all your characters.
 

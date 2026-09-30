@@ -153,11 +153,16 @@ function UnitLevel(u) return STATE.level or 60 end
 -- Group: STATE.party = { "party1", ... } present; STATE.partyBuffs[unit] = { [name] = left }
 -- STATE.hiddenAuras[unit] = true makes that unit's auras secret; STATE.roles[unit] = "HEALER"
 STATE.party, STATE.partyBuffs, STATE.hiddenAuras, STATE.roles, STATE.outOfRange = {}, {}, {}, {}, {}
-function IsInGroup() return #STATE.party > 0 end
-function IsInRaid() return false end
+function IsInGroup() return #STATE.party > 0 or STATE.raid ~= nil end
+-- Raid: STATE.raid = { "raid1", ... } present, STATE.raidMe = the one that's you
+function IsInRaid() return STATE.raid ~= nil end
+function GetNumGroupMembers() return STATE.raid and #STATE.raid or (#STATE.party + 1) end
+function UnitIsUnit(a, b) return a == b or (b == "player" and a == STATE.raidMe) end
+function GetRealmName() return "Forever" end
 local function inParty(u) for _, p in ipairs(STATE.party) do if p == u then return true end end return false end
 function UnitExists(u)
     if u == "player" then return true end
+    if STATE.raid then for _, r in ipairs(STATE.raid) do if r == u then return true end end end
     if u == "pet" then return STATE.pet ~= nil end
     return inParty(u)
 end
@@ -293,3 +298,18 @@ function GetInventoryItemDurability(slot)
     if not d then return nil end
     return maybeSecret(d), 100
 end
+
+-- Vendor: STATE.merchant = { { name, price, stack, icon }, ... }; BOUGHT logs purchases
+STATE.merchant, BOUGHT = {}, {}
+STATE.money, STATE.repairCost = 100000, 0
+function GetMerchantNumItems() return #STATE.merchant end
+function GetMerchantItemInfo(i)
+    local m = STATE.merchant[i]
+    return m.name, m.icon or "icon", m.price, m.stack or 1, -1, true, true, m.extended or false
+end
+function GetMerchantItemMaxStack(i) return 20 end
+function BuyMerchantItem(i, q) BOUGHT[#BOUGHT + 1] = STATE.merchant[i].name .. ":" .. tostring(q) end
+function GetMoney() return STATE.money end
+function CanMerchantRepair() return STATE.repairCost > 0 end
+function GetRepairAllCost() return STATE.repairCost, STATE.repairCost > 0 end
+function RepairAllItems() REPAIRED = true end

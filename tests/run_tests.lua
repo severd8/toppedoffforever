@@ -9,6 +9,7 @@ local function load_file(path)
 end
 load_file(ADDON_DIR .. "/Core.lua")
 load_file(ADDON_DIR .. "/Options.lua")
+load_file(ADDON_DIR .. "/Vendor.lua")
 local TO = ns.TO
 
 local function fire(event, ...)
@@ -316,7 +317,7 @@ for _, class in ipairs({ "MAGE", "PRIEST", "DRUID", "WARLOCK", "PALADIN", "HUNTE
     TO:AddCustom("Healing Potion", 3)
     for _, t in ipairs(TO.OPTION_TABS) do TO:ShowOptionsTab(t.key) end
 end
-assertEq(TO.optionsTab, "more", "last tab shown")
+assertEq(TO.optionsTab, "profiles", "last tab shown")
 TO:ShowOptionsTab("supplies")
 -- Click every checkbox and button in the checks list, and commit every edit box
 for _, f in ipairs(ALL_FRAMES) do
@@ -338,7 +339,9 @@ TO:OpenConfig()
 assertEq(TO.config.__shown, false, "options toggle closed")
 -- The walk above flipped settings; put the defaults back for later steps
 TO.char.wellFedInstanceOnly, TO.char.elixirInstanceOnly, TO.char.soulstoneInstanceOnly = true, true, true
-TO.char.customAlways = false
+TO.char.customAlways, TO.char.splitProfiles, TO.char.wholeRaid = false, false, false
+TO.char.restockAtVendor, TO.char.repairAtVendor = true, true
+TO.char.checksOutside = {}
 
 step("minimap button")
 local mm = TO.minimapButton
@@ -706,4 +709,209 @@ assertEq(ids()["party:blessing"], nil, "hidden class skipped")
 -- Options rows
 TO:OpenConfig(); TO:ShowOptionsTab("buffs"); TO:OpenConfig()
 STATE.party = {}; STATE.partyClass = {}; TO.char.blessings = {}
+step("separate checks outside dungeons")
+STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Arcane Intellect", "Ice Armor"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.checksOutside = {}, {}; TO.db.onlyInInstance = false
+STATE.buffs = {}; STATE.bags = {}; STATE.party = {}
+TO.char.splitProfiles = true
+TO:SetEnabled("buff:armor", false, true)          -- off outside only
+STATE.instance = false; refresh()
+assertEq(ids()["buff:armor"], nil, "armor off outside")
+assert(ids()["buff:intellect"], "intellect follows the dungeon set outside")
+STATE.instance = true; refresh()
+assert(ids()["buff:armor"], "armor on in dungeons")
+TO.char.splitProfiles = false; STATE.instance = false; refresh()
+assert(ids()["buff:armor"], "one set again when turned off")
+TO.char.checksOutside = {}
+
+step("whole raid")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Power Word: Fortitude"); fire("SPELLS_CHANGED")
+STATE.buffs = { ["Power Word: Fortitude"] = 1800 }
+STATE.raid = { "raid1", "raid2", "raid3", "raid4", "raid5", "raid6" }; STATE.raidMe = "raid1"
+STATE.party = { "party1" }
+STATE.partyBuffs = { party1 = { ["Power Word: Fortitude"] = 900 }, raid2 = {}, raid3 = {},
+    raid4 = { ["Prayer of Fortitude"] = 900 }, raid5 = {}, raid6 = {} }
+refresh()
+assertEq(ids()["party:fortitude"], nil, "raid, whole-raid off: only your group (all buffed)")
+TO.char.wholeRaid = true; refresh()
+local rf = ids()["party:fortitude"]
+assertEq(rf and rf.text, "4", "whole raid: four missing (you're skipped)")
+assertEq(rf.label, "Power Word: Fortitude (raid)", "labelled raid")
+TO.char.wholeRaid = false; STATE.raid = nil; STATE.raidMe = nil; STATE.party = {}
+
+step("mage conjures")
+STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Arcane Intellect", "Conjure Water", "Conjure Food", "Conjure Mana Jade", "Conjure Mana Agate"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.char.auto = {}
+STATE.buffs = { ["Arcane Intellect"] = 1800 }
+STATE.bags = { { id = 601, name = "Conjured Sparkling Water", count = 5,
+    tip = "Use: Restores 2934 mana over 27 sec. Must remain seated while drinking." },
+    { id = 602, name = "Conjured Sourdough", count = 30, tip = "Use: Restores 874 health over 27 sec. Must remain seated while eating." } }
+refresh()
+local cw = ids()["conjure:water"]
+assertEq(cw and cw.text, "5/20", "conjured water low")
+assertEq(cw.action.spell, "Conjure Water", "click conjures water")
+assertEq(ids()["conjure:food"], nil, "30 conjured food is enough")
+assertEq(TO.char.auto.water, nil, "conjured water isn't auto-tracked (can't buy it)")
+assertEq(ids()["conjure:gem"].action.spell, "Conjure Mana Jade", "best mana gem")
+table.insert(STATE.bags, { id = 603, name = "Mana Jade", count = 1 }); refresh()
+assertEq(ids()["conjure:gem"], nil, "have the gem")
+
+step("healthstones")
+STATE.class = "WARLOCK"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Demon Skin", "Create Healthstone (Lesser)", "Create Healthstone (Minor)"); fire("SPELLS_CHANGED")
+STATE.bags = {}; STATE.buffs = { ["Demon Skin"] = 0 }; STATE.pet = "alive"
+refresh()
+assertEq(ids().healthstone.action.spell, "Create Healthstone (Lesser)", "warlock: make the best healthstone")
+STATE.bags = { { id = 701, name = "Lesser Healthstone", count = 1 } }; refresh()
+assertEq(ids().healthstone, nil, "has one")
+STATE.class = "WARRIOR"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
+STATE.bags = {}; STATE.party = { "party1" }; STATE.partyClass = { party1 = "WARLOCK" }; STATE.partyBuffs = { party1 = {} }
+STATE.instance = true; refresh()
+local hs = ids().healthstone
+assert(hs and hs.detail:find("Ask Name_party1"), "others: ask the warlock in dungeons")
+assertEq(hs.action, nil, "nothing to click")
+STATE.instance = false; refresh()
+assertEq(ids().healthstone, nil, "not outside dungeons")
+STATE.partyClass = {}; STATE.party = {}; STATE.pet = nil
+
+step("copy another character")
+TO.db.chars["Alt - Forever"] = { class = "PRIEST", settings = { checks = { ["buff:fortitude"] = false },
+    custom = { { name = "Morning Glory Dew", min = 15 } }, blessings = { WARRIOR = "Kings" }, statFocus = "spi",
+    auto = { food = { name = "X", id = 1, min = 3 } } } }
+local others = TO:OtherCharacters()
+assertEq(#others >= 1 and others[1].key, "Alt - Forever", "other character listed")
+for _, o in ipairs(others) do assert(o.key ~= TO:CharacterKey(), "you're not in the list") end
+assert(TO:CopySettingsFrom("Alt - Forever"), "copied")
+assertEq(TO.char.checks["buff:fortitude"], false, "checks copied")
+assertEq(TO.char.custom[1].name, "Morning Glory Dew", "own items copied")
+assertEq(TO.char.blessings.WARRIOR, "Kings", "blessings copied")
+assertEq(TO.char.auto.food, nil, "auto picks not copied (re-picked from your bags)")
+TO.char.custom[1].min = 99
+assertEq(TO.db.chars["Alt - Forever"].settings.custom[1].min, 15, "a copy, not shared")
+assertEq(TO:CopySettingsFrom(TO:CharacterKey()), false, "can't copy yourself")
+TO.char.checks = {}; TO.char.custom = {}; TO.char.blessings = {}; TO.char.statFocus = nil
+TO.db.chars["Alt - Forever"] = nil
+
+step("vendor restock and repair")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Prayer of Fortitude", "Levitate"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.char.auto = {}
+STATE.bags = { { id = 801, name = "Sacred Candle", count = 4 },
+    { id = 802, name = "Morning Glory Dew", count = 12, tip = "Requires Level 45\nUse: Restores 2934 mana over 30 sec. Must remain seated while drinking." } }
+TO:AddCustom("Morning Glory Dew", 20)
+STATE.merchant = {
+    { name = "Sacred Candle", price = 500 },
+    { name = "Light Feather", price = 10 },
+    { name = "Morning Glory Dew", price = 400, stack = 5 },
+    { name = "Fancy Thing", price = 1, extended = true },
+}
+STATE.repairCost = 12345
+BOUGHT = {}; REPAIRED = false
+fire("MERCHANT_SHOW")
+local vp = TO.vendor
+assert(vp and vp.__shown, "restock panel shown")
+local plan = vp.plan
+local byName = {}
+for _, row in ipairs(plan) do byName[row.name] = row end
+assertEq(byName["Sacred Candle"].count, 6, "candles: 6 to reach 10")
+assertEq(byName["Light Feather"].count, 5, "light feathers: 5")
+assertEq(byName["Morning Glory Dew"].lots, 2, "dew sold in 5s: 2 stacks for 8 needed")
+assertEq(byName["Morning Glory Dew"].count, 10, "dew: 10 bought")
+assertEq(byName["Fancy Thing"], nil, "special-currency items skipped")
+-- Untick feathers, then Restock
+for _, r in ipairs(vp.rows) do
+    if r.row and r.row.name == "Light Feather" then r:SetChecked(false) r.__scripts.OnClick(r) end
+end
+vp.buy.__scripts.OnClick(vp.buy)
+local got = table.concat(BOUGHT, " ")
+assert(got:find("Sacred Candle:6"), "candles bought in one batch: " .. got)
+assert(not got:find("Light Feather"), "unticked row skipped")
+assert(select(2, got:gsub("Morning Glory Dew:nil", "")) == 2, "dew bought one stack at a time: " .. got)
+vp.repair.__scripts.OnClick(vp.repair)
+assertEq(REPAIRED, true, "repair all")
+-- Not enough money
+BOUGHT = {}; STATE.money = 100
+TO:BuyRestock({ { index = 1, name = "Sacred Candle", lots = 6, count = 6, cost = 3000, stack = 1 } })
+assertEq(#BOUGHT, 0, "can't afford: nothing bought")
+STATE.money = 100000
+-- Turned off
+TO.char.restockAtVendor, TO.char.repairAtVendor = false, false
+TO:UpdateVendorPanel()
+assertEq(vp.__shown, false, "hidden when both are off")
+TO.char.restockAtVendor, TO.char.repairAtVendor = true, true
+fire("MERCHANT_CLOSED")
+assertEq(vp.__shown, false, "hidden when the vendor closes")
+TO:RemoveCustom("Morning Glory Dew"); STATE.merchant = {}; STATE.repairCost = 0; STATE.bags = {}
+step("review fixes")
+-- Unticked rows stay unticked when the list refreshes
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Prayer of Fortitude", "Levitate"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.checksOutside, TO.char.auto = {}, {}, {}
+STATE.level = 60; STATE.bags = {}; STATE.money = 100000
+STATE.merchant = { { name = "Sacred Candle", price = 500 }, { name = "Holy Candle", price = 300 },
+    { name = "Light Feather", price = 10 } }
+fire("MERCHANT_SHOW")
+local vp = TO.vendor
+for _, r in ipairs(vp.rows) do
+    if r.row and r.row.name == "Light Feather" then r:SetChecked(false) r.__scripts.OnClick(r) end
+end
+fire("BAG_UPDATE_DELAYED")
+local fe
+for _, r in ipairs(vp.rows) do if r.row and r.row.name == "Light Feather" then fe = r end end
+assertEq(fe.__checked, false, "untick survives a refresh")
+BOUGHT = {}; vp.buy.__scripts.OnClick(vp.buy)
+assert(not table.concat(BOUGHT, " "):find("Light Feather"), "unticked row not bought after a refresh")
+-- Reagent rank by level
+local names = {}
+for _, row in ipairs(vp.plan) do names[row.name] = true end
+assert(names["Sacred Candle"] and not names["Holy Candle"], "level 60: Sacred Candles")
+STATE.level = 50; fire("MERCHANT_SHOW")
+names = {}
+for _, row in ipairs(TO.vendor.plan) do names[row.name] = true end
+assert(names["Holy Candle"] and not names["Sacred Candle"], "level 50: Holy Candles")
+-- Restock uses the dungeon set even with separate outside checks
+TO.char.splitProfiles = true; TO:SetEnabled("reagent:candle", false, true); STATE.instance = false
+fire("MERCHANT_SHOW")
+names = {}
+for _, row in ipairs(TO.vendor.plan) do names[row.name] = true end
+assert(names["Holy Candle"], "candles still restocked (dungeon set)")
+TO.char.splitProfiles = false; TO.char.checksOutside = {}
+-- Only shown rows are bought
+STATE.merchant = {}
+for i = 1, 16 do STATE.merchant[i] = { name = "Thing " .. i, price = 1 } end
+for i = 1, 16 do TO:AddCustom("Thing " .. i, 1) end
+fire("MERCHANT_SHOW")
+assertEq(#TO.vendor.plan, 12, "plan capped to the rows shown")
+for i = 1, 16 do TO:RemoveCustom("Thing " .. i) end
+fire("MERCHANT_CLOSED"); STATE.merchant = {}
+-- Mana gems aren't tracked as mana potions
+STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}; LEARN("Conjure Mana Citrine"); fire("SPELLS_CHANGED")
+TO.char.auto = {}; STATE.level = 60
+STATE.bags = { { id = 901, name = "Mana Citrine", count = 1, tip = "Use: Restores 775 to 925 mana." },
+    { id = 902, name = "Greater Mana Potion", count = 3, tip = "Requires Level 41\nUse: Restores 700 to 900 mana." } }
+refresh()
+assertEq(TO.char.auto.mana.name, "Greater Mana Potion", "mana gem isn't the mana potion")
+-- Stat food Min survives a stat change
+local EAT2 = " Must remain seated while eating."
+STATE.class = "WARRIOR"; TO.char.auto = {}
+STATE.bags = { { id = 911, name = "Spiced Wolf Meat", count = 3, tip = "Use: Restores 61 health over 15 sec." .. EAT2
+    .. " If you spend at least 10 seconds eating you will become well fed and gain 2 Stamina and Spirit for 15 min." } }
+refresh()
+TO.char.auto.statfood.min = 25
+TO:SetStatFocus("agi"); refresh()
+assertEq(TO.char.auto.statfood.min, 25, "your stat food Min is kept")
+TO:SetStatFocus(nil); TO.char.autoMins = {}
+-- Arcane Intellect isn't asked for on Warriors
+STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}; LEARN("Arcane Intellect"); fire("SPELLS_CHANGED")
+STATE.buffs = { ["Arcane Intellect"] = 1800 }; STATE.bags = {}
+STATE.party = { "party1", "party2" }; STATE.partyClass = { party1 = "WARRIOR", party2 = "PRIEST" }
+STATE.partyBuffs = { party1 = {}, party2 = {} }
+refresh()
+local ai = ids()["party:intellect"]
+assertEq(ai and ai.text, "1", "only the priest needs Intellect")
+assertEq(ai.action.unit, "party2", "click buffs the priest")
+STATE.party = {}; STATE.partyClass = {}; STATE.level = nil
 print("ALL TESTS PASSED")

@@ -1,3 +1,14 @@
+## 1.5.0
+
+- New: **one-click restock at vendors**. A list beside the vendor window shows everything you're short on (reagents, food, water, potions, your own items, ammo, pet food) that the vendor sells, with the cost. Untick anything you don't want, then click Restock. Multi-rank reagents buy the rank for your level (Holy or Sacred Candles, Wild Berries or Thornroot, Rebirth seeds). Nothing is bought until you click.
+- New: **Repair all** button with the cost, at vendors who repair.
+- New: **Mage conjures**. Conjured water and food below your Min, and a missing mana gem. Click to conjure your best rank. Conjured items and mana gems are no longer picked as your "best" food, water or mana potion.
+- New: **Healthstones**. Warlocks are reminded to make one; everyone else is reminded in dungeons when a Warlock is in the group.
+- New: **In raids, check the whole raid** for party buffs, blessings and Soulstone (off by default).
+- New: **Profiles** tab. Turn on separate checks outside dungeons and raids for a lighter set while questing, and copy another character's settings.
+- Arcane Intellect and Divine Spirit party checks skip Warriors and Rogues.
+- Your stat food Min is kept when the stat food changes.
+
 ## 1.4.1
 
 - New: **party blessings** for Paladins. Shows how many party members are missing their blessing, and a click blesses the next one in range. Choose the blessing for each class on the Buffs tab (Might for Warriors and Rogues, Wisdom for everyone else by default, or Kings, or none). A Greater Blessing or the same blessing from another Paladin counts.

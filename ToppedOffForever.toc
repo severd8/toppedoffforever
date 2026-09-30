@@ -1,6 +1,6 @@
 ## Interface: 16001
 ## Title: ToppedOff Forever
-## Notes: Reminds you when a buff, weapon enhancement, reagent, ammo or durability runs low. Click the icon to fix it.
+## Notes: Reminds you when buffs, party buffs, food, reagents, ammo or gear need topping off. Click the icon to fix it.
 ## Author: severd8
 ## Version: @project-version@
 ## IconTexture: Interface\AddOns\ToppedOffForever\Media\Icon
@@ -12,3 +12,4 @@
 
 Core.lua
 Options.lua
+Vendor.lua

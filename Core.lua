@@ -54,7 +54,7 @@ end
 TO.CLASS_BUFFS = {
     MAGE = {
         { id = "intellect", label = "Arcane Intellect", cast = { "Arcane Intellect" },
-          auras = { "Arcane Intellect", "Arcane Brilliance" }, party = true },
+          auras = { "Arcane Intellect", "Arcane Brilliance" }, party = true, skip = { WARRIOR = true, ROGUE = true } },
         { id = "armor", label = "Armor", cast = { "Ice Armor", "Frost Armor", "Mage Armor" } },
     },
     PRIEST = {
@@ -62,7 +62,7 @@ TO.CLASS_BUFFS = {
           auras = { "Power Word: Fortitude", "Prayer of Fortitude" }, party = true },
         { id = "innerfire", label = "Inner Fire", cast = { "Inner Fire" } },
         { id = "spirit", label = "Divine Spirit", cast = { "Divine Spirit" },
-          auras = { "Divine Spirit", "Prayer of Spirit" }, party = true },
+          auras = { "Divine Spirit", "Prayer of Spirit" }, party = true, skip = { WARRIOR = true, ROGUE = true } },
         { id = "shadowprot", label = "Shadow Protection", cast = { "Shadow Protection" },
           auras = { "Shadow Protection", "Prayer of Shadow Protection" }, off = true, party = true },
     },
@@ -126,14 +126,18 @@ TO.CLASS_REAGENTS = {
     },
     PRIEST = {
         { id = "candle", label = "Candles", items = { "Sacred Candle", "Holy Candle" }, min = 10,
+          buy = { { "Holy Candle", 48 }, { "Sacred Candle", 60 } },
           requires = { "Prayer of Fortitude", "Prayer of Spirit", "Prayer of Shadow Protection" } },
         { id = "feather", label = "Light Feather", items = { "Light Feather" }, min = 5, requires = { "Levitate" } },
     },
     DRUID = {
         { id = "gotw", label = "Gift of the Wild herbs", items = { "Wild Thornroot", "Wild Berries" }, min = 10,
+          buy = { { "Wild Berries", 50 }, { "Wild Thornroot", 60 } },
           requires = { "Gift of the Wild" } },
         { id = "seed", label = "Rebirth seed", items = { "Ironwood Seed", "Hornbeam Seed", "Ashwood Seed",
-          "Stranglethorn Seed", "Maple Seed" }, min = 2, requires = { "Rebirth" } },
+          "Stranglethorn Seed", "Maple Seed" }, min = 2, requires = { "Rebirth" },
+          buy = { { "Maple Seed", 20 }, { "Stranglethorn Seed", 30 }, { "Ashwood Seed", 40 },
+          { "Hornbeam Seed", 50 }, { "Ironwood Seed", 60 } } },
     },
     PALADIN = {
         { id = "kings", label = "Symbol of Kings", items = { "Symbol of Kings" }, min = 20,
@@ -205,6 +209,7 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     weapon = {},              -- mh / oh -> item name, spell -> preferred weapon spell
     custom = {},              -- { name = "Conjured Crystal Water", min = 20 }
     customAlways = false,     -- show your own items even when you have enough
+    autoMins = {},            -- auto slot -> your Min (kept when the tracked item changes)
     auto = {},                -- auto-tracked best items: slot -> { name, id, score, min }
     statFocus = nil,          -- stat food override ("str", "agi", ...); nil = class default
     wellFedInstanceOnly = true, -- Well Fed reminder only in dungeons and raids
@@ -213,6 +218,11 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     soulstoneInstanceOnly = true,
     petFood = "",             -- Hunter pet food item name ("" = not set)
     blessings = {},           -- Paladin: class -> "Kings" / "Might" / "Wisdom" / ... / "none"
+    splitProfiles = false,    -- separate on/off checks outside dungeons and raids
+    checksOutside = {},       -- check id -> on/off outside instances (missing = same as inside)
+    wholeRaid = false,        -- party buffs, blessings and Soulstone look at the whole raid
+    restockAtVendor = true,   -- restock list at vendors
+    repairAtVendor = true,    -- repair button at vendors
 }
 
 local function FillDefaults(dst, src)
@@ -234,14 +244,25 @@ function TO:PlayerClass()
     return Str(class) or "UNKNOWN"
 end
 
-function TO:IsEnabled(id, default)
-    local v = self.char.checks[id]
+-- Checks are on/off per character. With "separate checks outside dungeons" on,
+-- a second set applies outside instances; anything not set there follows the
+-- dungeon set. `outside` = true/false picks a set; nil = the one in use right now.
+function TO:UsingOutsideChecks()
+    return self.char.splitProfiles and not self:InInstance()
+end
+
+function TO:IsEnabled(id, default, outside)
+    if outside == nil then outside = self:UsingOutsideChecks() end
+    local v
+    if outside then v = self.char.checksOutside[id] end
+    if v == nil then v = self.char.checks[id] end
     if v == nil then return default ~= false end
     return v
 end
 
-function TO:SetEnabled(id, on)
-    self.char.checks[id] = on and true or false
+function TO:SetEnabled(id, on, outside)
+    local t = outside and self.char.checksOutside or self.char.checks
+    t[id] = on and true or false
     self:RequestUpdate()
 end
 
@@ -403,6 +424,15 @@ local function ItemName(id)
     return nil
 end
 
+-- Mage- and Warlock-made items (can't be bought): conjured food and water,
+-- mana gems and Healthstones. They have their own checks.
+local MADE_ITEMS = { ["mana agate"] = true, ["mana jade"] = true, ["mana citrine"] = true, ["mana ruby"] = true }
+local function IsConjured(name)
+    local n = name:lower()
+    return n:find("^conjured ") ~= nil or MADE_ITEMS[n] == true or n:find("healthstone", 1, true) ~= nil
+end
+TO.IsConjured = IsConjured
+
 local function ItemIcon(id)
     if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(id) end
     if GetItemIcon then return GetItemIcon(id) end
@@ -485,6 +515,8 @@ local function FormatTime(sec)
     return math.floor(sec) .. "s"
 end
 TO.FormatTime = FormatTime
+TO.Num = Num
+TO.IsSecretValue = IsSecret
 
 ---------------------------------------------------------------------------
 -- Building the list of reminders
@@ -695,8 +727,8 @@ function TO:PlayerSpecRole()
     if GetSpecialization and GetSpecializationInfo then
         local ok, spec = pcall(GetSpecialization)
         spec = ok and Num(spec)
-        if spec then
-            local _, name, _, _, specRole = GetSpecializationInfo(spec)
+        if spec and spec > 0 then
+            local _, _, name, _, _, specRole = pcall(GetSpecializationInfo, spec)
             local role, n = fromName(name)
             if role then return role, n end
             specRole = Str(specRole)
@@ -838,17 +870,17 @@ end
 function TO:UpdateAutoItems()
     local level = Num(UnitLevel("player")) or 60
     -- Spec or stat choice changed: pick the stat food again
+    -- (the tracked stat food is re-scored below, so a better match takes over)
     local basis = table.concat(self:StatPriority(), ",")
-    if self.char.statBasis ~= basis then
-        self.char.statBasis = basis
-        self.char.auto.statfood = nil
-    end
+    local rescore = self.char.statBasis ~= basis
+    self.char.statBasis = basis
     local hasMana = self.MANA_CLASSES[self:PlayerClass()]
     for _, slot in ipairs(self.AUTO_SLOTS) do
         if not slot.mana or hasMana then
             local best, bestScore
             for _, e in pairs(self.bag or {}) do
-                local k = self:ItemKind(e.id)
+                -- Conjured items can't be bought, so they're not tracked here (Mages: see conjures)
+                local k = not IsConjured(e.name) and self:ItemKind(e.id)
                 if k and k.level <= level then
                     local score = self:AutoScore(slot.key, k)
                     if score and (not bestScore or score > bestScore
@@ -858,10 +890,14 @@ function TO:UpdateAutoItems()
                 end
             end
             local cur = self.char.auto[slot.key]
+            if cur and rescore and slot.key == "statfood" then
+                local k = itemKinds[cur.id]
+                cur.score = k and self:AutoScore("statfood", k) or 0
+            end
             if best and (not cur or cur.id ~= best.id) and (not cur or bestScore > (cur.score or 0)
                 or not self:StillGood(cur, level)) then
                 self.char.auto[slot.key] = { name = best.name, id = best.id, score = bestScore,
-                    min = cur and cur.min or slot.min }
+                    min = cur and cur.min or self.char.autoMins[slot.key] or slot.min }
             elseif cur and best and cur.id == best.id then
                 cur.score = bestScore
             end
@@ -876,8 +912,11 @@ function TO:StillGood(cur, level)
 end
 
 -- Stat focus changed: pick the stat food again
+-- You picked a stat: choose the stat food again (your Min is kept)
 function TO:SetStatFocus(focus)
     self.char.statFocus = focus
+    local old = self.char.auto.statfood
+    if old and old.min then self.char.autoMins.statfood = old.min end
     self.char.auto.statfood = nil
     self:RequestUpdate()
 end
@@ -911,6 +950,20 @@ local function PartyUnits()
     return out
 end
 
+-- Party, or the whole raid (minus you) when "Check the whole raid" is on
+function TO:GroupUnits()
+    if IsInRaid and IsInRaid() and self.char.wholeRaid then
+        local out = {}
+        for i = 1, (Num(GetNumGroupMembers()) or 0) do
+            local u = "raid" .. i
+            local me = UnitIsUnit(u, "player")
+            if Plain(UnitExists(u)) and not (not IsSecret(me) and me) then out[#out + 1] = u end
+        end
+        return out, true
+    end
+    return PartyUnits(), false
+end
+
 local function HasAnyAura(buffs, names)
     for _, n in ipairs(names) do
         if buffs[n:lower()] then return true end
@@ -920,7 +973,7 @@ end
 
 -- Party members missing one of your group buffs. Click buffs the next one in range.
 function TO:CheckPartyBuffs(list)
-    local units = PartyUnits()
+    local units, raid = self:GroupUnits()
     if #units == 0 then return end
     for _, buff in ipairs(self.CLASS_BUFFS[self:PlayerClass()] or {}) do
         local id = "party:" .. buff.id
@@ -930,6 +983,11 @@ function TO:CheckPartyBuffs(list)
             for _, u in ipairs(units) do
                 local usable = Plain(UnitIsConnected(u)) ~= false and Plain(UnitIsDeadOrGhost(u)) ~= true
                     and Plain(UnitIsVisible(u)) ~= false
+                if usable and buff.skip then
+                    local _, cls = UnitClass(u)
+                    cls = Str(cls)
+                    if cls and buff.skip[cls] then usable = false end   -- no use to them
+                end
                 local b = usable and self:UnitBuffs(u)
                 if b and not HasAnyAura(b, buff.auras or buff.cast) then
                     names[#names + 1] = Str(UnitName(u)) or u
@@ -937,7 +995,7 @@ function TO:CheckPartyBuffs(list)
                 end
             end
             if #names > 0 then
-                local r = { id = id, label = buff.label .. " (party)", icon = SpellIcon(spell),
+                local r = { id = id, label = buff.label .. (raid and " (raid)" or " (party)"), icon = SpellIcon(spell),
                     text = tostring(#names), detail = "Missing on: " .. table.concat(names, ", ") }
                 if target then
                     r.action = { spell = spell, unit = target }
@@ -972,7 +1030,7 @@ end
 
 function TO:CheckPartyBlessings(list)
     if self:PlayerClass() ~= "PALADIN" or not self:IsEnabled("party:blessing", true) then return end
-    local units = PartyUnits()
+    local units, raid = self:GroupUnits()
     if #units == 0 then return end
     local names, target, targetSpell, anySpell = {}, nil, nil, nil
     for _, u in ipairs(units) do
@@ -989,7 +1047,8 @@ function TO:CheckPartyBlessings(list)
         end
     end
     if #names == 0 then return end
-    local r = { id = "party:blessing", label = "Blessings (party)", icon = SpellIcon(targetSpell or anySpell),
+    local r = { id = "party:blessing", label = raid and "Blessings (raid)" or "Blessings (party)",
+        icon = SpellIcon(targetSpell or anySpell),
         text = tostring(#names), detail = "Missing: " .. table.concat(names, ", ") }
     if target then
         r.action = { spell = targetSpell, unit = target }
@@ -1148,7 +1207,7 @@ function TO:CheckSoulstone(list)
     if not create then return end
     if (self.buffs or {})["soulstone resurrection"] then return end
     local healer
-    for _, u in ipairs(PartyUnits()) do
+    for _, u in ipairs((self:GroupUnits())) do
         local b = self:UnitBuffs(u)
         if not b then return end   -- hidden: can't tell, so don't nag
         if b["soulstone resurrection"] then return end
@@ -1195,6 +1254,88 @@ function TO:CheckBags(list)
         list[#list + 1] = { id = "bags", label = "Bag space", icon = self.ICONS.bags, text = tostring(free),
             detail = ("%d free bag slots (want %d)"):format(free, min), openBags = true,
             clickText = "Click to open your bags", urgentNow = free == 0, low = true }
+    end
+end
+
+-- Mage: conjured water, food and mana gem. Click to conjure.
+TO.CONJURES = {
+    { key = "water", label = "Conjured water", spell = "Conjure Water", min = 20 },
+    { key = "food",  label = "Conjured food",  spell = "Conjure Food",  min = 20 },
+}
+TO.MANA_GEMS = {   -- best first
+    { spell = "Conjure Mana Ruby", item = "Mana Ruby" },
+    { spell = "Conjure Mana Citrine", item = "Mana Citrine" },
+    { spell = "Conjure Mana Jade", item = "Mana Jade" },
+    { spell = "Conjure Mana Agate", item = "Mana Agate" },
+}
+
+-- How many conjured water (or food) you have, and one of them for the icon
+function TO:ConjuredCount(key)
+    local total, icon = 0, nil
+    for key2, e in pairs(self.bag or {}) do
+        if IsConjured(key2) then
+            local water = key2:find("water", 1, true) ~= nil
+            local gem = key2:find("mana ", 1, true) ~= nil
+            if (key == "water" and water) or (key == "food" and not water and not gem) then
+                total = total + e.count
+                icon = icon or e.icon
+            end
+        end
+    end
+    return total, icon
+end
+
+function TO:CheckConjures(list)
+    if self:PlayerClass() ~= "MAGE" then return end
+    for _, cj in ipairs(self.CONJURES) do
+        local id = "conjure:" .. cj.key
+        if self:Knows(cj.spell) and self:IsEnabled(id, true) then
+            local have, icon = self:ConjuredCount(cj.key)
+            local min = self:ReagentMin(id, cj.min)
+            if have < min then
+                list[#list + 1] = { id = id, label = cj.label, icon = icon or SpellIcon(cj.spell),
+                    text = have .. "/" .. min, low = true, action = { spell = cj.spell },
+                    detail = ("%d in your bags (want %d)"):format(have, min) }
+            end
+        end
+    end
+    if self:IsEnabled("conjure:gem", true) then
+        for _, g in ipairs(self.MANA_GEMS) do
+            if self:Knows(g.spell) then
+                if not (self.bag and self.bag[g.item:lower()]) then
+                    list[#list + 1] = { id = "conjure:gem", label = g.item, icon = SpellIcon(g.spell),
+                        action = { spell = g.spell }, detail = "No " .. g.item .. " in your bags" }
+                end
+                break
+            end
+        end
+    end
+end
+
+-- Healthstones: Warlocks make their own; everyone else is reminded in dungeons
+-- when a Warlock is in the group
+TO.HEALTHSTONE_SPELLS = { "Create Healthstone (Major)", "Create Healthstone (Greater)", "Create Healthstone",
+    "Create Healthstone (Lesser)", "Create Healthstone (Minor)" }
+TO.ICONS.healthstone = "Interface\\Icons\\INV_Stone_04"
+
+function TO:CheckHealthstone(list)
+    if self:FindBagItem("Healthstone") then return end
+    if self:PlayerClass() == "WARLOCK" then
+        local create = self:FirstKnown(self.HEALTHSTONE_SPELLS)
+        if create and self:IsEnabled("healthstone", true) then
+            list[#list + 1] = { id = "healthstone", label = "Healthstone", icon = SpellIcon(create),
+                action = { spell = create }, detail = "No Healthstone in your bags" }
+        end
+        return
+    end
+    if not self:IsEnabled("healthstone", true) or not self:InInstance() then return end
+    for _, u in ipairs((self:GroupUnits())) do
+        local _, cls = UnitClass(u)
+        if Str(cls) == "WARLOCK" then
+            list[#list + 1] = { id = "healthstone", label = "Healthstone", icon = self.ICONS.healthstone,
+                detail = "No Healthstone in your bags. Ask " .. (Str(UnitName(u)) or "your Warlock") .. " for one." }
+            return
+        end
     end
 end
 
@@ -1266,6 +1407,208 @@ function TO:CheckAutoItems(list)
     end
 end
 
+---------------------------------------------------------------------------
+-- Your characters: each one's settings are kept in the account-wide save too,
+-- so another character can copy them.
+---------------------------------------------------------------------------
+TO.COPY_FIELDS = { "checks", "checksOutside", "splitProfiles", "prefs", "mins", "weapon", "custom",
+    "customAlways", "statFocus", "wellFedInstanceOnly", "elixirs", "elixirInstanceOnly",
+    "soulstoneInstanceOnly", "petFood", "blessings", "wholeRaid", "restockAtVendor", "repairAtVendor" }
+
+local function DeepCopy(v)
+    if type(v) ~= "table" then return v end
+    local t = {}
+    for k, x in pairs(v) do t[k] = DeepCopy(x) end
+    return t
+end
+
+function TO:CharacterKey()
+    local name = Str(UnitName("player")) or "?"
+    local realm = GetRealmName and Str(GetRealmName()) or nil
+    return realm and (name .. " - " .. realm) or name
+end
+
+function TO:RegisterCharacter()
+    self.db.chars = self.db.chars or {}
+    -- The same table as this character's own save, so it's always current
+    self.db.chars[self:CharacterKey()] = { class = self:PlayerClass(), settings = self.char }
+end
+
+-- Other characters you've logged in with, sorted by name
+function TO:OtherCharacters()
+    local out, me = {}, self:CharacterKey()
+    for key, info in pairs(self.db.chars or {}) do
+        if key ~= me and type(info) == "table" and type(info.settings) == "table" then
+            out[#out + 1] = { key = key, class = info.class }
+        end
+    end
+    table.sort(out, function(a, b) return a.key < b.key end)
+    return out
+end
+
+function TO:CopySettingsFrom(key)
+    local info = self.db.chars and self.db.chars[key]
+    if not info or type(info.settings) ~= "table" or key == self:CharacterKey() then return false end
+    for _, field in ipairs(self.COPY_FIELDS) do
+        local v = info.settings[field]
+        if v ~= nil then self.char[field] = DeepCopy(v) end
+    end
+    self.char.statFocus = DeepCopy(info.settings.statFocus)   -- Automatic (nil) copies too
+    -- Their Min counts for food, water and potions; the items are re-picked from your bags
+    local mins = DeepCopy(info.settings.autoMins) or {}
+    for slot, a in pairs(info.settings.auto or {}) do
+        if type(a) == "table" and a.min and mins[slot] == nil then mins[slot] = a.min end
+    end
+    self.char.autoMins = mins
+    self.char.auto, self.char.statBasis = {}, nil
+    self:RequestUpdate()
+    return true
+end
+
+---------------------------------------------------------------------------
+-- Restocking at vendors: what you're short on, matched against what the vendor sells
+---------------------------------------------------------------------------
+-- { names = { ... }, need = n, label = } for every enabled item below its Min
+function TO:RestockNeeds()
+    local out = {}
+    local function add(names, have, min, label, partial)
+        if min and have < min then out[#out + 1] = { names = names, need = min - have, label = label, partial = partial } end
+    end
+    -- Restocking is getting ready for dungeons, so the dungeon set of checks is used
+    local function on(id, default) return self:IsEnabled(id, default, false) end
+    local class = self:PlayerClass()
+    local level = Num(UnitLevel("player")) or 60
+    for _, rg in ipairs(self.CLASS_REAGENTS[class] or {}) do
+        local id = "reagent:" .. rg.id
+        if on(id, true) and self:FirstKnown(rg.requires) then
+            -- Multi-rank reagents: buy the one your level needs
+            local names = rg.items
+            if rg.buy then
+                local pick
+                for _, b in ipairs(rg.buy) do if level >= b[2] then pick = b[1] end end
+                names = { pick or rg.buy[1][1] }
+            end
+            add(names, (self:BagCount(rg.items)), self:ReagentMin(id, rg.min), rg.label)
+        end
+    end
+    local own = {}
+    for _, c in ipairs(self.char.custom) do own[c.name:lower()] = true end
+    local hasMana = self.MANA_CLASSES[class]
+    for _, slot in ipairs(self.AUTO_SLOTS) do
+        local a = self.char.auto[slot.key]
+        if a and (not slot.mana or hasMana) and on("auto:" .. slot.key, true) and not IsConjured(a.name)
+            and not own[a.name:lower()] then
+            add({ a.name }, (self:BagCount({ a.name })), a.min or slot.min, a.name)
+        end
+    end
+    for _, c in ipairs(self.char.custom) do
+        if on("custom:" .. c.name:lower(), true) then
+            add({ c.name }, (self:BagCount({ c.name })), c.min, c.name)
+        end
+    end
+    local ammo = Num(GetInventoryItemID("player", 0))
+    if ammo and on("ammo", self.AMMO_CLASSES[class] == true) then
+        local name = ItemName(ammo)
+        if name then
+            add({ name }, Num(GetInventoryItemCount("player", 0)) or 0, self:ReagentMin("ammo", self.AMMO_DEFAULT_MIN), name)
+        end
+    end
+    local food = self.char.petFood or ""
+    if class == "HUNTER" and food ~= "" and on("pet:food", true) then
+        local e = self:FindBagItem(food)
+        add({ e and e.name or food }, e and e.count or 0, self:ReagentMin("pet:food", self.PET_FOOD_DEFAULT_MIN),
+            e and e.name or food, not e)
+    end
+    return out
+end
+
+-- What this vendor sells: list of { index, name, price, stack, available, icon }
+function TO:MerchantItems()
+    local items = {}
+    local n = Num(GetMerchantNumItems and GetMerchantNumItems()) or 0
+    for i = 1, n do
+        local name, icon, price, stack, avail, purchasable, extended
+        if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+            local info = C_MerchantFrame.GetItemInfo(i)
+            if type(info) == "table" then
+                name, icon, price, stack, avail, purchasable, extended = info.name, info.texture, info.price,
+                    info.stackCount, info.numAvailable, info.isPurchasable, info.hasExtendedCost
+            end
+        elseif GetMerchantItemInfo then
+            local _
+            name, icon, price, stack, avail, purchasable, _, extended = GetMerchantItemInfo(i)
+        end
+        name, price = Str(name), Num(price)
+        if name and price and not Plain(extended) and Plain(purchasable) ~= false then
+            items[#items + 1] = { index = i, name = name, price = price, stack = math.max(1, Num(stack) or 1),
+                available = Num(avail) or -1, icon = icon }
+        end
+    end
+    return items
+end
+
+-- Rows to buy: { index, name, lots, count, cost, stack, icon }
+function TO:RestockPlan()
+    local merchant = self:MerchantItems()
+    local byName = {}
+    for _, m in ipairs(merchant) do byName[m.name:lower()] = byName[m.name:lower()] or m end
+    local plan, used = {}, {}
+    for _, need in ipairs(self:RestockNeeds()) do
+        local m
+        for _, n in ipairs(need.names) do
+            m = byName[n:lower()]
+            if m then break end
+        end
+        if not m and need.partial then   -- pet food typed as part of a name
+            local text = need.names[1]:lower()
+            for _, x in ipairs(merchant) do
+                if x.name:lower():find(text, 1, true) then m = x break end
+            end
+        end
+        if m and not used[m.index] then
+            used[m.index] = true
+            local lots = math.ceil(need.need / m.stack)
+            if m.available >= 0 then lots = math.min(lots, m.available) end
+            if lots > 0 then
+                plan[#plan + 1] = { index = m.index, name = m.name, lots = lots, count = lots * m.stack,
+                    cost = lots * m.price, stack = m.stack, icon = m.icon }
+            end
+        end
+    end
+    return plan
+end
+
+-- Buys the rows (a click on the Restock button). Stacked goods (like arrows sold
+-- 200 at a time) are bought one stack per call; single items in batches.
+function TO:BuyRestock(plan)
+    local money = Num(GetMoney and GetMoney()) or 0
+    local bought, skipped = {}, {}
+    for _, row in ipairs(plan) do
+        if row.skip then   -- luacheck: ignore 542 (unticked: nothing to buy)
+        elseif row.cost > money then
+            skipped[#skipped + 1] = row.name
+        else
+            if row.stack == 1 then
+                local left = row.lots
+                local max = Num(GetMerchantItemMaxStack and GetMerchantItemMaxStack(row.index)) or 20
+                max = math.max(1, max)
+                while left > 0 do
+                    local q = math.min(left, max)
+                    BuyMerchantItem(row.index, q)
+                    left = left - q
+                end
+            else
+                for _ = 1, row.lots do BuyMerchantItem(row.index) end
+            end
+            money = money - row.cost
+            bought[#bought + 1] = row.count .. " " .. row.name
+        end
+    end
+    if #bought > 0 then Print("bought " .. table.concat(bought, ", ") .. ".") end
+    if #skipped > 0 then Print("not enough money for " .. table.concat(skipped, ", ") .. ".") end
+    return bought, skipped
+end
+
 function TO:ItemIconByName(name)
     if C_Item and C_Item.GetItemIconByID then
         local icon = C_Item.GetItemIconByID(name)
@@ -1327,6 +1670,8 @@ function TO:BuildReminders()
     self:CheckSoulstone(list)
     -- Row 2: things to top off
     self:CheckReagents(list)
+    self:CheckConjures(list)
+    self:CheckHealthstone(list)
     self:CheckAutoItems(list)
     self:CheckAmmo(list)
     self:CheckBags(list)
@@ -1567,6 +1912,7 @@ function TO:Update()
     self.lastUpdate = GetTime()
     self.reminders = self:BuildReminders()
     self:Layout(self.reminders)
+    if self.merchantOpen and self.UpdateVendorPanel then self:UpdateVendorPanel() end
 end
 
 function TO:RequestUpdate()
@@ -1871,6 +2217,7 @@ function TO:RemoveCustom(name)
         if c.name:lower() == name then
             table.remove(self.char.custom, i)
             self.char.checks["custom:" .. name] = nil
+            self.char.checksOutside["custom:" .. name] = nil
             self:RequestUpdate()
             return true
         end
@@ -2025,6 +2372,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
         FillDefaults(ToppedOffForeverCharDB, CHAR_DEFAULTS)
         TO.char = ToppedOffForeverCharDB
     elseif event == "PLAYER_LOGIN" then
+        TO:RegisterCharacter()
         TO:ScanSpellbook()
         TO:RunOutOfCombat(function() TO:BuildFrames() end)
         print(TO.LOGO_TEXT .. " |cffffd966ToppedOff Forever|r loaded. Type /topoff for options.")

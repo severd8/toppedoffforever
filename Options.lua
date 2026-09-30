@@ -167,7 +167,13 @@ TO.OPTION_TABS = {
     { key = "buffs",    label = "Buffs" },
     { key = "supplies", label = "Supplies" },
     { key = "more",     label = "Pet & gear" },
+    { key = "profiles", label = "Profiles" },
 }
+
+-- Which set of on/off checks the options are editing (see the Profiles tab)
+function TO:EditingOutside()
+    return (self.char.splitProfiles and self.editOutside) and true or false
+end
 
 -- Row helpers shared by the tabs. `ctx` holds the frame being filled and the y cursor.
 local function Builder(c)
@@ -200,10 +206,13 @@ local function Builder(c)
         return n
     end
 
-    -- Checkbox bound to a check id (on/off per character)
+    -- Checkbox bound to a check id (on/off per character, in the set being edited)
+    c.toggles = {}
     function ctx.toggle(id, label, default, x)
-        local cb = CheckBox(c, label, x or 0, ctx.y, function() return TO:IsEnabled(id, default) end,
-            function(v) TO:SetEnabled(id, v) end)
+        local function get() return TO:IsEnabled(id, default, TO:EditingOutside()) end
+        local cb = CheckBox(c, label, x or 0, ctx.y, get, function(v) TO:SetEnabled(id, v, TO:EditingOutside()) end)
+        cb.refresh = function() cb:SetChecked(get()) end
+        c.toggles[#c.toggles + 1] = cb
         return cb
     end
 
@@ -323,6 +332,8 @@ local function BuildBuffsTab(self, ctx, class)
                 if #self:KnownOptions(buff.cast) == 0 then NotLearned(cb, buff.label .. " on your party") end
                 ctx.row()
             end
+            ctx.charCheck("In raids, check the whole raid", "wholeRaid", 24)
+            ctx.row()
             ctx.note("Shows how many party members are missing it. Click to buff the next one in range.")
         end
     end
@@ -350,6 +361,8 @@ local function BuildBuffsTab(self, ctx, class)
                 "Blessing to give " .. self.CLASS_PLURALS[cls] .. " in your party")
             ctx.row()
         end
+        ctx.charCheck("In raids, check the whole raid", "wholeRaid", 24)
+        ctx.row()
         ctx.note("Shows how many party members are missing their blessing. Click to bless the next one in range. "
             .. "A Greater Blessing, or the same blessing from another Paladin, counts.")
     end
@@ -443,9 +456,19 @@ local function BuildSuppliesTab(self, ctx, class)
             local cb = ctx.toggle("auto:" .. slot.key, slotText(slot), true)
             ctx.fit(cb)
             autoRows[slot.key] = { cb = cb, slot = slot }
-            if a then ctx.minBox(a.min or slot.min, function(n) a.min = n end) end
+            if a then ctx.minBox(a.min or slot.min, function(n) a.min = n TO.char.autoMins[slot.key] = n end) end
             ctx.row()
         end
+    end
+    -- Healthstone
+    if class == "WARLOCK" then
+        if self:FirstKnown(self.HEALTHSTONE_SPELLS) then
+            ctx.fit(ctx.toggle("healthstone", "Healthstone (click to make one)", true))
+            ctx.row()
+        end
+    else
+        ctx.fit(ctx.toggle("healthstone", "Healthstone, if a Warlock is along", true))
+        ctx.row()
     end
     Label(c, "Stat food for", 26, ctx.y - 5, "GameFontHighlightSmall")
     local focusKeys = { false }
@@ -497,6 +520,26 @@ local function BuildSuppliesTab(self, ctx, class)
     ctx.note("The best of each in your bags is picked for you, and better ones take over as you level. "
         .. "Stat food follows your talents (or group role). Untick one to stop tracking it.")
 
+    -- Mage conjures
+    if class == "MAGE" then
+        ctx.header("Conjured food and water", "Min")
+        for _, cj in ipairs(self.CONJURES) do
+            local id = "conjure:" .. cj.key
+            local cb = ctx.toggle(id, cj.label, true)
+            ctx.fit(cb)
+            if not self:Knows(cj.spell) then NotLearned(cb, cj.label) end
+            ctx.reagentMin(id, cj.min)
+            ctx.row()
+        end
+        local gem
+        for _, g in ipairs(self.MANA_GEMS) do if self:Knows(g.spell) then gem = g break end end
+        local cb = ctx.toggle("conjure:gem", gem and ("Mana gem: " .. gem.item) or "Mana gem", true)
+        ctx.fit(cb)
+        if not gem then NotLearned(cb, "Mana gem") end
+        ctx.row()
+        ctx.note("Click to conjure your best rank.")
+    end
+
     ctx.header("Your own items", "Min")
     for _, item in ipairs(self.char.custom) do
         local name = item.name
@@ -527,6 +570,15 @@ local function BuildSuppliesTab(self, ctx, class)
 
     local reagents = self.CLASS_REAGENTS[class] or {}
     local showAmmo = self.AMMO_CLASSES[class] or class == "WARRIOR" or class == "ROGUE"
+    local function vendorSection()
+        ctx.header("At vendors")
+        ctx.charCheck("Show a restock list", "restockAtVendor")
+        ctx.row()
+        ctx.charCheck("Show a Repair all button", "repairAtVendor")
+        ctx.row()
+        ctx.note("Beside the vendor window: everything above that's below its Min and this vendor sells. "
+            .. "Nothing is bought until you click Restock.")
+    end
     if #reagents > 0 or showAmmo then
         ctx.header("Reagents and ammo", "Min")
         for _, rg in ipairs(reagents) do
@@ -543,6 +595,7 @@ local function BuildSuppliesTab(self, ctx, class)
             ctx.row()
         end
     end
+    vendorSection()
 end
 
 ---------------------------------------------------------------------------
@@ -589,6 +642,8 @@ local function BuildMoreTab(self, ctx, class)
         ctx.row()
         ctx.charCheck("Only in dungeons and raids", "soulstoneInstanceOnly", 24)
         ctx.row()
+        ctx.charCheck("In raids, check the whole raid", "wholeRaid", 24)
+        ctx.row()
         ctx.note("Click to put your Soulstone on the healer (or your friendly target), or to make one.")
     end
 
@@ -602,7 +657,75 @@ local function BuildMoreTab(self, ctx, class)
     ctx.note("Click the bag icon to open your bags.")
 end
 
-local TAB_BUILDERS = { buffs = BuildBuffsTab, supplies = BuildSuppliesTab, more = BuildMoreTab }
+---------------------------------------------------------------------------
+-- Profiles tab: separate checks outside dungeons; copy another character
+---------------------------------------------------------------------------
+StaticPopupDialogs = StaticPopupDialogs or {}
+StaticPopupDialogs["TOPPEDOFFFOREVER_COPY"] = {
+    text = "Copy ToppedOff settings from %s?\nThis replaces this character's checks, Min counts and choices.",
+    button1 = YES or "Yes",
+    button2 = NO or "No",
+    OnAccept = function(_, key)
+        if TO:CopySettingsFrom(key) then
+            TO.Print("copied settings from " .. key .. ".")
+            TO:ShowOptionsTab("profiles")
+        end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+}
+
+local function BuildProfilesTab(self, ctx)
+    local c = ctx.c
+    ctx.header("Dungeons and the open world")
+    CheckBox(c, "Separate checks outside dungeons and raids", 0, ctx.y,
+        function() return TO.char.splitProfiles and true or false end,
+        function(v)
+            TO.char.splitProfiles = v
+            TO.editOutside = false
+            TO:RequestUpdate()
+        end)
+    ctx.row()
+    ctx.note("Turn this on to have a lighter set of checks while questing. Each tab then has an "
+        .. "\"Editing\" choice at the top: tick and untick checks for dungeons and raids, or for everywhere else. "
+        .. "Anything you don't change outside follows the dungeon setting.")
+
+    ctx.header("Copy another character")
+    local others = self:OtherCharacters()
+    if #others == 0 then
+        Label(c, "|cff808080No other characters yet. Log in with them once.|r", 26, ctx.y - 4, "GameFontHighlightSmall")
+        ctx.row()
+    else
+        local choices = {}
+        for _, o in ipairs(others) do
+            local cls = o.class and o.class:sub(1, 1) .. o.class:sub(2):lower() or "?"
+            choices[#choices + 1] = { value = o.key, text = o.key .. " (" .. cls .. ")" }
+        end
+        self.copySource = self.copySource or others[1].key
+        local ok = false
+        for _, o in ipairs(others) do if o.key == self.copySource then ok = true end end
+        if not ok then self.copySource = others[1].key end
+        Dropdown(c, 0, ctx.y, RIGHT - 76, choices, function() return TO.copySource end,
+            function(v) TO.copySource = v end)
+        PanelButton(c, "Copy", 70, RIGHT - 70, ctx.y, function()
+            local key = TO.copySource
+            if not key then return end
+            if StaticPopup_Show then
+                local dialog = StaticPopup_Show("TOPPEDOFFFOREVER_COPY", key)
+                if dialog then dialog.data = key end
+            elseif TO:CopySettingsFrom(key) then
+                TO:ShowOptionsTab("profiles")
+            end
+        end)
+        ctx.row()
+    end
+    ctx.note("Copies checks, Min counts, your own items, blessing and stat food choices. "
+        .. "Display settings on the left are already shared by all your characters.")
+end
+
+local TAB_BUILDERS = { buffs = BuildBuffsTab, supplies = BuildSuppliesTab, more = BuildMoreTab,
+    profiles = BuildProfilesTab }
 
 function TO:BuildChecksList()
     local frame = self.config
@@ -613,6 +736,18 @@ function TO:BuildChecksList()
     frame.checks = c
     local ctx = Builder(c)
     local tab = self.optionsTab or "buffs"
+    if self.char.splitProfiles and tab ~= "profiles" then
+        Label(c, "Editing checks for", 0, -6, "GameFontNormal")
+        Dropdown(c, CYCLE_X, -2, CYCLE_W, {
+            { value = false, text = "Dungeons and raids" },
+            { value = true, text = "Everywhere else" },
+        }, function() return TO.editOutside and true or false end,
+        function(v)
+            TO.editOutside = v
+            for _, cb in ipairs(c.toggles) do cb.refresh() end
+        end)
+        ctx.y = -30
+    end
     TAB_BUILDERS[tab](self, ctx, self:PlayerClass())
     local h = -ctx.y + 10
     c:SetHeight(h)
@@ -730,7 +865,7 @@ function TO:BuildConfig()
 
     -- Tab buttons sitting on top of the panel
     f.tabs = {}
-    local tabW, tabX = 110, 252
+    local tabW, tabX = 86, 252
     for _, t in ipairs(TO.OPTION_TABS) do
         local b = CreateFrame("Button", nil, f)
         b:SetSize(tabW, 24)
