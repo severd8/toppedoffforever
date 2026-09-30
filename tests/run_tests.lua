@@ -354,4 +354,14 @@ step("tooltips")
 TO.db.shown = true TO:ApplySettings()
 for _, b in ipairs(TO.buttons) do if b.reminder then b.__scripts.OnEnter(b) end end
 
+step("frame pinned by its top-left corner")
+TO.main.__left, TO.main.__top = 300, 500
+TO.db.point = { "CENTER", "CENTER", 0, -150 }
+TO:RestorePosition()
+assertEq(TO.db.point[1], "TOPLEFT", "old center position converted")
+assertEq(TO.db.point[3], 300, "left edge kept")
+assertEq(TO.db.point[4], 500, "top edge kept")
+assertEq(TO.main.__point, "TOPLEFT", "frame anchored top-left")
+TO.main.__left = 320; TO:SavePosition()
+assertEq(TO.db.point[3], 320, "drag saves the top-left corner")
 print("ALL TESTS PASSED")

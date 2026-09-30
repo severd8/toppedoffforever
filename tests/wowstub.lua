@@ -99,6 +99,8 @@ function Methods:GetRegions() local r = {} for _, c in ipairs(self.__children) d
 function Methods:GetObjectType() return self.__kind end
 function Methods:GetHighlightTexture() return nil end
 function Methods:GetPoint() return "CENTER", UIParent, "CENTER", 12, 34 end
+function Methods:GetLeft() return self.__left end
+function Methods:GetTop() return self.__top end
 local oldSetPoint
 function Methods:SetPoint(p, rel, rp, x, y)
     if COMBAT and self.__protected then BLOCKED[#BLOCKED + 1] = (self.__name or self.__kind) .. ":SetPoint" end

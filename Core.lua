@@ -806,6 +806,8 @@ function TO:Layout(list)
     self.bar:SetShown(#shownList > 0)
     self.shownCount = #shownList
     self:UpdateHeader()
+    -- In case the position couldn't be read at login yet
+    if self.db.point[1] ~= "TOPLEFT" then self:PinTopLeft() end
 end
 
 function TO:InInstance()
@@ -830,7 +832,19 @@ end
 ---------------------------------------------------------------------------
 -- Frames
 ---------------------------------------------------------------------------
+-- The frame is pinned by its top-left corner, so when icons come and go the
+-- header stays put and the frame grows or shrinks to the right.
+function TO:PinTopLeft()
+    local left, top = Num(self.main:GetLeft()), Num(self.main:GetTop())
+    if not left or not top then return false end
+    self.main:ClearAllPoints()
+    self.main:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    self.db.point = { "TOPLEFT", "BOTTOMLEFT", left, top }
+    return true
+end
+
 function TO:SavePosition()
+    if self:PinTopLeft() then return end
     local p, _, rp, x, y = self.main:GetPoint()
     self.db.point = { p, rp, x, y }
 end
@@ -839,6 +853,8 @@ function TO:RestorePosition()
     local pt = self.db.point
     self.main:ClearAllPoints()
     self.main:SetPoint(pt[1], UIParent, pt[2], pt[3], pt[4])
+    -- Older saves (and the default) use the center: switch to the top-left corner
+    if pt[1] ~= "TOPLEFT" then self:PinTopLeft() end
 end
 
 function TO:ApplyVisibility()

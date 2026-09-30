@@ -1,5 +1,6 @@
 ## 1.1.1
 
+- The frame now stays pinned by its top-left corner. When a reminder goes away, the icons to its right slide left and the header stays where it is, instead of the whole frame shifting.
 - Your own items (food, water, potions, bandages) now sit on the right, with a thin gold separator between them and your buffs and other reminders on the left.
 
 ## 1.1.0
