@@ -1,3 +1,7 @@
+## 1.5.4
+
+- Fixed: recipes (like "Recipe: Minor Discolored Healing Potion") could be picked as your best food, water or potion, because their tooltip shows the item they make. Recipes are never tracked now, and one that was already tracked is dropped. Your Min is kept.
+
 ## 1.5.3
 
 - New: **Priest racial buffs**. Shadowguard (Troll) and Touch of Weakness (Undead) are tracked like your other buffs, and Fear Ward (Dwarf) is available but off by default. They only appear for Priests who have learned them.

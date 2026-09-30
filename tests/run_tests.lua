@@ -968,4 +968,24 @@ for _, f in ipairs(ALL_FRAMES) do
 end
 assert(sawGuard and not sawTouch, "only learned racial buffs listed")
 TO:OpenConfig()
+step("recipes aren't tracked")
+STATE.class = "WARRIOR"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.auto, TO.char.autoMins = {}, {}, {}
+STATE.level = 10; STATE.buffs = {}
+STATE.bags = { { id = 950, name = "Recipe: Minor Discolored Healing Potion", count = 1,
+    tip = "Use: Teaches you how to make Minor Discolored Healing Potion.\nMinor Discolored Healing Potion\nUse: Restores 70 to 90 health." } }
+-- An older version already picked it
+TO.char.auto.healing = { name = "Recipe: Minor Discolored Healing Potion", id = 950, score = 80, min = 5 }
+refresh()
+assertEq(TO.char.auto.healing, nil, "recipe dropped from healing potions")
+assertEq(ids()["auto:healing"], nil, "no recipe icon")
+assertEq(TO.char.autoMins.healing, 5, "your Min kept")
+table.insert(STATE.bags, { id = 951, name = "Minor Healing Potion", count = 3, tip = "Use: Restores 70 to 90 health." })
+refresh()
+assertEq(TO.char.auto.healing.name, "Minor Healing Potion", "the real potion is tracked")
+-- Tracked recipe no longer in bags: dropped too
+TO.char.auto.healing = { name = "Recipe: Something", id = 999, score = 80, min = 5 }
+refresh()
+assertEq(TO.char.auto.healing.name, "Minor Healing Potion", "recipe out of bags dropped")
+STATE.bags = {}; STATE.level = nil; TO.char.auto = {}; TO.char.autoMins = {}
 print("ALL TESTS PASSED")

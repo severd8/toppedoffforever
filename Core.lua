@@ -815,11 +815,36 @@ end
 -- What an item is good for: { food = amount, water = ..., bandage = ..., healing = ...,
 -- mana = ..., stats = { sta = 6, spi = 6 } (stat food), level = required level }
 local itemKinds = {}
+-- Recipes, patterns and the like show the tooltip of what they make, so they'd
+-- look like food or potions. They're never tracked.
+local RECIPE_PREFIXES = { "recipe:", "pattern:", "plans:", "schematic:", "formula:", "manual:", "design:" }
+local function IsRecipeName(name)
+    name = (name or ""):lower()
+    for _, p in ipairs(RECIPE_PREFIXES) do
+        if name:sub(1, #p) == p then return true end
+    end
+    return false
+end
+
+local function IsRecipe(id, text)
+    if IsRecipeName(ItemName(id)) then return true end
+    if C_Item and C_Item.GetItemInfoInstant then
+        local classID = Num(select(6, C_Item.GetItemInfoInstant(id)))
+        if classID == 9 then return true end   -- Recipe item class
+    end
+    return text:find("teaches you", 1, true) ~= nil
+end
+TO.IsRecipe = IsRecipe
+
 function TO:ItemKind(id)
     if itemKinds[id] then return itemKinds[id] end
     local text = TooltipText(id)
     if not text then return nil end   -- not loaded yet; try again next scan
     local k = { level = tonumber(text:match("requires level (%d+)")) or 0 }
+    if IsRecipe(id, text) then
+        itemKinds[id] = k   -- nothing it's good for
+        return k
+    end
     local wellFed = text:match("well fed(.*)")
     if wellFed then
         local stats, any = {}, false
@@ -894,6 +919,14 @@ function TO:UpdateAutoItems()
                 end
             end
             local cur = self.char.auto[slot.key]
+            -- A tracked item that doesn't qualify any more (like a recipe picked by an
+            -- older version) is dropped; your Min is kept for the next pick
+            local curKind = cur and itemKinds[cur.id]
+            if cur and (IsRecipeName(cur.name) or (curKind and self:AutoScore(slot.key, curKind) == nil)) then
+                if cur.min then self.char.autoMins[slot.key] = cur.min end
+                self.char.auto[slot.key] = nil
+                cur = nil
+            end
             if cur and rescore and slot.key == "statfood" then
                 local k = itemKinds[cur.id]
                 cur.score = k and self:AutoScore("statfood", k) or 0
