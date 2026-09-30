@@ -1,0 +1,13 @@
+## Interface: 16001
+## Title: ToppedOff Forever
+## Notes: Reminds you when a buff, weapon enhancement, reagent, ammo or durability runs low. Click the icon to fix it.
+## Author: Tyler
+## Version: @project-version@
+## IconTexture: Interface\Icons\INV_Misc_Bag_08
+## SavedVariables: ToppedOffForeverDB
+## SavedVariablesPerCharacter: ToppedOffForeverCharDB
+## X-License: MIT
+## X-Category: Buffs & Debuffs
+
+Core.lua
+Options.lua

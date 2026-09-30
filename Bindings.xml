@@ -1,0 +1,9 @@
+<!-- Keybindings for ToppedOff Forever. WoW loads this file automatically.
+     category gives the addon its own section in Options > Keybindings.
+     "Fix reminder 1-3" press the first three reminder icons; names are set in Core.lua. -->
+<Bindings>
+  <Binding name="CLICK ToppedOffForeverButton1:LeftButton" category="ToppedOff Forever"/>
+  <Binding name="CLICK ToppedOffForeverButton2:LeftButton" category="ToppedOff Forever"/>
+  <Binding name="CLICK ToppedOffForeverButton3:LeftButton" category="ToppedOff Forever"/>
+  <Binding name="TOPPEDOFFFOREVER_OPTIONS" category="ToppedOff Forever">ToppedOffForever:ToggleConfig()</Binding>
+</Bindings>

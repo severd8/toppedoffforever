@@ -1,0 +1,34 @@
+# Builds the addon and uploads it to CurseForge whenever a version tag (like v1.0.1) is pushed.
+# The tests run first; if they fail, nothing is uploaded.
+# Needs one repository secret: CF_API_KEY (your CurseForge API token).
+# Tags containing "beta" or "alpha" (e.g. v1.1.0-beta1) upload as Beta/Alpha files.
+name: Package and release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # lets the packager also create a GitHub release
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history, so the packager can find tags and build a changelog
+
+      - uses: BigWigsMods/packager@v2
+        with:
+          # File name stays the default (ToppedOffForever-v1.0.0-forever.zip);
+          # the name shown on CurseForge becomes e.g. "toppedoff-v1.0.0-forever".
+          args: -n ":toppedoff-{project-version}{classic}{nolib}"

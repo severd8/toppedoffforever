@@ -1,0 +1,13 @@
+# BigWigs packager settings
+package-as: ToppedOffForever
+
+# Use CHANGELOG.md as the release notes on CurseForge
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+# Development files that don't belong in the addon download
+ignore:
+  - .github
+  - tests
+  - DEVNOTES.md

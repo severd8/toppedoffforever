@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an idea for ToppedOff Forever
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: A new buff, reagent or item to check, or a feature you'd use.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
+      description: What problem does it solve?
+  - type: dropdown
+    id: class
+    attributes:
+      label: Which class is it for?
+      options: [All classes, Druid, Hunter, Mage, Paladin, Priest, Rogue, Shaman, Warlock, Warrior]

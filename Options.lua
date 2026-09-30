@@ -1,0 +1,372 @@
+-- ToppedOff Forever: options window
+-- Left side: display settings. Right side: every check for your class, with on/off,
+-- minimum counts, preferred spells, weapon items and your own items.
+
+local ADDON, ns = ...
+local TO = ns.TO
+
+local refreshers = {}
+local function AddRefresher(fn) table.insert(refreshers, fn) end
+local function RunRefreshers() for _, fn in ipairs(refreshers) do fn() end end
+
+---------------------------------------------------------------------------
+-- Widget helpers
+---------------------------------------------------------------------------
+local function Label(parent, text, x, y, template)
+    local fs = parent:CreateFontString(nil, "OVERLAY", template or "GameFontHighlight")
+    fs:SetPoint("TOPLEFT", x, y)
+    fs:SetText(text)
+    return fs
+end
+
+local function CheckBox(parent, text, x, y, getter, setter, tip)
+    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    cb:SetSize(24, 24)
+    cb:SetPoint("TOPLEFT", x, y)
+    local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fs:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+    fs:SetText(text)
+    cb.label = fs
+    cb:SetScript("OnClick", function(self) setter(self:GetChecked() and true or false) end)
+    if tip then
+        cb:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(text)
+            GameTooltip:AddLine(tip, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+    cb:SetChecked(getter())
+    return cb
+end
+
+-- A checkbox bound to an account-wide display setting
+local function SettingCheck(parent, text, x, y, key, tip)
+    local cb = CheckBox(parent, text, x, y, function() return TO.db[key] end, function(v)
+        if key == "locked" then
+            TO:SetLocked(v)
+        else
+            TO.db[key] = v
+            TO:ApplySettings()
+        end
+    end, tip)
+    AddRefresher(function() cb:SetChecked(TO.db[key] and true or false) end)
+    return cb
+end
+
+local function Slider(parent, text, x, y, key, min, max, suffix)
+    suffix = suffix or ""
+    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    title:SetPoint("TOPLEFT", x, y)
+
+    local s = CreateFrame("Slider", nil, parent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    s:SetOrientation("HORIZONTAL")
+    s:SetSize(180, 17)
+    s:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
+    s:SetHitRectInsets(0, 0, -8, -8)
+    if s.SetBackdrop and BACKDROP_SLIDER_8_8 then
+        s:SetBackdrop(BACKDROP_SLIDER_8_8)
+    else
+        local track = s:CreateTexture(nil, "BACKGROUND")
+        track:SetColorTexture(0, 0, 0, 0.6)
+        track:SetHeight(6)
+        track:SetPoint("LEFT")
+        track:SetPoint("RIGHT")
+    end
+    s:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    s:SetMinMaxValues(min, max)
+    s:SetValueStep(1)
+    if s.SetObeyStepsOnDrag then s:SetObeyStepsOnDrag(true) end   -- missing on Forever
+
+    s:SetScript("OnValueChanged", function(_, v)
+        v = math.floor(v + 0.5)
+        title:SetText(text .. ": |cffffd100" .. v .. suffix .. "|r")
+        if TO.db[key] ~= v then
+            TO.db[key] = v
+            TO:ApplySettings()
+        end
+    end)
+    AddRefresher(function()
+        s:SetValue(TO.db[key])
+        title:SetText(text .. ": |cffffd100" .. TO.db[key] .. suffix .. "|r")
+    end)
+    return s
+end
+
+local function EditBox(parent, width, x, y, text, numeric, onCommit)
+    local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    e:SetSize(width, 20)
+    e:SetPoint("TOPLEFT", x, y)
+    e:SetAutoFocus(false)
+    if numeric then e:SetNumeric(true) e:SetMaxLetters(4) end
+    e:SetText(text or "")
+    local function commit(self)
+        if onCommit then onCommit(self:GetText()) end
+        self:ClearFocus()
+    end
+    e:SetScript("OnEnterPressed", commit)
+    e:SetScript("OnEditFocusLost", function(self) if onCommit then onCommit(self:GetText()) end end)
+    e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    return e
+end
+
+local function PanelButton(parent, text, width, x, y, onClick)
+    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    b:SetSize(width, 22)
+    b:SetPoint("TOPLEFT", x, y)
+    b:SetText(text)
+    b:SetScript("OnClick", onClick)
+    return b
+end
+
+-- Button that cycles through a list of spell names
+local function SpellCycle(parent, x, y, options, getter, setter)
+    local b = PanelButton(parent, "", 170, x, y)
+    local function refresh() b:SetText(getter() or "") end
+    b:SetScript("OnClick", function()
+        local cur, nextIdx = getter(), 1
+        for i, v in ipairs(options) do
+            if v == cur then nextIdx = (i % #options) + 1 break end
+        end
+        setter(options[nextIdx])
+        refresh()
+    end)
+    b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Click to choose which spell to cast")
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    refresh()
+    return b
+end
+
+---------------------------------------------------------------------------
+-- Checks list (rebuilt every time the window opens, since it depends on
+-- your class, spells and added items)
+---------------------------------------------------------------------------
+local ROW = 26
+
+function TO:BuildChecksList()
+    local frame = self.config
+    if frame.checks then frame.checks:Hide() end
+    local c = CreateFrame("Frame", nil, frame.scrollChild)
+    c:SetPoint("TOPLEFT")
+    c:SetSize(330, 10)
+    frame.checks = c
+    local y = 0
+
+    local function header(text)
+        y = y - 6
+        Label(c, text, 0, y, "GameFontNormal")
+        y = y - 20
+    end
+    local function note(text)
+        Label(c, text, 28, y - 4, "GameFontDisableSmall")
+        y = y - 18
+    end
+    local function toggle(id, label, default)
+        local cb = CheckBox(c, label, 0, y, function() return TO:IsEnabled(id, default) end,
+            function(v) TO:SetEnabled(id, v) end)
+        return cb
+    end
+
+    local class = self:PlayerClass()
+
+    -- Buffs
+    local buffs = self.CLASS_BUFFS[class] or {}
+    if #buffs > 0 then
+        header("Buffs")
+        for _, buff in ipairs(buffs) do
+            local known = self:KnownOptions(buff.cast)
+            local cb = toggle("buff:" .. buff.id, buff.label, not buff.off)
+            if #known == 0 then
+                cb.label:SetText(buff.label .. " |cff808080(not learned)|r")
+            elseif #known > 1 then
+                SpellCycle(c, 160, y, known, function() return TO:BuffPreference(buff) end,
+                    function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end)
+            end
+            y = y - ROW
+        end
+    end
+
+    -- Weapons
+    header("Weapon enhancement")
+    local w = self:WeaponConfig()
+    if w.kind == "spell" then
+        local known = self:KnownOptions(w.cast)
+        local cb = toggle("weapon:mh", "Weapon buff", true)
+        if #known == 0 then
+            cb.label:SetText("Weapon buff |cff808080(not learned)|r")
+        elseif #known > 1 then
+            SpellCycle(c, 160, y, known, function() return TO:WeaponConfig().spell end,
+                function(v) TO.char.weapon.spell = v TO:RequestUpdate() end)
+        end
+        y = y - ROW
+    else
+        for _, key in ipairs({ "mh", "oh" }) do
+            toggle("weapon:" .. key, key == "mh" and "Main hand" or "Off hand", true)
+            EditBox(c, 150, 170, y - 2, w[key], false, function(text)
+                TO.char.weapon[key] = strtrim and strtrim(text) or text
+                TO:RequestUpdate()
+            end)
+            y = y - ROW
+        end
+        note("Item to use, e.g. Wizard Oil or Sharpening Stone. Blank = off.")
+    end
+
+    -- Reagents
+    local reagents = self.CLASS_REAGENTS[class] or {}
+    local showAmmo = self.AMMO_CLASSES[class] or class == "WARRIOR" or class == "ROGUE"
+    header("Reagents and ammo")
+    local function minBox(id, default)
+        EditBox(c, 40, 280, y - 2, tostring(TO:ReagentMin(id, default)), true, function(text)
+            local n = tonumber(text)
+            if n and n >= 0 then TO.char.mins[id] = math.floor(n) TO:RequestUpdate() end
+        end)
+    end
+    for _, rg in ipairs(reagents) do
+        local id = "reagent:" .. rg.id
+        local cb = toggle(id, rg.label, true)
+        if not self:FirstKnown(rg.requires) then
+            cb.label:SetText(rg.label .. " |cff808080(spell not learned)|r")
+        end
+        minBox(id, rg.min)
+        y = y - ROW
+    end
+    if showAmmo then
+        toggle("ammo", "Ammo", self.AMMO_CLASSES[class] == true)
+        minBox("ammo", self.AMMO_DEFAULT_MIN)
+        y = y - ROW
+    end
+    if #reagents > 0 or showAmmo then note("Number on the right = remind me below this many.") end
+
+    -- Durability
+    header("Gear")
+    toggle("durability", "Low durability (set % on the left)", true)
+    y = y - ROW
+
+    -- Your own items
+    header("Your own items")
+    for _, item in ipairs(self.char.custom) do
+        local name = item.name
+        toggle("custom:" .. name:lower(), name, true)
+        EditBox(c, 40, 230, y - 2, tostring(item.min), true, function(text)
+            local n = tonumber(text)
+            if n and n >= 1 then item.min = math.floor(n) TO:RequestUpdate() end
+        end)
+        PanelButton(c, "Remove", 60, 275, y, function()
+            TO:RemoveCustom(name)
+            TO:BuildChecksList()
+        end)
+        y = y - ROW
+    end
+    Label(c, "Item", 4, y - 4, "GameFontHighlightSmall")
+    local nameBox = EditBox(c, 160, 36, y, "", false)
+    Label(c, "Min", 206, y - 4, "GameFontHighlightSmall")
+    local minEdit = EditBox(c, 40, 232, y, "20", true)
+    PanelButton(c, "Add", 50, 280, y + 1, function()
+        if TO:AddCustom(nameBox:GetText(), minEdit:GetText()) then
+            TO:BuildChecksList()
+        else
+            TO.Print("type an item name and a number first.")
+        end
+    end)
+    y = y - ROW
+    note("Food, water, potions, anything. Exact item name.")
+
+    c:SetHeight(-y + 10)
+    frame.scrollChild:SetHeight(-y + 10)
+end
+
+function TO:RefreshConfig()
+    if self.config and self.config:IsShown() then
+        RunRefreshers()
+        self:BuildChecksList()
+    end
+end
+
+---------------------------------------------------------------------------
+-- Window
+---------------------------------------------------------------------------
+function TO:BuildConfig()
+    local f = CreateFrame("Frame", "ToppedOffForeverOptions", UIParent, "BasicFrameTemplateWithInset")
+    f:SetSize(620, 470)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetClampedToScreen(true)
+    f:Hide()
+    table.insert(UISpecialFrames, "ToppedOffForeverOptions")   -- Escape closes it
+
+    local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    title:SetPoint("TOP", 0, -6)
+    title:SetText("ToppedOff Forever")
+    self.config = f
+
+    -- Left column: display
+    local x, y = 16, -34
+    Label(f, "Display", x, y, "GameFontNormal")
+    y = y - 22
+    SettingCheck(f, "Show reminders", x, y, "shown")
+    y = y - 24
+    SettingCheck(f, "Lock position", x, y, "locked", "Unlock to drag the reminders with the blue box.")
+    y = y - 24
+    SettingCheck(f, "Hide in combat", x, y, "hideInCombat",
+        "Reminders can only change out of combat, so hiding them in combat keeps things tidy.")
+    y = y - 24
+    SettingCheck(f, "Only in dungeons and raids", x, y, "onlyInInstance")
+    y = y - 24
+    SettingCheck(f, "Minimap button", x, y, "minimap")
+    y = y - 34
+    Slider(f, "Icon size", x + 4, y, "iconSize", 20, 64)
+    y = y - 46
+    Slider(f, "Warn before buffs run out", x + 4, y, "warnMinutes", 1, 10, " min")
+    y = y - 46
+    Slider(f, "Durability warning below", x + 4, y, "durabilityPct", 5, 75, "%")
+    y = y - 44
+    Label(f, "Chat reminders", x, y, "GameFontNormal")
+    y = y - 22
+    SettingCheck(f, "On ready check", x, y, "readyCheck", "Lists anything missing in chat when a ready check starts.")
+    y = y - 24
+    SettingCheck(f, "On entering a dungeon or raid", x, y, "instanceReminder")
+    y = y - 24
+    SettingCheck(f, "Play a sound with chat reminders", x, y, "sound")
+    y = y - 32
+    PanelButton(f, "Reset position", 120, x, y, function()
+        SlashCmdList.TOPPEDOFFFOREVER("reset")
+    end)
+    PanelButton(f, "Check spells", 110, x + 126, y, function() TO:Check() end)
+
+    -- Right column: checks
+    Label(f, "What to check (this character)", 262, -34, "GameFontNormal")
+    local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 258, -56)
+    scroll:SetPoint("BOTTOMRIGHT", -32, 12)
+    local child = CreateFrame("Frame", nil, scroll)
+    child:SetSize(330, 10)
+    scroll:SetScrollChild(child)
+    f.scroll = scroll
+    f.scrollChild = child
+
+    f:SetScript("OnShow", function()
+        RunRefreshers()
+        TO:BuildChecksList()
+    end)
+end
+
+function TO:OpenConfig()
+    if not self.config then self:BuildConfig() end
+    if self.config:IsShown() then
+        self.config:Hide()
+    else
+        self.config:Show()
+    end
+end
+
+function TO:ToggleConfig() self:OpenConfig() end
