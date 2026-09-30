@@ -457,6 +457,23 @@ STATE.class = "PRIEST"
 TO:SetStatFocus("sp"); refresh()
 assertEq(TO.char.auto.statfood.name, "Blackened Basilisk", "Spell power override")
 TO:SetStatFocus(nil)
+-- Hybrids follow their talents
+STATE.talents = { { "Discipline", 5 }, { "Holy", 0 }, { "Shadow", 31 } }; refresh()
+assertEq(TO.char.auto.statfood.name, "Blackened Basilisk", "shadow priest: spell power food")
+STATE.talents = { { "Discipline", 21 }, { "Holy", 30 }, { "Shadow", 0 } }; refresh()
+assertEq(TO.char.auto.statfood.name, "Golden Fish Sticks", "holy priest: healing food")
+STATE.class = "SHAMAN"
+STATE.talents = { { "Elemental", 0 }, { "Enhancement", 31 }, { "Restoration", 5 } }
+table.insert(STATE.bags, { id = 123, name = "Smoked Desert Dumplings", count = 2, tip = "Requires Level 35\nUse: Restores 1392 health over 27 sec."
+    .. EAT .. " If you spend at least 10 seconds eating you will become well fed and gain 20 Strength for 15 min." })
+refresh()
+assertEq(TO.char.auto.statfood.name, "Smoked Desert Dumplings", "enhancement shaman: Strength food")
+STATE.talents = { { "Elemental", 31 }, { "Enhancement", 0 }, { "Restoration", 5 } }; refresh()
+assertEq(TO.char.auto.statfood.name, "Blackened Basilisk", "elemental shaman: spell power food")
+STATE.talents = nil; STATE.roles = { player = "HEALER" }; refresh()
+assertEq(TO.char.auto.statfood.name, "Golden Fish Sticks", "no talents: group role (healer)")
+STATE.roles = {}; STATE.class = "PRIEST"; refresh()
+assertEq(TO.char.auto.statfood.name, "Golden Fish Sticks", "no talents or role: class default (healing)")
 -- Options window lists them
 TO:OpenConfig()
 TO:BuildChecksList()

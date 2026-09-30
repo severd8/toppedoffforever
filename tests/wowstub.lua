@@ -165,6 +165,9 @@ function IsMounted() return STATE.mounted or false end
 function UnitOnTaxi() return false end
 function IsResting() return STATE.resting or false end
 function GetPetHappiness() return STATE.happiness end
+-- Talents (Classic style): STATE.talents = { { "Discipline", 5 }, { "Holy", 0 }, { "Shadow", 31 } }
+function GetNumTalentTabs() return STATE.talents and #STATE.talents or 0 end
+function GetTalentTabInfo(i) local t = STATE.talents[i] return t[1], "icon", t[2], "bg" end
 -- Tooltips: a bag entry's `tip` field is its tooltip text (lines split on "\n")
 C_TooltipInfo = { GetItemByID = function(id)
     for _, e in ipairs(STATE.bags) do

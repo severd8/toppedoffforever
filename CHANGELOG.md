@@ -1,6 +1,7 @@
 ## 1.4.1
 
-- Stat food now recognizes **spell power** and **healing** foods, in case Forever adds them. Mages and Warlocks prefer spell power food (then Intellect), and Priests and Shamans prefer healing food (then mana regen). Both are also in the "Stat food for" choices.
+- Stat food now recognizes **spell power** and **healing** foods, in case Forever adds them. Both are also in the "Stat food for" choices.
+- Stat food now follows **your role**, not just your class. Priests, Shamans, Druids and Paladins get food for what they do, read from the talent tree with the most points (or your group role): healers get healing then mana regen, casters (Shadow, Elemental, Balance) get spell power then Intellect, Enhancement and Retribution get Strength, and tanks get Stamina. Mages and Warlocks get spell power then Intellect. The "Stat food for" button shows what was picked, like "Caster: Spell power".
 
 ## 1.4.0
 

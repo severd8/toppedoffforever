@@ -665,8 +665,79 @@ TO.CLASS_STATS = {
 }
 local STAT_WORDS = { strength = "str", agility = "agi", stamina = "sta", intellect = "int", spirit = "spi" }
 
+-- Hybrid classes: stat food by what you do. Talent tree or spec name -> role.
+TO.SPEC_ROLES = {
+    shadow = "caster", discipline = "healer", holy = "healer",
+    elemental = "caster", enhancement = "melee", restoration = "healer",
+    balance = "caster", feral = "tank", ["feral combat"] = "tank", guardian = "tank",
+    protection = "tank", retribution = "melee",
+}
+TO.ROLE_STATS = {
+    PRIEST  = { healer = { "heal", "mp5", "int", "spi", "sta" }, caster = { "sp", "int", "sta", "spi", "mp5" } },
+    SHAMAN  = { healer = { "heal", "mp5", "int", "sta" }, caster = { "sp", "int", "mp5", "sta" },
+                melee = { "str", "agi", "sta", "int" } },
+    DRUID   = { healer = { "heal", "mp5", "int", "spi" }, caster = { "sp", "int", "mp5", "sta" },
+                tank = { "sta", "agi", "str" }, melee = { "agi", "str", "sta" } },
+    PALADIN = { healer = { "heal", "mp5", "int", "sta" }, tank = { "sta", "str", "agi" },
+                melee = { "str", "sta", "agi" } },
+}
+TO.ROLE_LABELS = { healer = "Healer", caster = "Caster", tank = "Tank", melee = "Melee" }
+
+-- Your role, from (1) your specialization, (2) the talent tree with the most points,
+-- or (3) the role you picked for the group. Returns role, and the spec/tree name.
+function TO:PlayerSpecRole()
+    local class = self:PlayerClass()
+    local function fromName(name)
+        name = Str(name)
+        return name and self.SPEC_ROLES[name:lower()], name
+    end
+    if GetSpecialization and GetSpecializationInfo then
+        local ok, spec = pcall(GetSpecialization)
+        spec = ok and Num(spec)
+        if spec then
+            local _, name, _, _, specRole = GetSpecializationInfo(spec)
+            local role, n = fromName(name)
+            if role then return role, n end
+            specRole = Str(specRole)
+            if specRole == "HEALER" then return "healer", n end
+            if specRole == "TANK" then return "tank", n end
+        end
+    end
+    if GetNumTalentTabs and GetTalentTabInfo then
+        local best, bestPts
+        for i = 1, (Num(GetNumTalentTabs()) or 0) do
+            local r = { pcall(GetTalentTabInfo, i) }
+            if r[1] then
+                -- Classic: name, icon, points. Later clients: id, name, description, icon, points.
+                local name, pts
+                if type(r[2]) == "number" then name, pts = r[3], r[6] else name, pts = r[2], r[4] end
+                name, pts = Str(name), Num(pts)
+                if name and pts and pts > 0 and (not bestPts or pts > bestPts) then best, bestPts = name, pts end
+            end
+        end
+        local role, n = fromName(best)
+        if role then return role, n end
+    end
+    local groupRole = Str(UnitGroupRolesAssigned and UnitGroupRolesAssigned("player"))
+    if groupRole == "HEALER" then return "healer" end
+    if groupRole == "TANK" then return "tank" end
+    if groupRole == "DAMAGER" then return class == "PALADIN" and "melee" or "caster" end
+    return nil
+end
+
+-- Stat priority without your override: by role for hybrids, else by class
+function TO:AutoStatPriority()
+    local class = self:PlayerClass()
+    local roles = self.ROLE_STATS[class]
+    if roles then
+        local role, name = self:PlayerSpecRole()
+        if role and roles[role] then return roles[role], role, name end
+    end
+    return self.CLASS_STATS[class] or { "sta", "spi" }
+end
+
 function TO:StatPriority()
-    local base = self.CLASS_STATS[self:PlayerClass()] or { "sta", "spi" }
+    local base = self:AutoStatPriority()
     local focus = self.char.statFocus
     if not focus then return base end
     local list = { focus }
@@ -765,6 +836,12 @@ end
 -- Picks the best item in your bags for each slot; better items replace worse ones
 function TO:UpdateAutoItems()
     local level = Num(UnitLevel("player")) or 60
+    -- Spec or stat choice changed: pick the stat food again
+    local basis = table.concat(self:StatPriority(), ",")
+    if self.char.statBasis ~= basis then
+        self.char.statBasis = basis
+        self.char.auto.statfood = nil
+    end
     local hasMana = self.MANA_CLASSES[self:PlayerClass()]
     for _, slot in ipairs(self.AUTO_SLOTS) do
         if not slot.mana or hasMana then
@@ -1879,6 +1956,11 @@ events:RegisterEvent("GROUP_ROSTER_UPDATE")
 -- Pet events; guarded in case this client doesn't have them
 pcall(events.RegisterUnitEvent, events, "UNIT_PET", "player")
 pcall(events.RegisterUnitEvent, events, "UNIT_HAPPINESS", "pet")
+-- Talent / spec changes (stat food follows your role)
+for _, e in ipairs({ "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED",
+    "PLAYER_SPECIALIZATION_CHANGED" }) do
+    pcall(events.RegisterEvent, events, e)
+end
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == ADDON then
         ToppedOffForeverDB = ToppedOffForeverDB or {}

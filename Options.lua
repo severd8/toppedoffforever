@@ -388,10 +388,11 @@ local function BuildSuppliesTab(self, ctx, class)
     for _, k in ipairs(self.STAT_KEYS) do focusKeys[#focusKeys + 1] = k end
     local function focusLabel(k)
         if not k then
-            local base = (self.CLASS_STATS[class] or { "sta" })[1]
-            return "Class default (" .. self.STAT_LABELS[base] .. ")"
+            local prio, role = TO:AutoStatPriority()
+            local who = role and TO.ROLE_LABELS[role] or "Auto"
+            return who .. ": " .. TO.STAT_LABELS[prio[1]]
         end
-        return self.STAT_LABELS[k]
+        return TO.STAT_LABELS[k]
     end
     local focusBtn = PanelButton(c, focusLabel(self.char.statFocus), CYCLE_W, CYCLE_X, ctx.y)
     focusBtn:SetScript("OnClick", function(b)
@@ -407,7 +408,7 @@ local function BuildSuppliesTab(self, ctx, class)
     end)
     ctx.row()
     ctx.note("The best of each in your bags is picked for you, and better ones take over as you level. "
-        .. "Untick one to stop tracking it.")
+        .. "Stat food follows your talents (or group role). Untick one to stop tracking it.")
 
     ctx.header("Your own items", "Min")
     for _, item in ipairs(self.char.custom) do
