@@ -100,6 +100,10 @@ WoW: Forever runs on the modern addon system, which limits what addons can do in
 
 Found a bug, or want a buff or reagent added? Please [submit it on GitHub](https://github.com/severd8/toppedoffforever/issues/new/choose). A short form asks for your class and any error message. You'll need a free GitHub account. Otherwise, feel free to leave a comment on the CurseForge page.
 
+## Support the addon
+
+ToppedOff Forever is free. If it has saved you a wipe, you can [leave a small tip on Ko-fi](https://ko-fi.com/tauntmasterforever). Thank you!
+
 ## Also by me
 
 **TauntMaster Forever**: one-click taunts off your healers and DPS, for tanks. Free on CurseForge.
