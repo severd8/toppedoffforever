@@ -38,6 +38,8 @@ FUTURE = { "Mage Armor", "Arcane Brilliance" }     -- visible in the spellbook b
 fire("ADDON_LOADED", ADDON)
 fire("PLAYER_LOGIN")
 assert(TO.built, "frames not built")
+assertEq(TO.char.customAlways, true, "quick-use bar on by default")
+TO.char.customAlways = false   -- most scenarios below test the "only when low" behavior
 assertEq(TO.db.iconSize, 40, "old default icon size upgraded")
 assert(lastLog("ToppedOff Forever|r loaded"), "login message")
 fire("PLAYER_ENTERING_WORLD")
@@ -156,11 +158,13 @@ assertEq(#TO.char.custom, 1, "re-adding updates instead of duplicating")
 refresh()
 assertEq(ids()["custom:conjured water"], nil, "5 >= 3")
 -- Always show, even when stocked; click uses the item
-assertEq(TO.char.customAlways, false, "always show off by default")
 TO.char.customAlways = true; refresh()
 local w = ids()["custom:conjured water"]
 assertEq(w and w.text, "5/3", "stocked item shown with count")
 assertEq(w.stocked, true, "marked as topped off")
+for _, b in ipairs(TO.buttons) do
+    if b.reminder == w then assertEq(b.icon.__alpha, TO.STOCKED_ALPHA, "stocked item dimmed") end
+end
 local wb
 for _, b in ipairs(TO.buttons) do if b.reminder == w then wb = b end end
 assertEq(wb.__attrs.type, "item", "click uses the item")

@@ -208,7 +208,7 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     mins = {},                -- reagent/ammo id -> minimum count
     weapon = {},              -- mh / oh -> item name, spell -> preferred weapon spell
     custom = {},              -- { name = "Conjured Crystal Water", min = 20 }
-    customAlways = false,     -- show your own items even when you have enough
+    customAlways = true,      -- show food, water and your items even when stocked (a quick-use bar)
     autoMins = {},            -- auto slot -> your Min (kept when the tracked item changes)
     auto = {},                -- auto-tracked best items: slot -> { name, id, score, min }
     statFocus = nil,          -- stat food override ("str", "agi", ...); nil = class default
@@ -1809,8 +1809,10 @@ function TO:ApplyButton(b, r)
     b.border:SetPoint("TOPLEFT", -thick, thick)
     b.border:SetPoint("BOTTOMRIGHT", thick, -thick)
     b.urgency = (color == self.COLORS.urgent and "urgent") or (color == self.COLORS.expiring and "expiring") or nil
-    -- Your own items: red count when you're low, white when topped off
+    -- Your own items: red count when you're low; dimmed with a white count when
+    -- they're only shown for quick use (topped off)
     if r.low then b.text:SetTextColor(1, 0.35, 0.3) else b.text:SetTextColor(1, 1, 1) end
+    b.icon:SetAlpha(r.stocked and self.STOCKED_ALPHA or 1)
 end
 
 -- Places the icons in a row. Must run out of combat (the icons are secure buttons).
@@ -1980,6 +1982,7 @@ function TO:IsBuffReminder(r)
     return false
 end
 TO.URGENT_SHARE = 0.2      -- red border in the last 20% of the warning time
+TO.STOCKED_ALPHA = 0.6     -- topped-off items shown for quick use are dimmed
 
 -- The frame (header + box around the icons) shows while unlocked, so it can be
 -- dragged, or whenever there are reminders if "Show header and frame" is on.

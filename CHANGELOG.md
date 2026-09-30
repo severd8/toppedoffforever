@@ -1,3 +1,7 @@
+## 1.5.1
+
+- Food, water, bandages, potions and your own items now show as a **quick-use bar** by default: dimmed when you're stocked, bright with a red count when you're low. Click one to use it. Turn it off with "Always show these, as a quick-use bar" on the Supplies tab. Existing characters keep their current setting.
+
 ## 1.5.0
 
 - New: **one-click restock at vendors**. A list beside the vendor window shows everything you're short on (reagents, food, water, potions, your own items, ammo, pet food) that the vendor sells, with the cost. Untick anything you don't want, then click Restock. Multi-rank reagents buy the rank for your level (Holy or Sacred Candles, Wild Berries or Thornroot, Rebirth seeds). Nothing is bought until you click.

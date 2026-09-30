@@ -563,8 +563,9 @@ local function BuildSuppliesTab(self, ctx, class)
         end
     end)
     ctx.row()
-    ctx.charCheck("Always show these, with counts", "customAlways", 0,
-        "Show your items (and the ones above) even when you have enough. Click an icon to use the item.")
+    ctx.charCheck("Always show these, as a quick-use bar", "customAlways", 0,
+        "Show your food, water, potions and items even when you have enough, dimmed, so you can click to use them. "
+        .. "Low ones are bright with a red count.")
     ctx.row()
     ctx.note("Anything else you want to keep stocked. Exact item name.")
 

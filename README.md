@@ -12,7 +12,7 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 
 ## Features
 
-- **Only shows what's wrong.** No icons when you're topped off. An icon appears when something runs low and disappears once it's fixed.
+- **Shows what's wrong, plus a quick-use bar.** Buffs, reagents and gear only show when something needs fixing. Your food, water, bandages and potions stay on screen as a dimmed quick-use bar you can click, and turn bright with a red count when they run low. Turn the bar off with "Always show these" on the Supplies tab.
 - **Class buffs for every class.** Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
 - **Party buffs.** See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild or Divine Spirit. **Click to buff the next one in range.**
 - **Party blessings** for Paladins. Choose the blessing for each class (like Kings or Might for Warriors, Kings or Wisdom for casters). **Click to bless the next one in range.**
@@ -34,7 +34,7 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 - **Low durability** warning before your gear breaks.
 - **Food, water, bandages and potions, picked for you.** ToppedOff finds the best food, water, bandage, healing potion and mana potion in your bags, plus the right **stat food for your class** (Strength for Warriors, Agility for Rogues and Hunters, spell power then Intellect for Mages and Warlocks; Priests, Shamans, Druids and Paladins get food for their role, from their talents or group role; change it in the options). When something better lands in your bags, it takes over. Water and mana potions are only tracked for mana users.
 - **Well Fed.** Reminds you when your stat food buff is missing or running out, and a click eats your stat food. On by default in dungeons and raids; turn it on everywhere in the options.
-- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). Turn on "Always show these, with counts" to keep them on screen even when you're stocked up; the count turns red when you're low.
+- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). They stay on screen as a quick-use bar (dimmed when stocked, red count when low).
 - **Chat reminders.** Lists anything missing when a ready check starts or when you enter a dungeon or raid.
 - **Keybindings.** Fix the first three reminders from the keyboard or a controller.
 
