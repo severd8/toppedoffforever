@@ -165,6 +165,20 @@ for _, b in ipairs(TO.buttons) do if b.reminder == w then wb = b end end
 assertEq(wb.__attrs.type, "item", "click uses the item")
 assertEq(wb.__attrs.item, "item:4", "uses it by item ID")
 assertEq(wb.__attrs.unit, "player", "on yourself (bandages)")
+-- Own items sit to the right of buffs, past a separator
+do
+    local firstOwn, lastOther
+    for i, b in ipairs(TO.buttons) do
+        if b.__shown ~= false and b.reminder then
+            if b.reminder.ownItem then firstOwn = firstOwn or i else lastOther = i end
+        end
+    end
+    assert(lastOther, "scenario has a buff reminder too")
+    do
+        assert(firstOwn and firstOwn > lastOther, "own items come after buffs")
+        assertEq(TO.separator.__shown, true, "separator shown between groups")
+    end
+end
 LOG = {}; TO:Remind("Ready check")
 assert(not lastLog("Conjured Water"), "topped-off items aren't reported as missing")
 TO.char.customAlways = false; refresh()

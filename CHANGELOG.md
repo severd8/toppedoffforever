@@ -1,3 +1,7 @@
+## 1.1.1
+
+- Your own items (food, water, potions, bandages) now sit on the right, with a thin gold separator between them and your buffs and other reminders on the left.
+
 ## 1.1.0
 
 - New: click one of your own items' icons to use it: food, drink, potions, and bandages (on yourself).

@@ -573,7 +573,7 @@ function TO:CheckReagents(list)
             local low = have < c.min
             if low or self.char.customAlways then
                 local r = { id = id, label = c.name, icon = icon or self:ItemIconByName(c.name),
-                    text = have .. "/" .. c.min, low = low, stocked = not low,
+                    text = have .. "/" .. c.min, low = low, stocked = not low, ownItem = true,
                     detail = low and ("%d in your bags (want %d)"):format(have, c.min)
                         or ("%d in your bags. Topped off."):format(have) }
                 -- Click to use it (food, drink, potions, bandages on yourself)
@@ -753,13 +753,43 @@ function TO:Layout(list)
     local size, gap = self.db.iconSize, 4
     local shownList = list
     if self.db.onlyInInstance and not self:InInstance() then shownList = {} end
+
+    -- Buffs and other reminders on the left, your own items (food, water,
+    -- bandages...) on the right, with a thin separator between the two groups.
+    local left, right = {}, {}
+    for _, r in ipairs(shownList) do
+        if r.ownItem then right[#right + 1] = r else left[#left + 1] = r end
+    end
+    shownList = {}
+    for _, r in ipairs(left) do shownList[#shownList + 1] = r end
+    for _, r in ipairs(right) do shownList[#shownList + 1] = r end
+    local split = #left > 0 and #right > 0
+    local sepSpace = split and self.SEPARATOR_SPACE or 0
+
+    if not self.separator then
+        self.separator = self.bar:CreateTexture(nil, "ARTWORK")
+        local g = self.COLORS.gold
+        self.separator:SetColorTexture(g[1], g[2], g[3], 0.8)
+        self.separator:SetWidth(2)
+    end
     for i, r in ipairs(shownList) do
         local b = self.buttons[i] or self:CreateButton(i)
         self:ApplyButton(b, r)
         b:SetSize(size, size)
         b:ClearAllPoints()
-        b:SetPoint("LEFT", self.bar, "LEFT", (i - 1) * (size + gap), 0)
+        local x = (i - 1) * (size + gap)
+        if split and i > #left then x = x + sepSpace end
+        b:SetPoint("LEFT", self.bar, "LEFT", x, 0)
         b:Show()
+    end
+    self.separator:ClearAllPoints()
+    if split then
+        local x = #left * (size + gap) - gap + math.floor(sepSpace / 2)
+        self.separator:SetPoint("TOPLEFT", self.bar, "TOPLEFT", x, -2)
+        self.separator:SetPoint("BOTTOMLEFT", self.bar, "BOTTOMLEFT", x, 2)
+        self.separator:Show()
+    else
+        self.separator:Hide()
     end
     for i = #shownList + 1, #self.buttons do
         local b = self.buttons[i]
@@ -770,7 +800,7 @@ function TO:Layout(list)
     -- Always room for at least two icons, so the frame keeps one tidy size and only
     -- grows once a third reminder shows up.
     local slots = math.max(#shownList, self.MIN_SLOTS)
-    local width = math.max(slots * (size + gap) - gap, self.HEADER_MIN_WIDTH)
+    local width = math.max(slots * (size + gap) - gap + sepSpace, self.HEADER_MIN_WIDTH)
     self.main:SetSize(width, size)
     self.bar:SetAllPoints(self.main)
     self.bar:SetShown(#shownList > 0)
@@ -831,6 +861,7 @@ TO.HEADER_HEIGHT = 22      -- header strip at the top of the frame
 TO.HEADER_MIN_WIDTH = 84   -- room for the logo and "ToppedOff"
 TO.FRAME_PAD = 4           -- space between the frame's edge and the icons
 TO.MIN_SLOTS = 2           -- the frame is always at least two icons wide
+TO.SEPARATOR_SPACE = 10    -- extra room between buff icons and your own items
 
 -- The frame (header + box around the icons) shows while unlocked, so it can be
 -- dragged, or whenever there are reminders if "Show header and frame" is on.

@@ -18,7 +18,7 @@ ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It wat
 - **Reagents and class items.** Soul Shards, teleport and portal runes, Arcane Powder, candles, Light Feathers, Symbols of Kings and Divinity, Ankhs, totems, Flash Powder and more. Checked only once you've learned a spell that needs them. Set your own minimums.
 - **Ammo** for Hunters.
 - **Low durability** warning before your gear breaks.
-- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). Turn on "Always show these, with counts" to keep them on screen even when you're stocked up; the count turns red when you're low.
+- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). Turn on "Always show these, with counts" to keep them on screen even when you're stocked up; the count turns red when you're low. They sit on the right of the frame, after a separator, with buffs and other reminders on the left.
 - **Chat reminders.** Lists anything missing when a ready check starts or when you enter a dungeon or raid.
 - **Keybindings.** Fix the first three reminders from the keyboard or a controller.
 
