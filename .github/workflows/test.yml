@@ -1,0 +1,24 @@
+# Runs the test suite on every push and pull request.
+# A red X on a commit means something broke; don't tag a release until it's green.
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_call:   # also run by the release workflow before packaging
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 (the version WoW uses)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1 liblua5.1-0-dev
+
+      - name: Check Lua syntax
+        run: luac5.1 -p Core.lua Options.lua
+
+      - name: Run tests
+        run: lua5.1 tests/run.lua

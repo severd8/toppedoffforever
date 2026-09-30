@@ -1,0 +1,59 @@
+name: Bug report
+description: Something in ToppedOff Forever isn't working
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting! The more detail you give, the faster it gets fixed.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What went wrong, and what did you expect to happen instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can it be reproduced?
+      description: The steps that lead to the problem.
+      placeholder: |
+        1. Logged in on my Mage
+        2. Let Arcane Intellect run out
+        3. ...
+  - type: dropdown
+    id: class
+    attributes:
+      label: Your class
+      options: [Druid, Hunter, Mage, Paladin, Priest, Rogue, Shaman, Warlock, Warrior]
+    validations:
+      required: true
+  - type: input
+    id: check
+    attributes:
+      label: Which reminder?
+      description: The buff, weapon enhancement, reagent or item involved (if any).
+      placeholder: Arcane Intellect
+  - type: dropdown
+    id: combat
+    attributes:
+      label: Were you in combat?
+      options: ["Yes", "No", "Not sure"]
+  - type: input
+    id: version
+    attributes:
+      label: Addon version
+      description: Shown in your AddOns list.
+      placeholder: v1.0.1
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: If a Lua error appeared, paste the full text here. The error display (or an addon like BugSack) shows it.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, the output of /topoff check, other addons you use, etc.
