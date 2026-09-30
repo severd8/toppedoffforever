@@ -1935,6 +1935,23 @@ function TO:PinTopLeft()
     return true
 end
 
+-- Right-click menu on the "ToppedOff" header (same as TauntMaster Forever's)
+function TO:ShowHeaderMenu(owner)
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then
+        self:OpenConfig()
+        return
+    end
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle("ToppedOff Forever")
+        root:CreateCheckbox("Lock",
+            function() return TO.db.locked end,
+            function() TO:SetLocked(not TO.db.locked) end)
+        root:CreateButton("Settings", function()
+            if not (TO.config and TO.config:IsShown()) then TO:OpenConfig() end
+        end)
+    end)
+end
+
 function TO:SavePosition()
     if self:PinTopLeft() then return end
     local p, _, rp, x, y = self.main:GetPoint()
@@ -2067,8 +2084,8 @@ function TO:BuildFrames()
         main:StopMovingOrSizing()
         TO:SavePosition()
     end)
-    header:SetScript("OnMouseUp", function(_, button)
-        if button == "RightButton" then TO:OpenConfig() end
+    header:SetScript("OnMouseUp", function(self, button)
+        if button == "RightButton" then TO:ShowHeaderMenu(self) end
     end)
     header:SetScript("OnEnter", function(f)
         GameTooltip:SetOwner(f, "ANCHOR_TOP")

@@ -918,4 +918,32 @@ local ai = ids()["party:intellect"]
 assertEq(ai and ai.text, "1", "only the priest needs Intellect")
 assertEq(ai.action.unit, "party2", "click buffs the priest")
 STATE.party = {}; STATE.partyClass = {}; STATE.level = nil
+step("header right-click menu")
+local items = {}
+MenuUtil = { CreateContextMenu = function(owner, fn)
+    items = {}
+    local root = { CreateTitle = function(_, t) items[#items + 1] = { kind = "title", text = t } end,
+        CreateCheckbox = function(_, t, isSel, onSel) items[#items + 1] = { kind = "check", text = t, isSel = isSel, onSel = onSel } end,
+        CreateButton = function(_, t, fn2) items[#items + 1] = { kind = "button", text = t, fn = fn2 } end }
+    fn(owner, root)
+end }
+local header
+for _, f in ipairs(ALL_FRAMES) do
+    if f.__scripts.OnMouseUp and f.__scripts.OnDragStart and f.__parent == TO.box then header = f end
+end
+assert(header, "header found")
+TO.db.locked = false
+header.__scripts.OnMouseUp(header, "RightButton")
+assertEq(items[1].text, "ToppedOff Forever", "menu title")
+assertEq(items[2].text, "Lock", "lock checkbox")
+assertEq(items[2].isSel(), false, "unlocked")
+items[2].onSel()
+assertEq(TO.db.locked, true, "locked from the menu")
+assertEq(items[3].text, "Settings", "settings button")
+if TO.config and TO.config:IsShown() then TO:OpenConfig() end
+items[3].fn()
+assertEq(TO.config.__shown, true, "settings opened")
+items[3].fn()
+assertEq(TO.config.__shown, true, "Settings again keeps it open")
+TO:OpenConfig(); TO:SetLocked(false); MenuUtil = nil
 print("ALL TESTS PASSED")

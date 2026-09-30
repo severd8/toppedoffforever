@@ -1,3 +1,7 @@
+## 1.5.2
+
+- Right-clicking the "ToppedOff" header now opens a menu with **Lock** and **Settings**, like TauntMaster Forever.
+
 ## 1.5.1
 
 - Food, water, bandages, potions and your own items now show as a **quick-use bar** by default: dimmed when you're stocked, bright with a red count when you're low. Click one to use it. Turn it off with "Always show these, as a quick-use bar" on the Supplies tab. Existing characters keep their current setting.

@@ -50,7 +50,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 
 - **Move the icons.** They start unlocked, inside a frame with a "ToppedOff" header. Drag the header to move them, then lock it in the options or with `/topoff lock`. Clicking the icons works whether they're locked or not.
 - **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Buffs are cast on you. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you).
-- **Open the options.** Type `/topoff`, left-click the minimap button, or right-click the "ToppedOff" header.
+- **Open the options.** Type `/topoff`, left-click the minimap button, or right-click the "ToppedOff" header and choose **Settings**. The header menu also has **Lock**.
 - **Show or hide.** Right-click the minimap button, or type `/topoff toggle`.
 
 ### Options window
