@@ -441,6 +441,22 @@ STATE.class = "PRIEST"; TO.char.auto = {}; refresh()
 assertEq(TO.char.auto.water.name, "Melon Juice", "priest water")
 assertEq(TO.char.auto.mana.name, "Mana Potion", "priest mana potion (rejuvenation skipped)")
 assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "priest has no mp5/int food here: best of the rest")
+table.insert(STATE.bags, { id = 120, name = "Nightfin Soup", count = 4, tip = "Requires Level 35\nUse: Restores 874 health over 27 sec."
+    .. EAT .. " If you spend at least 10 seconds eating you will become well fed and restore 8 mana every 5 seconds for 10 min." })
+STATE.level = 40; TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.statfood.name, "Nightfin Soup", "priest: mana regen food")
+table.insert(STATE.bags, { id = 121, name = "Golden Fish Sticks", count = 4, tip = "Requires Level 35\nUse: Restores 1000 health over 27 sec."
+    .. EAT .. " If you spend at least 10 seconds eating you will become well fed and gain up to 44 bonus healing and 20 Spirit for 30 min." })
+table.insert(STATE.bags, { id = 122, name = "Blackened Basilisk", count = 4, tip = "Requires Level 35\nUse: Restores 1000 health over 27 sec."
+    .. EAT .. " If you spend at least 10 seconds eating you will become well fed and gain 23 spell damage and 20 Spirit for 30 min." })
+TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.statfood.name, "Golden Fish Sticks", "priest prefers healing food")
+STATE.class = "MAGE"; TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.statfood.name, "Blackened Basilisk", "mage prefers spell power food")
+STATE.class = "PRIEST"
+TO:SetStatFocus("sp"); refresh()
+assertEq(TO.char.auto.statfood.name, "Blackened Basilisk", "Spell power override")
+TO:SetStatFocus(nil)
 -- Options window lists them
 TO:OpenConfig()
 TO:BuildChecksList()

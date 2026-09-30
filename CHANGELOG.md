@@ -1,3 +1,7 @@
+## 1.4.1
+
+- Stat food now recognizes **spell power** and **healing** foods, in case Forever adds them. Mages and Warlocks prefer spell power food (then Intellect), and Priests and Shamans prefer healing food (then mana regen). Both are also in the "Stat food for" choices.
+
 ## 1.4.0
 
 - New: **party buffs**. See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild or Divine Spirit, and click to buff the next one in range.

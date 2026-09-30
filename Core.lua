@@ -649,19 +649,19 @@ TO.MANA_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PR
     SHAMAN = true, WARLOCK = true }
 
 -- Stat food: which Well Fed stats matter, best first
-TO.STAT_KEYS = { "str", "agi", "sta", "int", "spi", "mp5" }
+TO.STAT_KEYS = { "str", "agi", "sta", "int", "spi", "mp5", "sp", "heal" }
 TO.STAT_LABELS = { str = "Strength", agi = "Agility", sta = "Stamina", int = "Intellect",
-    spi = "Spirit", mp5 = "Mana regen" }
+    spi = "Spirit", mp5 = "Mana regen", sp = "Spell power", heal = "Healing" }
 TO.CLASS_STATS = {
     WARRIOR = { "str", "sta", "agi" },
     ROGUE   = { "agi", "str", "sta" },
     HUNTER  = { "agi", "int", "mp5", "sta" },
-    MAGE    = { "int", "mp5", "spi", "sta" },
-    WARLOCK = { "int", "sta", "spi", "mp5" },
-    PRIEST  = { "mp5", "int", "spi", "sta" },
-    SHAMAN  = { "mp5", "int", "sta", "str" },
-    PALADIN = { "sta", "str", "mp5", "int" },
-    DRUID   = { "sta", "agi", "str", "int" },
+    MAGE    = { "sp", "int", "mp5", "spi", "sta" },
+    WARLOCK = { "sp", "int", "sta", "spi", "mp5" },
+    PRIEST  = { "heal", "mp5", "int", "spi", "sp", "sta" },
+    SHAMAN  = { "heal", "mp5", "int", "sta", "str" },
+    PALADIN = { "sta", "str", "heal", "mp5", "int" },
+    DRUID   = { "sta", "agi", "str", "heal", "int" },
 }
 local STAT_WORDS = { strength = "str", agility = "agi", stamina = "sta", intellect = "int", spirit = "spi" }
 
@@ -725,6 +725,13 @@ function TO:ItemKind(id)
         end
         local mp5 = wellFed:match("(%d+) mana every 5") or wellFed:match("(%d+) mana per 5")
         if mp5 then stats.mp5 = tonumber(mp5); any = true end
+        -- Spell power and healing foods (Burning Crusade style wording)
+        local sp = wellFed:match("(%d+) spell damage") or wellFed:match("(%d+) spell power")
+            or wellFed:match("spell damage[^%d]*(%d+)") or wellFed:match("spell power[^%d]*(%d+)")
+        if sp then stats.sp = tonumber(sp); any = true end
+        local heal = wellFed:match("(%d+) bonus healing") or wellFed:match("(%d+) healing")
+            or wellFed:match("healing done[^%d]*(%d+)")
+        if heal then stats.heal = tonumber(heal); any = true end
         if any then k.stats = stats end
     end
     local hp = text:match("restores (%d+) health over")
