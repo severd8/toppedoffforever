@@ -176,7 +176,8 @@ TO.LOGO_TEXT = "|T" .. TO.ICONS.addon .. ":0|t"
 local DEFAULTS = {            -- account-wide: display
     shown = true,
     locked = false,
-    iconSize = 36,
+    iconSize = 40,
+    showHeader = true,
     hideInCombat = true,
     onlyInInstance = false,
     warnMinutes = 3,
@@ -697,7 +698,9 @@ function TO:CreateButton(i)
     local gd = self.COLORS.goldDark
     b.border:SetColorTexture(gd[1], gd[2], gd[3], 1)
     b.text = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    b.text:SetPoint("BOTTOMLEFT", 1, 2)
     b.text:SetPoint("BOTTOMRIGHT", -1, 2)
+    b.text:SetJustifyH("CENTER")
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     b:SetScript("OnEnter", Button_OnEnter)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -750,10 +753,13 @@ function TO:Layout(list)
         b:Hide()
     end
     local count = math.max(#shownList, 1)
-    self.main:SetSize(count * (size + gap) - gap, size)
+    local width = count * (size + gap) - gap
+    self.main:SetSize(width, size)
     self.bar:SetAllPoints(self.main)
     self.bar:SetShown(#shownList > 0)
     self.shownCount = #shownList
+    self.header:SetWidth(math.max(width, self.HEADER_MIN_WIDTH))
+    self:UpdateHeader()
 end
 
 function TO:InInstance()
@@ -805,10 +811,21 @@ function TO:ApplyVisibility()
     self.driver = driver
 end
 
+TO.HEADER_HEIGHT = 20
+TO.HEADER_MIN_WIDTH = 104   -- room for the logo and "ToppedOff"
+
+-- Header shows while unlocked (to drag it), or with reminders if "Show header" is on.
+-- The highlight around the icons shows only while unlocked.
+function TO:UpdateHeader()
+    if not self.header then return end
+    local unlocked = not self.db.locked
+    self.header:SetShown(unlocked or (self.db.showHeader and (self.shownCount or 0) > 0))
+    self.outline:SetShown(unlocked)
+end
+
 function TO:SetLocked(locked)
     self.db.locked = locked
-    self.mover:SetShown(not locked)
-    self.outline:SetShown(not locked)
+    self:UpdateHeader()
 end
 
 function TO:ApplySettings()
@@ -835,9 +852,8 @@ function TO:BuildFrames()
     -- The first three exist from the start so their keybindings always work
     for i = 1, 3 do self:CreateButton(i) end
 
-    -- Shown while unlocked: a drag handle ABOVE the icons (it must never cover them,
-    -- or it would swallow clicks meant for the icons), plus a highlight around them
-    -- that ignores the mouse.
+    -- Highlight around the icons while unlocked. Ignores the mouse and sits behind
+    -- the icons, so it never blocks clicks.
     local cy = self.COLORS.cyan
     local outline = CreateFrame("Frame", nil, main)
     outline:SetPoint("TOPLEFT", -3, 3)
@@ -850,45 +866,46 @@ function TO:BuildFrames()
     self:AddBorder(outline, self.COLORS.goldDark, 1)
     self.outline = outline
 
-    local mover = CreateFrame("Frame", nil, main)
-    mover:SetPoint("BOTTOMLEFT", main, "TOPLEFT", -3, 3)
-    mover:SetSize(96, 18)
-    mover:SetFrameStrata("HIGH")
-    mover:EnableMouse(true)
-    mover:RegisterForDrag("LeftButton")
-    mover.bg = mover:CreateTexture(nil, "BACKGROUND")
-    mover.bg:SetAllPoints()
-    mover.bg:SetColorTexture(cy[1], cy[2], cy[3], 0.35)
-    self:AddBorder(mover, self.COLORS.goldDark, 1)
-    mover.text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    mover.text:SetPoint("CENTER", 8, 0)
-    mover.text:SetText("ToppedOff")
-    mover.text:SetTextColor(unpack(self.COLORS.gold))
-    mover.logo = mover:CreateTexture(nil, "OVERLAY")
-    mover.logo:SetSize(14, 14)
-    mover.logo:SetPoint("RIGHT", mover.text, "LEFT", -2, 0)
-    mover.logo:SetTexture(self.ICONS.addon)
-    mover:SetScript("OnDragStart", function()
-        if InCombatLockdown() then return end
+    -- Header bar above the icons (crimson and gold, like the logo's banner).
+    -- Drag it to move while unlocked; right-click for options. It sits ABOVE the
+    -- icons and never covers them.
+    local header = CreateFrame("Frame", nil, main)
+    header:SetPoint("BOTTOMLEFT", main, "TOPLEFT", 0, 3)
+    header:SetSize(self.HEADER_MIN_WIDTH, self.HEADER_HEIGHT)
+    header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+    self:SkinFrame(header, self.COLORS.crimson, self.COLORS.goldDark, 0.95, 1)
+    header.logo = header:CreateTexture(nil, "OVERLAY")
+    header.logo:SetSize(16, 16)
+    header.logo:SetPoint("LEFT", 3, 0)
+    header.logo:SetTexture(self.ICONS.addon)
+    header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    header.text:SetPoint("LEFT", header.logo, "RIGHT", 4, 0)
+    header.text:SetText("ToppedOff")
+    header.text:SetTextColor(unpack(self.COLORS.gold))
+    header:SetScript("OnDragStart", function()
+        if TO.db.locked or InCombatLockdown() then return end
         main:StartMoving()
     end)
-    mover:SetScript("OnDragStop", function()
+    header:SetScript("OnDragStop", function()
         main:StopMovingOrSizing()
         TO:SavePosition()
     end)
-    mover:SetScript("OnMouseUp", function(_, button)
+    header:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then TO:OpenConfig() end
     end)
-    mover:SetScript("OnEnter", function(f)
+    header:SetScript("OnEnter", function(f)
         GameTooltip:SetOwner(f, "ANCHOR_TOP")
-        GameTooltip:AddLine(TO.LOGO_TEXT .. " ToppedOff Forever")
-        GameTooltip:AddLine("Drag to move", 1, 1, 1)
+        GameTooltip:AddLine(TO.LOGO_TEXT .. " ToppedOff Forever", unpack(TO.COLORS.gold))
+        if not TO.db.locked then
+            GameTooltip:AddLine("Drag to move", 1, 1, 1)
+            GameTooltip:AddLine("Lock it in the options or with /topoff lock", 1, 1, 1)
+        end
         GameTooltip:AddLine("Right-click for options", 1, 1, 1)
-        GameTooltip:AddLine("Lock it in the options or with /topoff lock", 1, 1, 1)
         GameTooltip:Show()
     end)
-    mover:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    self.mover = mover
+    header:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    self.header = header
 
     self:BuildMinimapButton()
     self.built = true
@@ -1107,7 +1124,7 @@ SlashCmdList.TOPPEDOFFFOREVER = function(msg)
         TO:Toggle()
     elseif cmd == "lock" or cmd == "unlock" then
         TO:SetLocked(cmd == "lock")
-        Print(cmd == "lock" and "locked." or "unlocked — drag the ToppedOff tab to move.")
+        Print(cmd == "lock" and "locked." or "unlocked — drag the ToppedOff header to move.")
     elseif cmd == "check" then
         TO:Check()
     elseif cmd == "add" then
@@ -1160,6 +1177,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
         ToppedOffForeverDB = ToppedOffForeverDB or {}
         FillDefaults(ToppedOffForeverDB, DEFAULTS)
         TO.db = ToppedOffForeverDB
+        if (TO.db.schema or 0) < 2 then
+            if TO.db.iconSize == 36 then TO.db.iconSize = 40 end   -- old default: use the new, larger one
+            TO.db.schema = 2
+        end
         ToppedOffForeverCharDB = ToppedOffForeverCharDB or {}
         FillDefaults(ToppedOffForeverCharDB, CHAR_DEFAULTS)
         TO.char = ToppedOffForeverCharDB

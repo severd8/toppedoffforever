@@ -12,7 +12,7 @@ A reminder addon for **World of Warcraft: Forever** (interface 16001, client 1.6
 - `ToppedOffForever.toc` — `## Version: @project-version@` is filled in by the packager from the git tag. Don't hard-code a version. `ToppedOffForeverDB` (account: display settings) and `ToppedOffForeverCharDB` (per character: what to check).
 - `Core.lua` — check data tables (`CLASS_BUFFS`, `WEAPON_DEFAULTS`, `CLASS_REAGENTS`), game scanning (spellbook, buffs, bags, weapon enchants, durability), building the reminder list, the secure reminder icons, minimap button, chat reminders, slash commands, events.
 - `Options.lua` — options window: display settings on the left, a per-class checks list (rebuilt each time the window opens) on the right.
-- `Media/Icon.tga` — the logo mark (64×64, 32-bit TGA with alpha): TOC icon, minimap button, options window corner, mover, and inline in chat/tooltips via `TO.LOGO_TEXT`. WoW needs TGA or BLP, not PNG.
+- `Media/Icon.tga` — the logo mark (64×64, 32-bit TGA with alpha): TOC icon, minimap button, options window corner, the header above the icons, and inline in chat/tooltips via `TO.LOGO_TEXT`. WoW needs TGA or BLP, not PNG.
 - `art/` — logo sources (not shipped): `logo.svg` (full logo with banner), `logo.png` (1024×1024, for CurseForge and the README), `icon.svg` (the medallion used in game). Re-export `Media/Icon.tga` from `icon.svg` if the logo changes.
 - `Bindings.xml` — keybindings (loaded automatically, not listed in the `.toc`). `CLICK ToppedOffForeverButton1-3:LeftButton` press the first three icons; `TOPPEDOFFFOREVER_OPTIONS` opens the options. Names are set in `Core.lua`.
 - `tests/` — offline test suite (not shipped). `wowstub.lua` fakes the WoW API; `run_tests.lua` holds the scenarios; `run.lua` runs them.

@@ -31,11 +31,13 @@ end
 
 ---------------------------------------------------------------------------
 step("load + login (mage)")
+ToppedOffForeverDB = { iconSize = 36 }   -- settings from 1.0.0
 LEARN("Arcane Intellect", "Frost Armor", "Ice Armor", "Teleport: Stormwind", "Slow Fall")
 FUTURE = { "Mage Armor", "Arcane Brilliance" }     -- visible in the spellbook but not learned
 fire("ADDON_LOADED", ADDON)
 fire("PLAYER_LOGIN")
 assert(TO.built, "frames not built")
+assertEq(TO.db.iconSize, 40, "old default icon size upgraded")
 assert(lastLog("ToppedOff Forever|r loaded"), "login message")
 fire("PLAYER_ENTERING_WORLD")
 tick()
@@ -254,11 +256,17 @@ for _, cmd in ipairs({ "", "", "lock", "unlock", "check", "toggle", "toggle", "h
     SlashCmdList.TOPPEDOFFFOREVER(cmd)
 end
 assertEq(TO.db.locked, false, "unlocked")
-assertEq(TO.mover.__shown, true, "mover shown when unlocked")
-assertEq(TO.mover.__point, "BOTTOMLEFT", "drag handle sits above the icons, not over them")
+assertEq(TO.header.__shown, true, "header shown when unlocked")
+assertEq(TO.header.__point, "BOTTOMLEFT", "header sits above the icons, not over them")
 assertEq(TO.outline.__shown, true, "highlight shown when unlocked")
 SlashCmdList.TOPPEDOFFFOREVER("lock")
-assertEq(TO.mover.__shown, false, "mover hidden when locked")
+TO.shownCount = 0 TO:UpdateHeader()
+assertEq(TO.header.__shown, false, "header hidden when locked with no reminders")
+TO.shownCount = 2 TO:UpdateHeader()
+assertEq(TO.header.__shown, true, "header shown with reminders")
+TO.db.showHeader = false TO:UpdateHeader()
+assertEq(TO.header.__shown, false, "header can be turned off")
+TO.db.showHeader = true
 assertEq(TO.outline.__shown, false, "highlight hidden when locked")
 
 step("options window")
@@ -297,7 +305,7 @@ TO.db.minimap = false TO:ApplySettings()
 assertEq(mm.__shown, false, "minimap button hidden")
 
 assert(TO.config.logo.__texture:find("Media\\Icon"), "options window shows the logo")
-assert(TO.mover.logo.__texture:find("Media\\Icon"), "mover shows the logo")
+assert(TO.header.logo.__texture:find("Media\\Icon"), "header shows the logo")
 assert(lastLog("Media\\Icon"), "chat lines carry the logo")
 
 step("tooltips")

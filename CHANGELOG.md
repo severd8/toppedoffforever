@@ -1,7 +1,9 @@
 ## 1.0.2
 
 - Fixed: clicking a reminder icon (or pressing its keybinding) did nothing when "Cast action keybinds on key down" was turned on.
-- Fixed: clicking a reminder icon did nothing while the reminders were unlocked. The drag box covered the icons; it's now a "ToppedOff" tab above them, so icons can be clicked whether locked or not.
+- Fixed: clicking a reminder icon did nothing while the reminders were unlocked. The drag box covered the icons.
+- New: a "ToppedOff" header bar above the icons, in the logo's colors. Drag it to move the icons while unlocked; right-click it for options. Turn it off with "Show header with reminders".
+- Icons are a bit bigger by default (40 instead of 36), and their counts and timers are centered so they fit.
 - Author name is now severd8.
 
 ## 1.0.0 — Initial release
