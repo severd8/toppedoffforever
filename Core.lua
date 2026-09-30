@@ -65,6 +65,10 @@ TO.CLASS_BUFFS = {
           auras = { "Divine Spirit", "Prayer of Spirit" }, party = true, skip = { WARRIOR = true, ROGUE = true } },
         { id = "shadowprot", label = "Shadow Protection", cast = { "Shadow Protection" },
           auras = { "Shadow Protection", "Prayer of Shadow Protection" }, off = true, party = true },
+        -- Racial Priest buffs: only listed for Priests who have them
+        { id = "shadowguard", label = "Shadowguard", cast = { "Shadowguard" }, racial = true },
+        { id = "touchweak", label = "Touch of Weakness", cast = { "Touch of Weakness" }, racial = true },
+        { id = "fearward", label = "Fear Ward", cast = { "Fear Ward" }, racial = true, off = true },
     },
     DRUID = {
         { id = "motw", label = "Mark of the Wild", cast = { "Mark of the Wild" },

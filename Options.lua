@@ -310,17 +310,19 @@ local function BuildBuffsTab(self, ctx, class)
         ctx.header("Your buffs")
         for _, buff in ipairs(buffs) do
             local known = self:KnownOptions(buff.cast)
-            local cb = ctx.toggle("buff:" .. buff.id, buff.label, not buff.off)
-            if #known == 0 then
-                NotLearned(cb, buff.label)
-            elseif #known > 1 then
-                cb.label:SetWidth(CYCLE_X - 30)
-                cb.label:SetWordWrap(false)
-                cb.label:SetJustifyH("LEFT")
-                SpellCycle(c, CYCLE_X, ctx.y, known, function() return TO:BuffPreference(buff) end,
-                    function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end)
+            if not (buff.racial and #known == 0) then   -- racial buffs only for races that have them
+                local cb = ctx.toggle("buff:" .. buff.id, buff.label, not buff.off)
+                if #known == 0 then
+                    NotLearned(cb, buff.label)
+                elseif #known > 1 then
+                    cb.label:SetWidth(CYCLE_X - 30)
+                    cb.label:SetWordWrap(false)
+                    cb.label:SetJustifyH("LEFT")
+                    SpellCycle(c, CYCLE_X, ctx.y, known, function() return TO:BuffPreference(buff) end,
+                        function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end)
+                end
+                ctx.row()
             end
-            ctx.row()
         end
 
         local partyBuffs = {}

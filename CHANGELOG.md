@@ -1,3 +1,7 @@
+## 1.5.3
+
+- New: **Priest racial buffs**. Shadowguard (Troll) and Touch of Weakness (Undead) are tracked like your other buffs, and Fear Ward (Dwarf) is available but off by default. They only appear for Priests who have learned them.
+
 ## 1.5.2
 
 - The divider between buffs and things to top off is bolder: a thicker gold line with dark edges that runs the full width of the frame, with a bit more space around it.

@@ -13,7 +13,7 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 ## Features
 
 - **Shows what's wrong, plus a quick-use bar.** Buffs, reagents and gear only show when something needs fixing. Your food, water, bandages and potions stay on screen as a dimmed quick-use bar you can click, and turn bright with a red count when they run low. Turn the bar off with "Always show these" on the Supplies tab.
-- **Class buffs for every class.** Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
+- **Class buffs for every class.** Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield, Priest racial buffs (Shadowguard, Touch of Weakness, Fear Ward) and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
 - **Party buffs.** See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild or Divine Spirit. **Click to buff the next one in range.**
 - **Party blessings** for Paladins. Choose the blessing for each class (like Kings or Might for Warriors, Kings or Wisdom for casters). **Click to bless the next one in range.**
 - **Group buffs count.** Arcane Brilliance covers Arcane Intellect, Prayer of Fortitude covers Fortitude, and a buff from another player counts too.

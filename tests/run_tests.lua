@@ -946,4 +946,26 @@ assertEq(TO.config.__shown, true, "settings opened")
 items[3].fn()
 assertEq(TO.config.__shown, true, "Settings again keeps it open")
 TO:OpenConfig(); TO:SetLocked(false); MenuUtil = nil
+step("priest racial buffs")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Power Word: Fortitude", "Inner Fire", "Shadowguard", "Fear Ward"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.party = {}; STATE.bags = {}
+STATE.buffs = { ["Power Word: Fortitude"] = 1800, ["Inner Fire"] = 600 }
+refresh()
+assertEq(ids()["buff:shadowguard"].action.spell, "Shadowguard", "Troll priest: Shadowguard missing")
+assertEq(ids()["buff:touchweak"], nil, "no Touch of Weakness if not learned")
+assertEq(ids()["buff:fearward"], nil, "Fear Ward off by default")
+STATE.buffs.Shadowguard = 400; refresh()
+assertEq(ids()["buff:shadowguard"], nil, "Shadowguard up")
+-- Options list only the racials you have
+TO:OpenConfig(); TO:ShowOptionsTab("buffs")
+local sawTouch, sawGuard = false, false
+for _, f in ipairs(ALL_FRAMES) do
+    if f.__kind == "FontString" and f:IsVisible() and f.__text then
+        if f.__text:find("^Touch of Weakness") then sawTouch = true end
+        if f.__text:find("^Shadowguard") then sawGuard = true end
+    end
+end
+assert(sawGuard and not sawTouch, "only learned racial buffs listed")
+TO:OpenConfig()
 print("ALL TESTS PASSED")
