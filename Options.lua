@@ -392,20 +392,43 @@ local function BuildSuppliesTab(self, ctx, class)
             local who = role and TO.ROLE_LABELS[role] or "Auto"
             return who .. ": " .. TO.STAT_LABELS[prio[1]]
         end
-        return TO.STAT_LABELS[k]
+        return TO.STAT_LABELS[k] .. " (your pick)"
     end
     local focusBtn = PanelButton(c, focusLabel(self.char.statFocus), CYCLE_W, CYCLE_X, ctx.y)
-    focusBtn:SetScript("OnClick", function(b)
-        local cur, nextIdx = TO.char.statFocus or false, 1
-        for i, k in ipairs(focusKeys) do
-            if k == cur then nextIdx = (i % #focusKeys) + 1 break end
-        end
-        TO:SetStatFocus(focusKeys[nextIdx] or nil)
+    local function choose(k)
+        TO:SetStatFocus(k or nil)
         TO:UpdateAutoItems()
-        b:SetText(focusLabel(TO.char.statFocus))
+        focusBtn:SetText(focusLabel(TO.char.statFocus))
         local row = autoRows.statfood
         if row then row.cb.label:SetText(slotText(row.slot)) end
+    end
+    -- A list to pick from (or step through the choices if menus aren't available)
+    focusBtn:SetScript("OnClick", function(b)
+        if MenuUtil and MenuUtil.CreateContextMenu then
+            MenuUtil.CreateContextMenu(b, function(_, root)
+                root:CreateTitle("Stat food")
+                for _, k in ipairs(focusKeys) do
+                    local text = k and TO.STAT_LABELS[k] or ("Automatic (" .. focusLabel(nil) .. ")")
+                    root:CreateRadio(text, function() return (TO.char.statFocus or false) == k end,
+                        function() choose(k) end)
+                end
+            end)
+        else
+            local cur, nextIdx = TO.char.statFocus or false, 1
+            for i, k in ipairs(focusKeys) do
+                if k == cur then nextIdx = (i % #focusKeys) + 1 break end
+            end
+            choose(focusKeys[nextIdx])
+        end
     end)
+    focusBtn:SetScript("OnEnter", function(b)
+        GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Stat food")
+        GameTooltip:AddLine("Automatic picks food for your role. Click to choose a stat yourself, "
+            .. "like Strength for a Protection Paladin.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    focusBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     ctx.row()
     ctx.note("The best of each in your bags is picked for you, and better ones take over as you level. "
         .. "Stat food follows your talents (or group role). Untick one to stop tracking it.")

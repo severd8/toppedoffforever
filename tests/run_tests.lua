@@ -647,4 +647,31 @@ assertEq(opened, true, "click opens your bags")
 STATE.freeSlots = 10; refresh()
 assertEq(ids().bags, nil, "enough space")
 STATE.freeSlots = nil
+step("stat food override menu")
+local menu
+MenuUtil = { CreateContextMenu = function(owner, fn)
+    menu = { radios = {} }
+    local root = { CreateTitle = function() end,
+        CreateRadio = function(_, text, isSel, onSel) menu.radios[#menu.radios + 1] = { text = text, isSel = isSel, onSel = onSel } end }
+    fn(owner, root)
+end }
+STATE.class = "PALADIN"; STATE.talents = { { "Holy", 0 }, { "Protection", 31 }, { "Retribution", 5 } }
+TO.char.statFocus = nil
+TO:OpenConfig(); TO:ShowOptionsTab("supplies")
+local fbtn
+for _, f in ipairs(ALL_FRAMES) do
+    if f.__kind == "Button" and f.__shown ~= false and f:IsVisible() and type(f.__text) == "string"
+        and f.__text:find("^Tank: Stamina") then fbtn = f end
+end
+assert(fbtn, "stat food button shows the automatic pick for a Protection Paladin")
+fbtn.__scripts.OnClick(fbtn)
+assert(menu and #menu.radios == #TO.STAT_KEYS + 1, "menu lists Automatic plus every stat")
+assertEq(menu.radios[1].isSel(), true, "Automatic selected")
+for _, r in ipairs(menu.radios) do if r.text == "Strength" then r.onSel() end end
+assertEq(TO.char.statFocus, "str", "Strength picked")
+assertEq(fbtn.__text, "Strength (your pick)", "button shows your pick")
+assertEq(TO:StatPriority()[1], "str", "Strength food first")
+fbtn.__scripts.OnClick(fbtn); menu.radios[1].onSel()
+assertEq(TO.char.statFocus, nil, "back to Automatic")
+TO:OpenConfig(); MenuUtil = nil; STATE.talents = nil
 print("ALL TESTS PASSED")
