@@ -752,13 +752,14 @@ function TO:Layout(list)
         b:SetAttribute("type", nil)
         b:Hide()
     end
-    local count = math.max(#shownList, 1)
-    local width = count * (size + gap) - gap
+    -- Always room for at least two icons, so the frame keeps one tidy size and only
+    -- grows once a third reminder shows up.
+    local slots = math.max(#shownList, self.MIN_SLOTS)
+    local width = math.max(slots * (size + gap) - gap, self.HEADER_MIN_WIDTH)
     self.main:SetSize(width, size)
     self.bar:SetAllPoints(self.main)
     self.bar:SetShown(#shownList > 0)
     self.shownCount = #shownList
-    self.header:SetWidth(math.max(width, self.HEADER_MIN_WIDTH))
     self:UpdateHeader()
 end
 
@@ -811,16 +812,17 @@ function TO:ApplyVisibility()
     self.driver = driver
 end
 
-TO.HEADER_HEIGHT = 20
-TO.HEADER_MIN_WIDTH = 104   -- room for the logo and "ToppedOff"
+TO.HEADER_HEIGHT = 22      -- header strip at the top of the frame
+TO.HEADER_MIN_WIDTH = 84   -- room for the logo and "ToppedOff"
+TO.FRAME_PAD = 4           -- space between the frame's edge and the icons
+TO.MIN_SLOTS = 2           -- the frame is always at least two icons wide
 
--- Header shows while unlocked (to drag it), or with reminders if "Show header" is on.
--- The highlight around the icons shows only while unlocked.
+-- The frame (header + box around the icons) shows while unlocked, so it can be
+-- dragged, or whenever there are reminders if "Show header and frame" is on.
 function TO:UpdateHeader()
-    if not self.header then return end
+    if not self.box then return end
     local unlocked = not self.db.locked
-    self.header:SetShown(unlocked or (self.db.showHeader and (self.shownCount or 0) > 0))
-    self.outline:SetShown(unlocked)
+    self.box:SetShown(unlocked or (self.db.showHeader and (self.shownCount or 0) > 0))
 end
 
 function TO:SetLocked(locked)
@@ -852,29 +854,36 @@ function TO:BuildFrames()
     -- The first three exist from the start so their keybindings always work
     for i = 1, 3 do self:CreateButton(i) end
 
-    -- Highlight around the icons while unlocked. Ignores the mouse and sits behind
-    -- the icons, so it never blocks clicks.
-    local cy = self.COLORS.cyan
-    local outline = CreateFrame("Frame", nil, main)
-    outline:SetPoint("TOPLEFT", -3, 3)
-    outline:SetPoint("BOTTOMRIGHT", 3, -3)
-    outline:EnableMouse(false)
-    outline:SetFrameLevel(main:GetFrameLevel())   -- behind the icons
-    outline.bg = outline:CreateTexture(nil, "BACKGROUND")
-    outline.bg:SetAllPoints()
-    outline.bg:SetColorTexture(cy[1], cy[2], cy[3], 0.2)
-    self:AddBorder(outline, self.COLORS.goldDark, 1)
-    self.outline = outline
+    -- One uniform frame around the header and the icons, in the logo's colors.
+    -- It sits behind the icons and ignores the mouse, so it never blocks clicks;
+    -- only the header strip at the top takes the mouse (drag to move, right-click
+    -- for options).
+    local pad, headerH = self.FRAME_PAD, self.HEADER_HEIGHT
+    local box = CreateFrame("Frame", nil, main)
+    box:SetPoint("TOPLEFT", main, "TOPLEFT", -pad, pad + headerH)
+    box:SetPoint("BOTTOMRIGHT", main, "BOTTOMRIGHT", pad, -pad)
+    box:SetFrameLevel(main:GetFrameLevel())   -- behind the icons
+    box:EnableMouse(false)
+    self:SkinFrame(box, self.COLORS.navy, self.COLORS.goldDark, 0.85, 1)
+    self.box = box
+    if main.SetClampRectInsets then main:SetClampRectInsets(-pad, pad, pad + headerH, -pad) end
 
-    -- Header bar above the icons (crimson and gold, like the logo's banner).
-    -- Drag it to move while unlocked; right-click for options. It sits ABOVE the
-    -- icons and never covers them.
-    local header = CreateFrame("Frame", nil, main)
-    header:SetPoint("BOTTOMLEFT", main, "TOPLEFT", 0, 3)
-    header:SetSize(self.HEADER_MIN_WIDTH, self.HEADER_HEIGHT)
+    local header = CreateFrame("Frame", nil, box)
+    header:SetPoint("TOPLEFT", box, "TOPLEFT", 1, -1)
+    header:SetPoint("TOPRIGHT", box, "TOPRIGHT", -1, -1)
+    header:SetHeight(headerH - 2)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
-    self:SkinFrame(header, self.COLORS.crimson, self.COLORS.goldDark, 0.95, 1)
+    local cr = self.COLORS.crimson
+    header.bg = header:CreateTexture(nil, "BACKGROUND")
+    header.bg:SetAllPoints()
+    header.bg:SetColorTexture(cr[1], cr[2], cr[3], 0.95)
+    local gd = self.COLORS.goldDark
+    header.line = header:CreateTexture(nil, "BORDER")
+    header.line:SetPoint("BOTTOMLEFT")
+    header.line:SetPoint("BOTTOMRIGHT")
+    header.line:SetHeight(1)
+    header.line:SetColorTexture(gd[1], gd[2], gd[3], 1)
     header.logo = header:CreateTexture(nil, "OVERLAY")
     header.logo:SetSize(16, 16)
     header.logo:SetPoint("LEFT", 3, 0)

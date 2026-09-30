@@ -354,8 +354,8 @@ function TO:BuildConfig()
     y = y - 24
     SettingCheck(f, "Only in dungeons and raids", x, y, "onlyInInstance")
     y = y - 24
-    SettingCheck(f, "Show header with reminders", x, y, "showHeader",
-        "The ToppedOff bar above the icons. It always shows while unlocked, so you can drag it.")
+    SettingCheck(f, "Show header and frame", x, y, "showHeader",
+        "The ToppedOff frame around the icons. It always shows while unlocked, so you can drag it by the header.")
     y = y - 24
     SettingCheck(f, "Minimap button", x, y, "minimap")
     y = y - 34

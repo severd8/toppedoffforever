@@ -256,18 +256,17 @@ for _, cmd in ipairs({ "", "", "lock", "unlock", "check", "toggle", "toggle", "h
     SlashCmdList.TOPPEDOFFFOREVER(cmd)
 end
 assertEq(TO.db.locked, false, "unlocked")
-assertEq(TO.header.__shown, true, "header shown when unlocked")
-assertEq(TO.header.__point, "BOTTOMLEFT", "header sits above the icons, not over them")
-assertEq(TO.outline.__shown, true, "highlight shown when unlocked")
+assertEq(TO.box.__shown, true, "frame shown when unlocked")
+assertEq(TO.header.__point, "TOPRIGHT", "header runs along the top of the frame")
+assertEq(TO.box.__frameLevel, 1, "frame sits behind the icons")
 SlashCmdList.TOPPEDOFFFOREVER("lock")
 TO.shownCount = 0 TO:UpdateHeader()
-assertEq(TO.header.__shown, false, "header hidden when locked with no reminders")
+assertEq(TO.box.__shown, false, "frame hidden when locked with no reminders")
 TO.shownCount = 2 TO:UpdateHeader()
-assertEq(TO.header.__shown, true, "header shown with reminders")
+assertEq(TO.box.__shown, true, "frame shown with reminders")
 TO.db.showHeader = false TO:UpdateHeader()
-assertEq(TO.header.__shown, false, "header can be turned off")
+assertEq(TO.box.__shown, false, "frame can be turned off")
 TO.db.showHeader = true
-assertEq(TO.outline.__shown, false, "highlight hidden when locked")
 
 step("options window")
 TO:OpenConfig()
@@ -308,6 +307,15 @@ assert(TO.config.logo.__parent ~= TO.config, "logo sits in its own frame above t
 assert(TO.config.logo.__texture:find("Media\\Icon"), "options window shows the logo")
 assert(TO.header.logo.__texture:find("Media\\Icon"), "header shows the logo")
 assert(lastLog("Media\\Icon"), "chat lines carry the logo")
+
+step("frame width")
+TO.db.locked, TO.db.onlyInInstance = false, false
+TO:Layout({ { id = "a", label = "A" } })
+assertEq(TO.main.__size[1], 84, "one reminder: still two icons wide")
+TO:Layout({ { id = "a", label = "A" }, { id = "b", label = "B" }, { id = "c", label = "C" } })
+assertEq(TO.main.__size[1], 128, "three reminders: frame grows")
+TO:Layout({})
+assertEq(TO.main.__size[1], 84, "no reminders: two icons wide")
 
 step("tooltips")
 TO.db.shown = true TO:ApplySettings()
