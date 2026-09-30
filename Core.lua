@@ -167,6 +167,7 @@ TO.ICONS = {
     durability = "Interface\\Icons\\Trade_BlackSmithing",
     ammo = "Interface\\Icons\\INV_Ammo_Arrow_02",
     unknown = "Interface\\Icons\\INV_Misc_QuestionMark",
+    wellFed = "Interface\\Icons\\Spell_Misc_Food",
     addon = "Interface\\AddOns\\ToppedOffForever\\Media\\Icon",   -- the ToppedOff logo
 }
 -- Logo as inline chat/tooltip text
@@ -201,6 +202,7 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     customAlways = false,     -- show your own items even when you have enough
     auto = {},                -- auto-tracked best items: slot -> { name, id, score, min }
     statFocus = nil,          -- stat food override ("str", "agi", ...); nil = class default
+    wellFedInstanceOnly = true, -- Well Fed reminder only in dungeons and raids
 }
 
 local function FillDefaults(dst, src)
@@ -757,6 +759,49 @@ function TO:SetStatFocus(focus)
     self:RequestUpdate()
 end
 
+-- Well Fed: the stat buff from food. Click the icon to eat your stat food.
+TO.WELL_FED_AURAS = { "well fed", "increased agility", "increased intellect", "increased stamina",
+    "increased strength", "increased spirit", "mana regeneration" }
+TO.EATING_AURAS = { "food", "food & drink", "refreshment" }
+
+function TO:CheckWellFed(list)
+    local id = "wellfed"
+    if not self:IsEnabled(id, true) then return end
+    if self.char.wellFedInstanceOnly and not self:InInstance() then return end
+    local buffs = self.buffs or {}
+    for _, a in ipairs(self.EATING_AURAS) do
+        if buffs[a] then return end   -- eating right now
+    end
+    local left
+    for _, a in ipairs(self.WELL_FED_AURAS) do
+        local l = buffs[a]
+        if l and (not left or l == 0 or l > left) then left = l end
+    end
+    local warn = self.db.warnMinutes * 60
+    if left and (left == 0 or left >= warn) then return end
+
+    local food = self.char.auto.statfood
+    local r = { id = id, label = "Well Fed", icon = self.ICONS.wellFed }
+    if left then
+        r.text = FormatTime(left)
+        r.detail = "Runs out in " .. FormatTime(left)
+        r.expires = left
+    else
+        r.detail = "Missing"
+    end
+    local e = food and self.bag and self.bag[food.name:lower()]
+    if e then
+        r.icon = e.icon or ItemIcon(e.id) or r.icon
+        r.action = { use = "item:" .. e.id, useName = e.name }
+        r.detail = r.detail .. "\nEat " .. e.name .. " (" .. e.count .. " in your bags)"
+    else
+        r.noItem = food and food.name or "stat food"
+        if food then r.icon = ItemIcon(food.id) or r.icon end
+        r.detail = r.detail .. "\nNo " .. r.noItem .. " in your bags"
+    end
+    list[#list + 1] = r
+end
+
 function TO:CheckAutoItems(list)
     local hasMana = self.MANA_CLASSES[self:PlayerClass()]
     local own = {}
@@ -833,8 +878,9 @@ function TO:BuildReminders()
     local list = {}
     self:CheckBuffs(list)
     self:CheckWeapons(list)
-    self:CheckReagents(list)
     self:UpdateAutoItems()
+    self:CheckWellFed(list)
+    self:CheckReagents(list)
     self:CheckAutoItems(list)
     self:CheckAmmo(list)
     self:CheckDurability(list)
@@ -968,42 +1014,46 @@ function TO:Layout(list)
     local shownList = list
     if self.db.onlyInInstance and not self:InInstance() then shownList = {} end
 
-    -- Buffs and other reminders on the left, your own items (food, water,
-    -- bandages...) on the right, with a thin separator between the two groups.
-    local left, right = {}, {}
+    -- Row 1: buffs (class buffs, weapon enhancements, Well Fed).
+    -- Row 2: things to top off (reagents, ammo, food, water, potions, repair).
+    -- A thin gold divider sits between the rows when both have icons.
+    local top, bottom = {}, {}
     for _, r in ipairs(shownList) do
-        if r.ownItem then right[#right + 1] = r else left[#left + 1] = r end
+        if self:IsBuffReminder(r) then top[#top + 1] = r else bottom[#bottom + 1] = r end
     end
     shownList = {}
-    for _, r in ipairs(left) do shownList[#shownList + 1] = r end
-    for _, r in ipairs(right) do shownList[#shownList + 1] = r end
-    local split = #left > 0 and #right > 0
-    local sepSpace = split and self.SEPARATOR_SPACE or 0
+    for _, r in ipairs(top) do shownList[#shownList + 1] = r end
+    for _, r in ipairs(bottom) do shownList[#shownList + 1] = r end
+    local twoRows = #top > 0 and #bottom > 0
+    local rowStep = size + self.DIVIDER_SPACE
 
-    if not self.separator then
-        self.separator = self.bar:CreateTexture(nil, "ARTWORK")
+    if not self.divider then
+        self.divider = self.bar:CreateTexture(nil, "ARTWORK")
         local g = self.COLORS.gold
-        self.separator:SetColorTexture(g[1], g[2], g[3], 0.8)
-        self.separator:SetWidth(2)
+        self.divider:SetColorTexture(g[1], g[2], g[3], 0.8)
+        self.divider:SetHeight(2)
     end
     for i, r in ipairs(shownList) do
         local b = self.buttons[i] or self:CreateButton(i)
         self:ApplyButton(b, r)
         b:SetSize(size, size)
         b:ClearAllPoints()
-        local x = (i - 1) * (size + gap)
-        if split and i > #left then x = x + sepSpace end
-        b:SetPoint("LEFT", self.bar, "LEFT", x, 0)
+        local col, rowY = i - 1, 0
+        if twoRows and i > #top then col, rowY = i - #top - 1, -rowStep end
+        b:SetPoint("TOPLEFT", self.bar, "TOPLEFT", col * (size + gap), rowY)
         b:Show()
     end
-    self.separator:ClearAllPoints()
-    if split then
-        local x = #left * (size + gap) - gap + math.floor(sepSpace / 2)
-        self.separator:SetPoint("TOPLEFT", self.bar, "TOPLEFT", x, -2)
-        self.separator:SetPoint("BOTTOMLEFT", self.bar, "BOTTOMLEFT", x, 2)
-        self.separator:Show()
+    local cols = twoRows and math.max(#top, #bottom) or #shownList
+    local slots = math.max(cols, self.MIN_SLOTS)
+    local width = math.max(slots * (size + gap) - gap, self.HEADER_MIN_WIDTH)
+    self.divider:ClearAllPoints()
+    if twoRows then
+        local y = -(size + math.floor(self.DIVIDER_SPACE / 2) - 1)
+        self.divider:SetPoint("TOPLEFT", self.bar, "TOPLEFT", 0, y)
+        self.divider:SetPoint("TOPRIGHT", self.bar, "TOPRIGHT", 0, y)
+        self.divider:Show()
     else
-        self.separator:Hide()
+        self.divider:Hide()
     end
     for i = #shownList + 1, #self.buttons do
         local b = self.buttons[i]
@@ -1012,10 +1062,8 @@ function TO:Layout(list)
         b:Hide()
     end
     -- Always room for at least two icons, so the frame keeps one tidy size and only
-    -- grows once a third reminder shows up.
-    local slots = math.max(#shownList, self.MIN_SLOTS)
-    local width = math.max(slots * (size + gap) - gap + sepSpace, self.HEADER_MIN_WIDTH)
-    self.main:SetSize(width, size)
+    -- grows once a third reminder shows up. A second row makes it taller.
+    self.main:SetSize(width, twoRows and (size + rowStep) or size)
     self.bar:SetAllPoints(self.main)
     self.bar:SetShown(#shownList > 0)
     self.shownCount = #shownList
@@ -1091,7 +1139,13 @@ TO.HEADER_HEIGHT = 22      -- header strip at the top of the frame
 TO.HEADER_MIN_WIDTH = 84   -- room for the logo and "ToppedOff"
 TO.FRAME_PAD = 4           -- space between the frame's edge and the icons
 TO.MIN_SLOTS = 2           -- the frame is always at least two icons wide
-TO.SEPARATOR_SPACE = 10    -- extra room between buff icons and your own items
+TO.DIVIDER_SPACE = 10      -- room between the buff row and the top-off row
+
+-- Buffs (row 1) vs things to top off (row 2)
+function TO:IsBuffReminder(r)
+    local id = r.id or ""
+    return id:find("^buff:") ~= nil or id:find("^weapon:") ~= nil or id == "wellfed"
+end
 TO.URGENT_SHARE = 0.2      -- red border in the last 20% of the warning time
 
 -- The frame (header + box around the icons) shows while unlocked, so it can be

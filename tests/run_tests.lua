@@ -165,19 +165,17 @@ for _, b in ipairs(TO.buttons) do if b.reminder == w then wb = b end end
 assertEq(wb.__attrs.type, "item", "click uses the item")
 assertEq(wb.__attrs.item, "item:4", "uses it by item ID")
 assertEq(wb.__attrs.unit, "player", "on yourself (bandages)")
--- Own items sit to the right of buffs, past a separator
+-- Buffs on the top row, things to top off on the second row, divider between
 do
-    local firstOwn, lastOther
+    local lastTop, firstBottom
     for i, b in ipairs(TO.buttons) do
         if b.__shown ~= false and b.reminder then
-            if b.reminder.ownItem then firstOwn = firstOwn or i else lastOther = i end
+            if TO:IsBuffReminder(b.reminder) then lastTop = i else firstBottom = firstBottom or i end
         end
     end
-    assert(lastOther, "scenario has a buff reminder too")
-    do
-        assert(firstOwn and firstOwn > lastOther, "own items come after buffs")
-        assertEq(TO.separator.__shown, true, "separator shown between groups")
-    end
+    assert(lastTop, "scenario has a buff reminder too")
+    assert(firstBottom and firstBottom > lastTop, "top-off items come after buffs")
+    assertEq(TO.divider.__shown, true, "divider shown between rows")
 end
 LOG = {}; TO:Remind("Ready check")
 assert(not lastLog("Conjured Water"), "topped-off items aren't reported as missing")
@@ -449,4 +447,34 @@ assertEq(aiButton().urgency, "urgent", "red in the last 20%")
 STATE.buffs = {}; refresh()
 assertEq(aiButton().urgency, nil, "missing buff: normal border")
 TO.db.warnMinutes = 3
+step("well fed")
+STATE.class = "DRUID"; TO.char.checks = {}; TO.db.onlyInInstance = false; TO.db.warnMinutes = 3
+TO.char.auto = {}; TO.char.custom = {}; STATE.level = 30; TO.char.wellFedInstanceOnly = true
+STATE.bags = { { id = 104, name = "Spiced Wolf Meat", count = 6, tip = "Requires Level 5\nUse: Restores 61 health over 15 sec."
+    .. " Must remain seated while eating. If you spend at least 10 seconds eating you will become well fed and gain 2 Stamina and Spirit for 15 min." } }
+STATE.buffs = {}
+STATE.instance = false; refresh()
+assertEq(ids().wellfed, nil, "only in dungeons by default")
+STATE.instance = true; refresh()
+local wf = ids().wellfed
+assert(wf, "Well Fed missing in a dungeon")
+assertEq(wf.action and wf.action.use, "item:104", "click eats the stat food")
+local wfb
+for _, b in ipairs(TO.buttons) do if b.reminder == wf then wfb = b end end
+assertEq(wfb.__attrs.type, "item", "secure item use")
+assertEq(TO:IsBuffReminder(wf), true, "Well Fed sits on the buff row")
+STATE.buffs = { ["Well Fed"] = 600 }; refresh()
+assertEq(ids().wellfed, nil, "fed: no reminder")
+STATE.buffs = { ["Well Fed"] = 30 }; refresh()
+assertEq(ids().wellfed.expires, 30, "running out")
+STATE.buffs = { ["Food"] = 10 }; refresh()
+assertEq(ids().wellfed, nil, "eating right now: no reminder")
+STATE.buffs = {}; STATE.bags = {}; refresh()
+assertEq(ids().wellfed.noItem, "Spiced Wolf Meat", "no food in bags: greyed, names the food")
+TO.char.wellFedInstanceOnly = false; STATE.instance = false; refresh()
+assert(ids().wellfed, "shown everywhere when turned on")
+TO:SetEnabled("wellfed", false); refresh()
+assertEq(ids().wellfed, nil, "turned off")
+TO:SetEnabled("wellfed", true); TO.char.wellFedInstanceOnly = true
+STATE.class = "MAGE"; TO.char.auto = {}; STATE.level = nil; refresh()
 print("ALL TESTS PASSED")

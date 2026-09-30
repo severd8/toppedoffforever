@@ -6,6 +6,8 @@
 
 ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It watches your own character and shows a small icon only when something needs topping off: a buff that's missing or about to run out, a weapon without its poison or oil, low reagents, low ammo, or worn-out gear. Click the icon and it's fixed.
 
+Icons sit in two rows: **buffs** on top (class buffs, weapon enhancements, Well Fed), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, repairs).
+
 ---
 
 ## Features
@@ -19,7 +21,8 @@ ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It wat
 - **Ammo** for Hunters.
 - **Low durability** warning before your gear breaks.
 - **Food, water, bandages and potions, picked for you.** ToppedOff finds the best food, water, bandage, healing potion and mana potion in your bags, plus the right **stat food for your class** (Strength for Warriors, Agility for Rogues and Hunters, Intellect for Mages and Warlocks, mana regen for Priests and Shamans, Stamina for Druids and Paladins; change it in the options). When something better lands in your bags, it takes over. Water and mana potions are only tracked for mana users.
-- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). Turn on "Always show these, with counts" to keep them on screen even when you're stocked up; the count turns red when you're low. They sit on the right of the frame, after a separator, with buffs and other reminders on the left.
+- **Well Fed.** Reminds you when your stat food buff is missing or running out, and a click eats your stat food. On by default in dungeons and raids; turn it on everywhere in the options.
+- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). Turn on "Always show these, with counts" to keep them on screen even when you're stocked up; the count turns red when you're low.
 - **Chat reminders.** Lists anything missing when a ready check starts or when you enter a dungeon or raid.
 - **Keybindings.** Fix the first three reminders from the keyboard or a controller.
 

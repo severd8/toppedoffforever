@@ -199,6 +199,15 @@ function TO:BuildChecksList()
         end
     end
 
+    -- Well Fed (stat food buff)
+    header("Stat food buff")
+    toggle("wellfed", "Well Fed", true)
+    y = y - ROW
+    CheckBox(c, "Only in dungeons and raids", 24, y, function() return TO.char.wellFedInstanceOnly end,
+        function(v) TO.char.wellFedInstanceOnly = v TO:RequestUpdate() end)
+    y = y - ROW
+    note("Click the icon to eat your stat food (see Your own items).")
+
     -- Weapons
     header("Weapon enhancement")
     local w = self:WeaponConfig()

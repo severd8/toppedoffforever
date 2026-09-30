@@ -1,3 +1,8 @@
+## 1.3.0
+
+- New: **Well Fed reminder**. Shows when your stat food buff is missing or running out (orange, then red, like other buffs). Click it to eat your stat food. Not shown while you're eating. On by default in dungeons and raids only; change it under "Stat food buff" in the options.
+- New layout: **buffs on the top row** (class buffs, weapon enhancements, Well Fed) and **things to top off on the second row** (reagents, ammo, food, water, bandages, potions, repairs), with a gold divider between them. This replaces the side-by-side separator.
+
 ## 1.2.0
 
 - New: **auto-tracked items**. ToppedOff picks the best food, water, bandage, healing potion and mana potion in your bags, plus the best stat food for your class, and reminds you when you're low (Min 20 for food, water and bandages, 10 for stat food, 5 for potions). Better items take over automatically as you level, and your Min is kept. An item stays tracked when you run out, so you know to restock.
