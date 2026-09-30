@@ -805,6 +805,7 @@ end
 function TO:SetLocked(locked)
     self.db.locked = locked
     self.mover:SetShown(not locked)
+    self.outline:SetShown(not locked)
 end
 
 function TO:ApplySettings()
@@ -831,20 +832,33 @@ function TO:BuildFrames()
     -- The first three exist from the start so their keybindings always work
     for i = 1, 3 do self:CreateButton(i) end
 
-    -- Shown while unlocked: drag to move
+    -- Shown while unlocked: a drag handle ABOVE the icons (it must never cover them,
+    -- or it would swallow clicks meant for the icons), plus a highlight around them
+    -- that ignores the mouse.
+    local cy = self.COLORS.cyan
+    local outline = CreateFrame("Frame", nil, main)
+    outline:SetPoint("TOPLEFT", -3, 3)
+    outline:SetPoint("BOTTOMRIGHT", 3, -3)
+    outline:EnableMouse(false)
+    outline:SetFrameLevel(main:GetFrameLevel())   -- behind the icons
+    outline.bg = outline:CreateTexture(nil, "BACKGROUND")
+    outline.bg:SetAllPoints()
+    outline.bg:SetColorTexture(cy[1], cy[2], cy[3], 0.2)
+    self:AddBorder(outline, self.COLORS.goldDark, 1)
+    self.outline = outline
+
     local mover = CreateFrame("Frame", nil, main)
-    mover:SetPoint("TOPLEFT", -4, 18)
-    mover:SetPoint("BOTTOMRIGHT", 4, -4)
+    mover:SetPoint("BOTTOMLEFT", main, "TOPLEFT", -3, 3)
+    mover:SetSize(96, 18)
     mover:SetFrameStrata("HIGH")
     mover:EnableMouse(true)
     mover:RegisterForDrag("LeftButton")
     mover.bg = mover:CreateTexture(nil, "BACKGROUND")
     mover.bg:SetAllPoints()
-    local cy = self.COLORS.cyan
-    mover.bg:SetColorTexture(cy[1], cy[2], cy[3], 0.25)
+    mover.bg:SetColorTexture(cy[1], cy[2], cy[3], 0.35)
     self:AddBorder(mover, self.COLORS.goldDark, 1)
     mover.text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    mover.text:SetPoint("TOP", 7, -3)
+    mover.text:SetPoint("CENTER", 8, 0)
     mover.text:SetText("ToppedOff")
     mover.text:SetTextColor(unpack(self.COLORS.gold))
     mover.logo = mover:CreateTexture(nil, "OVERLAY")
@@ -1090,7 +1104,7 @@ SlashCmdList.TOPPEDOFFFOREVER = function(msg)
         TO:Toggle()
     elseif cmd == "lock" or cmd == "unlock" then
         TO:SetLocked(cmd == "lock")
-        Print(cmd == "lock" and "locked." or "unlocked — drag the blue box to move.")
+        Print(cmd == "lock" and "locked." or "unlocked — drag the ToppedOff tab to move.")
     elseif cmd == "check" then
         TO:Check()
     elseif cmd == "add" then

@@ -343,7 +343,7 @@ function TO:BuildConfig()
     y = y - 22
     SettingCheck(f, "Show reminders", x, y, "shown")
     y = y - 24
-    SettingCheck(f, "Lock position", x, y, "locked", "Unlock to drag the reminders with the highlighted box.")
+    SettingCheck(f, "Lock position", x, y, "locked", "Unlock to drag the reminders by the ToppedOff tab above them.")
     y = y - 24
     SettingCheck(f, "Hide in combat", x, y, "hideInCombat",
         "Reminders can only change out of combat, so hiding them in combat keeps things tidy.")

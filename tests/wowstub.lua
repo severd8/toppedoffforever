@@ -102,12 +102,14 @@ function Methods:GetPoint() return "CENTER", UIParent, "CENTER", 12, 34 end
 local oldSetPoint
 function Methods:SetPoint(p, rel, rp, x, y)
     if COMBAT and self.__protected then BLOCKED[#BLOCKED + 1] = (self.__name or self.__kind) .. ":SetPoint" end
+    self.__point = p
     if type(rel) == "table" then self.__pos = { x or 0, y or 0 } else self.__pos = { rel or 0, rp or 0 } end
 end
 function Methods:GetWidth() return 140 end
 function Methods:GetCenter() return 0, 0 end
 function Methods:GetEffectiveScale() return 1 end
 function Methods:GetName() return self.__name end
+function Methods:GetFrameLevel() return 1 end
 function Methods:SetSize(w, h) protectedCheck(self, "SetSize") self.__size = { w, h } end
 function Methods:SetValue(v) self.__value = v if self.__scripts.OnValueChanged then self.__scripts.OnValueChanged(self, issecretvalue(v) and 0 or v) end end
 function Methods:SetMinMaxValues(a, b) end

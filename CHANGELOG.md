@@ -1,4 +1,9 @@
-## 1.0.1 — Initial release
+## 1.0.2
+
+- Fixed: clicking a reminder icon did nothing while the reminders were unlocked. The drag box covered the icons; it's now a "ToppedOff" tab above them, so icons can be clicked whether locked or not.
+- Author name is now severd8.
+
+## 1.0.0 — Initial release
 
 First public release of ToppedOff Forever for WoW: Forever.
 

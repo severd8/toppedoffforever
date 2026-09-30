@@ -255,8 +255,11 @@ for _, cmd in ipairs({ "", "", "lock", "unlock", "check", "toggle", "toggle", "h
 end
 assertEq(TO.db.locked, false, "unlocked")
 assertEq(TO.mover.__shown, true, "mover shown when unlocked")
+assertEq(TO.mover.__point, "BOTTOMLEFT", "drag handle sits above the icons, not over them")
+assertEq(TO.outline.__shown, true, "highlight shown when unlocked")
 SlashCmdList.TOPPEDOFFFOREVER("lock")
 assertEq(TO.mover.__shown, false, "mover hidden when locked")
+assertEq(TO.outline.__shown, false, "highlight hidden when locked")
 
 step("options window")
 TO:OpenConfig()
