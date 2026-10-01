@@ -1,3 +1,7 @@
+## 1.5.5
+
+- Fixed: picking a stat under "Stat food for" still tracked food with a different stat when you had none with your stat. Now only food with the stat you picked is tracked. Automatic still falls back to any stat food.
+
 ## 1.5.4
 
 - Fixed: recipes (like "Recipe: Minor Discolored Healing Potion") could be picked as your best food, water or potion, because their tooltip shows the item they make. Recipes are never tracked now, and one that was already tracked is dropped. Your Min is kept.

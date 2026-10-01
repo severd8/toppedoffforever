@@ -905,7 +905,7 @@ STATE.bags = { { id = 911, name = "Spiced Wolf Meat", count = 3, tip = "Use: Res
     .. " If you spend at least 10 seconds eating you will become well fed and gain 2 Stamina and Spirit for 15 min." } }
 refresh()
 TO.char.auto.statfood.min = 25
-TO:SetStatFocus("agi"); refresh()
+TO:SetStatFocus("spi"); refresh()
 assertEq(TO.char.auto.statfood.min, 25, "your stat food Min is kept")
 TO:SetStatFocus(nil); TO.char.autoMins = {}
 -- Arcane Intellect isn't asked for on Warriors
@@ -988,4 +988,18 @@ TO.char.auto.healing = { name = "Recipe: Something", id = 999, score = 80, min =
 refresh()
 assertEq(TO.char.auto.healing.name, "Minor Healing Potion", "recipe out of bags dropped")
 STATE.bags = {}; STATE.level = nil; TO.char.auto = {}; TO.char.autoMins = {}
+step("picked stat food is strict")
+STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.auto, TO.char.autoMins = {}, {}, {}
+STATE.level = 20; STATE.buffs = {}; STATE.talents = nil
+STATE.bags = { { id = 960, name = "Spiced Wolf Meat", count = 8, tip = "Use: Restores 58 health over 18 sec."
+    .. " Must remain seated while eating. If you spend at least 10 seconds eating you will become well fed and gain 1 Agility for 15 min." } }
+TO:SetStatFocus("agi"); refresh()
+assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Agility picked: Agility food tracked")
+TO:SetStatFocus("sta"); refresh()
+assertEq(TO.char.auto.statfood, nil, "Stamina picked, only Agility food: nothing tracked")
+assertEq(ids()["auto:statfood"], nil, "no stat food icon")
+TO:SetStatFocus(nil); refresh()
+assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Automatic falls back to any stat food")
+STATE.bags = {}; STATE.level = nil; TO.char.auto = {}
 print("ALL TESTS PASSED")

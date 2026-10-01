@@ -773,13 +773,11 @@ function TO:AutoStatPriority()
     return self.CLASS_STATS[class] or { "sta", "spi" }
 end
 
+-- Automatic: your role's stats, best first. A stat you picked yourself: only that one.
 function TO:StatPriority()
-    local base = self:AutoStatPriority()
     local focus = self.char.statFocus
-    if not focus then return base end
-    local list = { focus }
-    for _, k in ipairs(base) do if k ~= focus then list[#list + 1] = k end end
-    return list
+    if focus then return { focus } end
+    return self:AutoStatPriority()
 end
 
 -- The whole tooltip of an item as lowercase text (nil if the game hasn't loaded it yet)
@@ -890,6 +888,8 @@ function TO:AutoScore(slot, k)
         for i, stat in ipairs(prio) do
             if k.stats[stat] then return (#prio - i + 1) * 1000 + k.stats[stat] end
         end
+        -- Automatic falls back to any stat food; a stat you picked yourself doesn't
+        if self.char.statFocus then return nil end
         return 0
     end
     return k[slot]

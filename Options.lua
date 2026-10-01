@@ -513,8 +513,9 @@ local function BuildSuppliesTab(self, ctx, class)
     focusBtn:SetScript("OnEnter", function(b)
         GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Stat food")
-        GameTooltip:AddLine("Automatic picks food for your role. Click to choose a stat yourself, "
-            .. "like Strength for a Protection Paladin.", 1, 1, 1, true)
+        GameTooltip:AddLine("Automatic picks food for your role, and falls back to any stat food. "
+            .. "Pick a stat yourself (like Strength for a Protection Paladin) to track only food with that stat.",
+            1, 1, 1, true)
         GameTooltip:Show()
     end)
     focusBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
