@@ -1,3 +1,7 @@
+## 1.5.9
+
+- New: **combat bar**. While the reminders are hidden in combat, your healing potion, mana potion, Healthstone and bandage stay on screen in one row, in the same spot. Click to use them. Counts and the potion cooldown update during combat, and an item you run out of turns grey. On by default; turn it off with "Keep potions in combat" under "Hide in combat".
+
 ## 1.5.8
 
 - Fixed: food, stat food, water, bandages and potions that the game hadn't finished loading (common right after logging in) were misread and never tracked, so Automatic stat food could show "none in bags" while you had some. ToppedOff now waits for the item to load and checks again.

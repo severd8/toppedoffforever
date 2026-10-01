@@ -829,6 +829,9 @@ function TO:BuildConfig()
     SettingCheck(f, "Hide in combat", x, y, "hideInCombat",
         "Reminders can only change out of combat, so hiding them in combat keeps things tidy.")
     y = y - 24
+    SettingCheck(f, "Keep potions in combat", x + 20, y, "combatBar",
+        "While the reminders are hidden in combat, your healing and mana potions, Healthstone and bandage stay on screen in one row, with live counts and cooldowns.")
+    y = y - 24
     SettingCheck(f, "Only in dungeons and raids", x, y, "onlyInInstance")
     y = y - 24
     SettingCheck(f, "Show header and frame", x, y, "showHeader",

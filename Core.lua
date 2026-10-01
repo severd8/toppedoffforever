@@ -194,6 +194,7 @@ local DEFAULTS = {            -- account-wide: display
     iconSize = 40,
     showHeader = true,
     hideInCombat = true,
+    combatBar = true,         -- while hidden in combat, keep potions, Healthstone and bandage on screen
     onlyInInstance = false,
     warnMinutes = 3,
     durabilityPct = 25,
@@ -1793,7 +1794,14 @@ local function Button_OnEnter(self)
 end
 
 function TO:CreateButton(i)
-    local b = CreateFrame("Button", "ToppedOffForeverButton" .. i, self.bar, "SecureActionButtonTemplate")
+    local b = self:NewIconButton("ToppedOffForeverButton" .. i, self.bar)
+    self.buttons[i] = b
+    return b
+end
+
+-- A clickable icon (secure, so it can cast or use items): icon, border, count text
+function TO:NewIconButton(name, parent)
+    local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate")
     -- Register for both up and down: the secure template acts on only one of them,
     -- chosen by the "Cast action keybinds on key down" setting. With only "AnyUp",
     -- nothing happens when that setting is on.
@@ -1814,7 +1822,6 @@ function TO:CreateButton(i)
     b:SetScript("OnEnter", Button_OnEnter)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     b:Hide()
-    self.buttons[i] = b
     return b
 end
 
@@ -1970,6 +1977,132 @@ function TO:Layout(list)
     self:UpdateHeader()
     -- In case the position couldn't be read at login yet
     if self.db.point[1] ~= "TOPLEFT" then self:PinTopLeft() end
+    self:LayoutCombatBar()
+end
+
+---------------------------------------------------------------------------
+-- Combat bar: while the reminders hide in combat, your healing and mana potions,
+-- Healthstone and bandage stay on screen in one row where the reminders were.
+-- Its icons are set up before combat (WoW doesn't allow it during combat); the
+-- counts and cooldowns keep updating in combat.
+---------------------------------------------------------------------------
+TO.COMBAT_SLOTS = {
+    { key = "healing", label = "Healing potion" },
+    { key = "mana", label = "Mana potion", mana = true },
+    { key = "healthstone", label = "Healthstone" },
+    { key = "bandage", label = "Bandage" },
+}
+
+function TO:BuildCombatBar()
+    local pad, headerH = self.FRAME_PAD, self.HEADER_HEIGHT
+    local f = CreateFrame("Frame", "ToppedOffForeverCombatBar", UIParent, "SecureHandlerStateTemplate")
+    f:SetPoint("TOPLEFT", self.main, "TOPLEFT")
+    f:SetSize(self.db.iconSize, self.db.iconSize)
+    local box = CreateFrame("Frame", nil, f)
+    box:SetPoint("TOPLEFT", f, "TOPLEFT", -pad, pad + headerH)
+    box:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", pad, -pad)
+    box:SetFrameLevel(f:GetFrameLevel())
+    box:EnableMouse(false)
+    self:SkinFrame(box, self.COLORS.navy, self.COLORS.goldDark, 0.85, 1)
+    self:NewHeaderStrip(box)
+    f.box = box
+    f.buttons = {}
+    f:Hide()
+    self.combat = f
+end
+
+-- Your combat items in your bags right now, in a fixed order
+function TO:CombatItems()
+    local items = {}
+    local hasMana = self.MANA_CLASSES[self:PlayerClass()]
+    for _, slot in ipairs(self.COMBAT_SLOTS) do
+        local e
+        if slot.key == "healthstone" then
+            e = self:FindBagItem("Healthstone")
+        elseif not slot.mana or hasMana then
+            local a = self.char.auto[slot.key]
+            e = a and self.bag[a.name:lower()]
+        end
+        if e and e.count > 0 then
+            items[#items + 1] = { slot = slot, id = e.id, name = e.name, icon = e.icon, count = e.count }
+        end
+    end
+    return items
+end
+
+function TO:CombatButton(i)
+    local f = self.combat
+    if f.buttons[i] then return f.buttons[i] end
+    local b = self:NewIconButton("ToppedOffForeverCombatButton" .. i, f)
+    b.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
+    b.cooldown:SetAllPoints()
+    b.text:SetParent(b.cooldown)   -- the count stays above the cooldown swirl
+    f.buttons[i] = b
+    return b
+end
+
+-- Out of combat: set up the combat bar for the items you have now
+function TO:LayoutCombatBar()
+    local f = self.combat
+    if not f or InCombatLockdown() then return end
+    local items = {}
+    local use = self.db.shown and self.db.hideInCombat and self.db.combatBar
+        and not (self.db.onlyInInstance and not self:InInstance())
+    if use then items = self:CombatItems() end
+    local size, gap = self.db.iconSize, 4
+    for i, it in ipairs(items) do
+        local b = self:CombatButton(i)
+        b.itemID = it.id
+        b.reminder = { label = it.name, detail = it.slot.label, action = { use = "item:" .. it.id, useName = it.name } }
+        b:SetAttribute("type", "item")
+        b:SetAttribute("item", "item:" .. it.id)
+        b:SetAttribute("unit", "player")
+        b.icon:SetTexture(it.icon or ItemIcon(it.id) or self.ICONS.unknown)
+        b:SetSize(size, size)
+        b:ClearAllPoints()
+        b:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * (size + gap), 0)
+        b:Show()
+    end
+    for i = #items + 1, #f.buttons do
+        local b = f.buttons[i]
+        b.itemID, b.reminder = nil, nil
+        b:SetAttribute("type", nil)
+        b:Hide()
+    end
+    f.count = #items
+    f:SetSize(math.max(#items * (size + gap) - gap, self.HEADER_MIN_WIDTH), size)
+    f.box:SetShown(not self.db.locked or self.db.showHeader)
+    self:UpdateCombatCounts()
+    local driver = #items > 0 and "[combat] show; hide" or "hide"
+    if driver ~= f.driver then
+        UnregisterStateDriver(f, "visibility")
+        RegisterStateDriver(f, "visibility", driver)
+        f.driver = driver
+    end
+end
+
+-- Counts and cooldowns; safe in combat
+function TO:UpdateCombatCounts()
+    local f = self.combat
+    if not f then return end
+    for i = 1, (f.count or 0) do
+        local b = f.buttons[i]
+        local id = b and b.itemID
+        if id then
+            local count = 0
+            if C_Item and C_Item.GetItemCount then count = Num(C_Item.GetItemCount(id)) or 0 end
+            b.text:SetText(count)
+            b.text:SetTextColor(1, 1, 1)
+            if b.icon.SetDesaturated then b.icon:SetDesaturated(count == 0) end
+            local getCD = (C_Container and C_Container.GetItemCooldown) or (C_Item and C_Item.GetItemCooldown)
+            if getCD then
+                local ok, start, duration = pcall(getCD, id)
+                if ok and start and duration then
+                    pcall(b.cooldown.SetCooldown, b.cooldown, start, duration)
+                end
+            end
+        end
+    end
 end
 
 function TO:InInstance()
@@ -2107,6 +2240,33 @@ function TO:ApplySettings()
     self:RunOutOfCombat(function() self:Update() end)
 end
 
+-- The red "ToppedOff" strip along the top of a frame
+function TO:NewHeaderStrip(box)
+    local header = CreateFrame("Frame", nil, box)
+    header:SetPoint("TOPLEFT", box, "TOPLEFT", 1, -1)
+    header:SetPoint("TOPRIGHT", box, "TOPRIGHT", -1, -1)
+    header:SetHeight(self.HEADER_HEIGHT - 2)
+    local cr = self.COLORS.crimson
+    header.bg = header:CreateTexture(nil, "BACKGROUND")
+    header.bg:SetAllPoints()
+    header.bg:SetColorTexture(cr[1], cr[2], cr[3], 0.95)
+    local gd = self.COLORS.goldDark
+    header.line = header:CreateTexture(nil, "BORDER")
+    header.line:SetPoint("BOTTOMLEFT")
+    header.line:SetPoint("BOTTOMRIGHT")
+    header.line:SetHeight(1)
+    header.line:SetColorTexture(gd[1], gd[2], gd[3], 1)
+    header.logo = header:CreateTexture(nil, "OVERLAY")
+    header.logo:SetSize(16, 16)
+    header.logo:SetPoint("LEFT", 3, 0)
+    header.logo:SetTexture(self.ICONS.addon)
+    header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    header.text:SetPoint("LEFT", header.logo, "RIGHT", 4, 0)
+    header.text:SetText("ToppedOff")
+    header.text:SetTextColor(unpack(self.COLORS.gold))
+    return header
+end
+
 function TO:BuildFrames()
     local main = CreateFrame("Frame", "ToppedOffForeverFrame", UIParent, "SecureHandlerStateTemplate")
     main:SetSize(self.db.iconSize, self.db.iconSize)
@@ -2136,30 +2296,9 @@ function TO:BuildFrames()
     self.box = box
     if main.SetClampRectInsets then main:SetClampRectInsets(-pad, pad, pad + headerH, -pad) end
 
-    local header = CreateFrame("Frame", nil, box)
-    header:SetPoint("TOPLEFT", box, "TOPLEFT", 1, -1)
-    header:SetPoint("TOPRIGHT", box, "TOPRIGHT", -1, -1)
-    header:SetHeight(headerH - 2)
+    local header = self:NewHeaderStrip(box)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
-    local cr = self.COLORS.crimson
-    header.bg = header:CreateTexture(nil, "BACKGROUND")
-    header.bg:SetAllPoints()
-    header.bg:SetColorTexture(cr[1], cr[2], cr[3], 0.95)
-    local gd = self.COLORS.goldDark
-    header.line = header:CreateTexture(nil, "BORDER")
-    header.line:SetPoint("BOTTOMLEFT")
-    header.line:SetPoint("BOTTOMRIGHT")
-    header.line:SetHeight(1)
-    header.line:SetColorTexture(gd[1], gd[2], gd[3], 1)
-    header.logo = header:CreateTexture(nil, "OVERLAY")
-    header.logo:SetSize(16, 16)
-    header.logo:SetPoint("LEFT", 3, 0)
-    header.logo:SetTexture(self.ICONS.addon)
-    header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    header.text:SetPoint("LEFT", header.logo, "RIGHT", 4, 0)
-    header.text:SetText("ToppedOff")
-    header.text:SetTextColor(unpack(self.COLORS.gold))
     header:SetScript("OnDragStart", function()
         if TO.db.locked or InCombatLockdown() then return end
         main:StartMoving()
@@ -2184,6 +2323,7 @@ function TO:BuildFrames()
     header:SetScript("OnLeave", function() GameTooltip:Hide() end)
     self.header = header
 
+    self:BuildCombatBar()
     self:BuildMinimapButton()
     self.built = true
     self:ApplySettings()
@@ -2449,6 +2589,8 @@ events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("SPELLS_CHANGED")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
+events:RegisterEvent("BAG_UPDATE_COOLDOWN")
+events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 events:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
 events:RegisterEvent("READY_CHECK")
@@ -2502,6 +2644,11 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
         TO:RequestUpdate()
     elseif not TO.built then
         return
+    elseif event == "PLAYER_REGEN_DISABLED" or event == "BAG_UPDATE_COOLDOWN" then
+        TO:UpdateCombatCounts()
+    elseif event == "BAG_UPDATE_DELAYED" and InCombatLockdown() then
+        TO:UpdateCombatCounts()
+        TO:RequestUpdate()
     elseif event == "SPELLS_CHANGED" then
         TO:ScanSpellbook()
         TO:RequestUpdate()

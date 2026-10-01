@@ -258,6 +258,7 @@ C_UnitAuras = {
 
 -- Bags: STATE.bags = { { id = 1, name = "Soul Shard", count = 3 }, ... } (one stack per slot)
 C_Container = {
+    GetItemCooldown = function(id) return (STATE.itemCD or {})[id] or 0, 0, 1 end,
     GetContainerNumSlots = function(bag) if bag == 0 then return 16 end return 0 end,
     GetContainerNumFreeSlots = function(bag)
         if bag ~= 0 then return 0, 0 end
@@ -272,6 +273,11 @@ C_Container = {
 }
 local function itemById(id) for _, e in ipairs(STATE.bags) do if e.id == id then return e end end end
 C_Item = {
+    GetItemCount = function(id)
+        local n = 0
+        for _, e in ipairs(STATE.bags) do if e.id == id then n = n + e.count end end
+        return n
+    end,
     IsItemDataCachedByID = function(id) return not (STATE.uncached and STATE.uncached[id]) end,
     RequestLoadItemDataByID = function(id) STATE.requested = STATE.requested or {}; STATE.requested[id] = true end,
     GetItemNameByID = function(id) local e = itemById(id) return e and e.name end,

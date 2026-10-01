@@ -236,6 +236,16 @@ TO.db.locked = false
 TO:RequestUpdate()
 tick()
 Dump("reminders", TO.main)
+-- The combat bar, as it shows in combat (locked, header on)
+TO.db.locked = true
+TO:RequestUpdate()
+tick()
+TO.combat:Show()
+Dump("combat-bar", TO.combat)
+TO.combat:Hide()
+TO.db.locked = false
+TO:RequestUpdate()
+tick()
 
 TO:OpenConfig()
 for _, t in ipairs(TO.OPTION_TABS) do

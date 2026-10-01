@@ -35,6 +35,7 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 - **Food, water, bandages and potions, picked for you.** ToppedOff finds the best food, water, bandage, healing potion and mana potion in your bags, plus the right **stat food for your class** (Strength for Warriors, Agility for Rogues and Hunters, spell power then Intellect for Mages and Warlocks; Priests, Shamans, Druids and Paladins get food for their role, from their talents or group role; change it in the options). When something better lands in your bags, it takes over. Water and mana potions are only tracked for mana users.
 - **Well Fed.** Reminds you when your stat food buff is missing or running out, and a click eats your stat food. On by default in dungeons and raids; turn it on everywhere in the options.
 - **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). They stay on screen as a quick-use bar (dimmed when stocked, red count when low).
+- **Combat bar.** While the reminders are hidden in combat, your healing and mana potions, Healthstone and bandage stay on screen in one row where the reminders were. Click to use, with live counts and the potion cooldown. Turn it off with "Keep potions in combat".
 - **Chat reminders.** Lists anything missing when a ready check starts or when you enter a dungeon or raid.
 - **Keybindings.** Fix the first three reminders from the keyboard or a controller.
 
@@ -57,7 +58,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 
 | Side | What's there |
 |---|---|
-| **Display** (left) | Show reminders, lock, hide in combat, only in dungeons and raids, show header, minimap button, icon size, icons per row, warning time for buffs, durability warning %, chat reminders and sound, Reset position and Check spells buttons |
+| **Display** (left) | Show reminders, lock, hide in combat, keep potions in combat, only in dungeons and raids, show header, minimap button, icon size, icons per row, warning time for buffs, durability warning %, chat reminders and sound, Reset position and Check spells buttons |
 | **Buffs** tab (right) | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, elixirs and flasks |
 | **Supplies** tab | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
 | **Pet & gear** tab | Pet, Soulstone (Warlocks), durability and bag space |
@@ -93,7 +94,7 @@ Go to **Options → Keybindings → ToppedOff Forever**:
 WoW: Forever runs on the modern addon system, which limits what addons can do in combat. ToppedOff Forever is built around those rules:
 
 - **It never acts on its own.** Every buff, weapon enhancement and item use is your click. It never buys, casts or uses anything by itself.
-- **Reminders update out of combat.** WoW doesn't let addons change clickable icons during combat, so the icons are hidden in combat by default and refresh as soon as it ends.
+- **Reminders update out of combat.** WoW doesn't let addons change clickable icons during combat, so the icons are hidden in combat by default (except the combat bar) and refresh as soon as it ends.
 - **Replacing a weapon enhancement** that hasn't run out yet makes WoW ask you to confirm. That's the game's normal prompt.
 - **Spell and item names** are the Classic ones. If something isn't found in Forever, `/topoff check` shows it in yellow. Please report it.
 

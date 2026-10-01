@@ -1058,4 +1058,52 @@ STATE.uncached = nil
 fire("GET_ITEM_INFO_RECEIVED", 130, true)
 tick()
 assertEq(TO.char.auto.statfood and TO.char.auto.statfood.name, "Spiced Wolf Meat", "Agility food is the fallback for Stamina")
+step("combat bar: potions, Healthstone and bandage stay in combat")
+STATE.class = "PRIEST"; STATE.level = 40; STATE.buffs = {}; STATE.uncached = nil
+TO.db.shown = true; TO.db.hideInCombat = true; TO.db.combatBar = true; TO.db.onlyInInstance = false
+TO.char.auto = {}; TO.char.custom = {}
+local EAT2 = " Must remain seated while eating."
+STATE.bags = {
+    { id = 140, name = "Haunch of Meat", count = 12, tip = "Use: Restores 243 health over 21 sec." .. EAT2 },
+    { id = 141, name = "Healing Potion", count = 3, tip = "Use: Restores 280 to 360 health." },
+    { id = 142, name = "Mana Potion", count = 2, tip = "Use: Restores 280 to 360 mana." },
+    { id = 143, name = "Healthstone", count = 1, tip = "Use: Instantly restores 500 health." },
+    { id = 144, name = "Heavy Linen Bandage", count = 8, tip = "Use: Heals 114 damage over 6 sec." },
+}
+TO:ApplySettings(); refresh()
+local CB = TO.combat
+assertEq(CB.__driver, "[combat] show; hide", "combat bar shows only in combat")
+assertEq(CB.count, 4, "healing potion, mana potion, Healthstone, bandage")
+local function cbItem(i) return CB.buttons[i]:GetAttribute("item") end
+assertEq(cbItem(1), "item:141", "healing potion first")
+assertEq(cbItem(2), "item:142", "then mana potion")
+assertEq(cbItem(3), "item:143", "then Healthstone")
+assertEq(cbItem(4), "item:144", "then bandage")
+assertEq(CB.buttons[1]:GetAttribute("type"), "item", "click uses the item")
+assertEq(CB.buttons[1].text:GetText(), 3, "count shown")
+-- In combat: counts update, nothing protected is touched
+COMBAT = true; BLOCKED = {}
+fire("PLAYER_REGEN_DISABLED")
+STATE.bags[2].count = 2
+fire("BAG_UPDATE_DELAYED")
+STATE.itemCD = { [141] = 1000 }
+fire("BAG_UPDATE_COOLDOWN")
+tick()
+assertEq(#BLOCKED, 0, "combat bar touched protected things in combat: " .. table.concat(BLOCKED, ", "))
+assertEq(CB.buttons[1].text:GetText(), 2, "count updates in combat")
+table.remove(STATE.bags, 3)   -- drank the last mana potion
+fire("BAG_UPDATE_DELAYED")
+assertEq(CB.buttons[2].text:GetText(), 0, "used up")
+assertEq(CB.buttons[2].icon.__desat, true, "used up: greyed out")
+COMBAT = false; fire("PLAYER_REGEN_ENABLED"); tick(); STATE.itemCD = nil
+assertEq(CB.count, 3, "after combat the bar is rebuilt without the used-up potion")
+-- Warriors: no mana potion; settings that turn it off
+STATE.class = "WARRIOR"; TO.char.auto = {}; refresh()
+for i = 1, CB.count do assert(cbItem(i) ~= "item:142", "warriors don't get mana potions") end
+TO.db.combatBar = false; TO:ApplySettings(); refresh()
+assertEq(CB.__driver, "hide", "combat bar off")
+TO.db.combatBar = true; TO.db.hideInCombat = false; TO:ApplySettings(); refresh()
+assertEq(CB.__driver, "hide", "not needed when the reminders stay in combat")
+TO.db.hideInCombat = true; STATE.bags = {}; TO:ApplySettings(); refresh()
+assertEq(CB.__driver, "hide", "nothing to show")
 print("ALL TESTS PASSED")
