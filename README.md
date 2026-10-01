@@ -6,31 +6,31 @@
 
 ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It watches your own character and shows a small icon only when something needs topping off: a buff that's missing or about to run out, a weapon without its poison or oil, low reagents, low ammo, or worn-out gear. Click the icon and it's fixed.
 
-Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhancements, Well Fed, elixirs, pet, Soulstone), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, bag space, repairs). Long rows wrap after 8 icons (change it with "Icons per row").
+Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhancements, Well Fed, elixirs, pet, Soulstone), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, your own items, conjures, Healthstone, bag space, repairs). Long rows wrap after 8 icons (change it with "Icons per row").
 
 ---
 
 ## Features
 
 - **Shows what's wrong, plus a quick-use bar.** Buffs, reagents and gear only show when something needs fixing. Your food, water, bandages and potions stay on screen as a dimmed quick-use bar you can click, and turn bright with a red count when they run low. Turn the bar off with "Always show these" on the Supplies tab.
-- **Class buffs for every class.** Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield, Priest racial buffs (Shadowguard, Touch of Weakness, Fear Ward) and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
-- **Party buffs.** See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild, Thorns or Divine Spirit. **Click to buff the next one in range.**
-- **Party blessings** for Paladins. Choose the blessing for each class (like Kings or Might for Warriors, Kings or Wisdom for casters). **Click to bless the next one in range.**
+- **Class buffs for every class** (Rogues get poisons instead). Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield, Priest racial buffs (Shadowguard, Touch of Weakness, Fear Ward) and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
+- **Party buffs.** See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild, Thorns, Divine Spirit or Shadow Protection (off by default). Arcane Intellect and Divine Spirit skip Warriors and Rogues. **Click to buff the next one in range.** In raids, turn on "check the whole raid" to cover everyone.
+- **Party blessings** for Paladins. Choose the blessing for each class (Might for Warriors and Rogues and Wisdom for everyone else by default, or any blessing you've learned). **Click to bless the next one in range.**
 - **Group buffs count.** Arcane Brilliance covers Arcane Intellect, Prayer of Fortitude covers Fortitude, and a buff from another player counts too.
 - **Choose your spell.** For Blessings, Auras, Aspects, Armors and Shaman weapon buffs, pick which one the icon casts.
 - **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and any oil or sharpening stone you choose. **Click to apply it to your weapon.** Your best rank in your bags is used automatically. Rogues are also warned when poison charges run low.
 - **Elixirs and flasks.** Tick the ones in your bags you want to keep up. You're reminded when the buff is missing or running out, and a click drinks it. On by default in dungeons and raids only.
 - **Pets.** Hunters and Warlocks are reminded when their pet isn't out or is dead (click to call, revive or summon). Hunters also see when their pet isn't happy: set a pet food and one click feeds it, with a reminder when the food runs low.
-- **Soulstone.** Warlocks are reminded when nobody in the group has a Soulstone. Click to put yours on the healer, or to make one.
+- **Soulstone.** Warlocks are reminded when nobody in the group has a Soulstone. Click to put yours on the healer, or to make one. On by default in dungeons and raids only.
 - **Bag space.** Warns when you're down to a few free bag slots.
 - **Mage conjures.** Conjured water and food below your Min, and a missing mana gem. Click to conjure your best rank.
 - **Healthstones.** Warlocks are reminded to make one. Everyone else is reminded in dungeons when a Warlock is in the group.
-- **One-click restock at vendors.** Beside the vendor window, a list of everything you're short on that the vendor sells (reagents, food, water, potions, your own items, ammo, pet food), with the cost. Untick anything you don't want, then click **Restock**. Nothing is bought until you click.
+- **One-click restock at vendors.** Beside the vendor window, a list of everything you're short on that the vendor sells (reagents at the right rank for your level, food, stat food, water, bandages, potions, your own items, ammo, pet food), with the cost. Untick anything you don't want, then click **Restock**. Nothing is bought until you click.
 - **Repair button.** At a vendor who repairs, "Repair all" shows the cost. One click.
 - **Separate checks outside dungeons.** Keep a lighter set of checks while questing, and everything on in dungeons and raids.
 - **Copy another character.** Copy one character's checks, Min counts, items and choices to an alt.
 - **Reagents and class items.** Soul Shards, teleport and portal runes, Arcane Powder, candles, Light Feathers, Symbols of Kings and Divinity, Ankhs, totems, Flash Powder and more. Checked only once you've learned a spell that needs them. Set your own minimums.
-- **Ammo** for Hunters.
+- **Ammo** for Hunters (optional for Warriors and Rogues).
 - **Low durability** warning before your gear breaks.
 - **Food, water, bandages and potions, picked for you.** ToppedOff finds the best food, water, bandage, healing potion and mana potion in your bags, plus the right **stat food for your class** (Strength for Warriors, Agility for Rogues and Hunters, spell power then Intellect for Mages and Warlocks; Priests, Shamans, Druids and Paladins get food for their role, from their talents or group role; change it in the options). When something better lands in your bags, it takes over. Water and mana potions are only tracked for mana users.
 - **Well Fed.** Reminds you when your stat food buff is missing or running out, and a click eats your stat food. On by default in dungeons and raids; turn it on everywhere in the options.
@@ -49,7 +49,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 ## Using it
 
 - **Move the icons.** They start unlocked, inside a frame with a "ToppedOff" header. Drag the header to move them, then lock it in the options or with `/topoff lock`. Clicking the icons works whether they're locked or not.
-- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Buffs are cast on you. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you).
+- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Your buffs are cast on you, and party buffs and blessings on the party member shown. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you).
 - **Open the options.** Type `/topoff`, left-click the minimap button, or right-click the "ToppedOff" header and choose **Settings**. The header menu also has **Lock**.
 - **Show or hide.** Right-click the minimap button, or type `/topoff toggle`.
 
@@ -57,7 +57,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 
 | Side | What's there |
 |---|---|
-| **Display** (left) | Show reminders, lock, hide in combat, only in dungeons and raids, show header, minimap button, icon size, warning time for buffs, durability warning %, chat reminders and sound |
+| **Display** (left) | Show reminders, lock, hide in combat, only in dungeons and raids, show header, minimap button, icon size, icons per row, warning time for buffs, durability warning %, chat reminders and sound, Reset position and Check spells buttons |
 | **Buffs** tab (right) | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, elixirs and flasks |
 | **Supplies** tab | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
 | **Pet & gear** tab | Pet, Soulstone (Warlocks), durability and bag space |
@@ -81,7 +81,7 @@ Go to **Options → Keybindings → ToppedOff Forever**:
 | `/topoff` | Open or close the options |
 | `/topoff show` · `/topoff hide` · `/topoff toggle` | Show or hide the reminders |
 | `/topoff lock` · `/topoff unlock` | Lock or unlock the reminders' position |
-| `/topoff check` | List everything checked for your class and what was found |
+| `/topoff check` | List your class buffs, weapon, reagents, your own items and durability, and whether each was found |
 | `/topoff add 20 Conjured Crystal Water` | Remind you when you have fewer than 20 of an item |
 | `/topoff remove Conjured Crystal Water` | Stop checking an item you added |
 | `/topoff reset` | Move the reminders back to the default position |
@@ -103,6 +103,7 @@ WoW: Forever runs on the modern addon system, which limits what addons can do in
 - **A weapon icon is grey.** The item you chose isn't in your bags. Hover for details.
 - **The icons disappeared.** You may have hidden them, turned on **Only in dungeons and raids**, or you may simply be topped off. Type `/topoff show`.
 - **The icons are off-screen.** Type `/topoff reset`.
+- **"WoW blocked ..." in chat.** The game stopped an action and blamed ToppedOff. Please report it with the message.
 
 ## Feedback and bug reports
 
