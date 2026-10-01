@@ -114,7 +114,8 @@ ToppedOff Forever is free. If it has saved you a wipe, you can [leave a small ti
 
 ## Also by me
 
-**TauntMaster Forever**: one-click taunts off your healers and DPS, for tanks. Free on CurseForge.
+- **TauntMaster Forever**: one-click taunts off your healers and DPS, for tanks. Free on CurseForge.
+- **Outfitter Forever**: the classic Outfitter gear manager, ported to WoW Forever. Free on CurseForge.
 
 ## License
 
