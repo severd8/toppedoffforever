@@ -1,3 +1,9 @@
+## 1.5.7
+
+- Fixed: a "GetAuraDataByIndex(): Auras cannot be accessed when secret" error. When the game hides buffs (for example in some instances), ToppedOff now keeps the last buffs it could read instead of erroring, and party buff checks wait until buffs are readable.
+- If the game refuses some other read, the error is reported once instead of every few seconds.
+- New: **Thorns** is now a party buff for Druids. See who's missing it and click to cast it on them.
+
 ## 1.5.6
 
 - Fixed: "ToppedOffForever has been blocked from an action only available to the Blizzard UI" when opening the Game Menu (Escape). The options code re-assigned one of Blizzard's own tables, which made WoW distrust Blizzard's menu code.

@@ -1017,4 +1017,28 @@ fire("ADDON_ACTION_FORBIDDEN", "ToppedOffForever", "UseContainerItem()")
 assert(LOG[#LOG]:find("WoW blocked UseContainerItem"), "names the blocked function")
 fire("ADDON_ACTION_FORBIDDEN", "SomeOtherAddon", "Foo()")
 assert(not LOG[#LOG]:find("Foo"), "other addons ignored")
+step("hidden auras don't error")
+STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Mark of the Wild", "Thorns"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.bags = {}; STATE.party = { "party1", "party2" }
+STATE.partyClass = {}; STATE.partyBuffs = { party1 = { ["Mark of the Wild"] = 900 }, party2 = { ["Thorns"] = 500 } }
+STATE.buffs = { ["Mark of the Wild"] = 1800, ["Thorns"] = 500 }
+refresh()
+local th = ids()["party:thorns"]
+assertEq(th and th.text, "1", "Thorns on the party: one missing")
+assertEq(th.action.unit, "party1", "click thorns the one missing it")
+STATE.aurasLocked = true
+refresh()   -- must not error
+assertEq(TO.buffs["thorns"] ~= nil, true, "last readable buffs kept")
+assertEq(ids()["party:thorns"], nil, "party auras hidden: no guessing")
+STATE.aurasLocked = false; STATE.party = {}
+step("errors reported once")
+local reported = 0
+geterrorhandler = function() return function() reported = reported + 1 end end
+local real = TO.CheckDurability
+TO.CheckDurability = function() error("boom") end
+refresh(); refresh(); refresh()
+assertEq(reported, 1, "same error reported once")
+TO.CheckDurability = real; geterrorhandler = nil
+refresh()
 print("ALL TESTS PASSED")

@@ -238,6 +238,8 @@ function IsPlayerSpell(id) for _, n in ipairs(SPELLBOOK) do if SPELLS[n].id == i
 -- Buffs on you: STATE.buffs[name] = seconds left (0 = permanent)
 C_UnitAuras = {
     GetAuraDataByIndex = function(unit, i, filter)
+        -- STATE.aurasLocked: the game refuses (errors) while auras are hidden
+        if STATE.aurasLocked then error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted") end
         local list = {}
         local src = STATE.buffs
         if unit ~= "player" then

@@ -73,7 +73,7 @@ TO.CLASS_BUFFS = {
     DRUID = {
         { id = "motw", label = "Mark of the Wild", cast = { "Mark of the Wild" },
           auras = { "Mark of the Wild", "Gift of the Wild" }, party = true },
-        { id = "thorns", label = "Thorns", cast = { "Thorns" } },
+        { id = "thorns", label = "Thorns", cast = { "Thorns" }, party = true },
         { id = "omen", label = "Omen of Clarity", cast = { "Omen of Clarity" } },
     },
     WARLOCK = {
@@ -353,12 +353,21 @@ end
 
 -- Your buffs, keyed by lowercase name -> seconds left (0 = doesn't expire)
 -- Buff names on any unit (lowercase -> seconds left). nil if the game hides them.
+-- One aura, or false when the game hides auras right now. Forever throws an error
+-- (instead of returning a hidden value) when an addon asks while they're hidden.
+local function AuraAt(unit, i)
+    local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
+    if not ok then return false end
+    return a
+end
+
 function TO:UnitBuffs(unit)
     local buffs = {}
     local now = GetTime()
     if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
     for i = 1, 40 do
-        local a = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+        local a = AuraAt(unit, i)
+        if a == false then return nil end   -- hidden: can't tell
         if a == nil then break end
         if IsSecret(a) or type(a) ~= "table" then return nil end
         local name = a.name
@@ -386,13 +395,16 @@ function TO:ScanBuffs()
     end
     if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
         for i = 1, 40 do
-            local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+            local a = AuraAt("player", i)
+            -- Hidden right now: keep the last list we could read
+            if a == false then return end
             if a == nil or IsSecret(a) or type(a) ~= "table" then break end
             add(a.name, a.expirationTime)
         end
     elseif UnitBuff then
         for i = 1, 40 do
-            local name, _, _, _, _, expires = UnitBuff("player", i)
+            local ok, name, _, _, _, _, expires = pcall(UnitBuff, "player", i)
+            if not ok then return end
             if name == nil or IsSecret(name) then break end
             add(name, expires)
         end
@@ -1960,7 +1972,19 @@ function TO:Update()
     if InCombatLockdown() then self.dirty = true return end
     self.dirty = false
     self.lastUpdate = GetTime()
-    self.reminders = self:BuildReminders()
+    -- If the game refuses a read (Forever errors on some hidden data), keep the last
+    -- reminders and report the error once per session instead of every refresh
+    local ok, list = pcall(self.BuildReminders, self)
+    if not ok then
+        self.errorsSeen = self.errorsSeen or {}
+        if not self.errorsSeen[list] then
+            self.errorsSeen[list] = true
+            local handler = geterrorhandler and geterrorhandler()
+            if handler then handler(list) end
+        end
+        return
+    end
+    self.reminders = list
     self:Layout(self.reminders)
     if self.merchantOpen and self.UpdateVendorPanel then self:UpdateVendorPanel() end
 end
