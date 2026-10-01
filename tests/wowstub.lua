@@ -185,6 +185,7 @@ C_TooltipInfo = { GetItemByID = function(id)
     for _, e in ipairs(STATE.bags) do
         if e.id == id then
             local lines = { { leftText = e.name } }
+            if STATE.uncached and STATE.uncached[id] then return { lines = lines } end
             for l in (e.tip or ""):gmatch("[^\n]+") do lines[#lines + 1] = { leftText = l } end
             return { lines = lines }
         end
@@ -271,6 +272,8 @@ C_Container = {
 }
 local function itemById(id) for _, e in ipairs(STATE.bags) do if e.id == id then return e end end end
 C_Item = {
+    IsItemDataCachedByID = function(id) return not (STATE.uncached and STATE.uncached[id]) end,
+    RequestLoadItemDataByID = function(id) STATE.requested = STATE.requested or {}; STATE.requested[id] = true end,
     GetItemNameByID = function(id) local e = itemById(id) return e and e.name end,
     GetItemIconByID = function(id) return "item:" .. tostring(id) end,
     GetItemSpell = function(id) local e = itemById(id) return e and e.spell, e and 1 end,

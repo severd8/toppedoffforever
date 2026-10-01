@@ -1041,4 +1041,21 @@ refresh(); refresh(); refresh()
 assertEq(reported, 1, "same error reported once")
 TO.CheckDurability = real; geterrorhandler = nil
 refresh()
+step("stat food: Automatic falls back to any stat food, even one that loads late")
+STATE.class = "PALADIN"; STATE.level = 30; STATE.talents = nil; STATE.roles = {}; STATE.buffs = {}
+TO.char.auto = {}; TO.char.statFocus = nil
+STATE.uncached = { [130] = true }
+STATE.bags = {
+    { id = 130, name = "Spiced Wolf Meat", count = 7, tip = "Use: Restores 58 health over 18 sec. Must remain seated while eating."
+        .. " If you spend at least 10 seconds eating you will become well fed and gain 1 Agility for 15 min."
+        .. " Additionally, experience gained from kills is increased by 5%. (1 Sec Cooldown)" },
+}
+refresh()
+assertEq(TO:AutoStatPriority()[1], "sta", "paladin with no role: Stamina first")
+assertEq(TO.char.auto.statfood, nil, "not loaded yet: not judged")
+assertEq(STATE.requested and STATE.requested[130], true, "asked the game to load it")
+STATE.uncached = nil
+fire("GET_ITEM_INFO_RECEIVED", 130, true)
+tick()
+assertEq(TO.char.auto.statfood and TO.char.auto.statfood.name, "Spiced Wolf Meat", "Agility food is the fallback for Stamina")
 print("ALL TESTS PASSED")

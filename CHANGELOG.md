@@ -1,3 +1,7 @@
+## 1.5.8
+
+- Fixed: food, stat food, water, bandages and potions that the game hadn't finished loading (common right after logging in) were misread and never tracked, so Automatic stat food could show "none in bags" while you had some. ToppedOff now waits for the item to load and checks again.
+
 ## 1.5.7
 
 - Fixed: a "GetAuraDataByIndex(): Auras cannot be accessed when secret" error. When the game hides buffs (for example in some instances), ToppedOff now keeps the last buffs it could read instead of erroring, and party buff checks wait until buffs are readable.

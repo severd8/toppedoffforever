@@ -794,7 +794,18 @@ end
 
 -- The whole tooltip of an item as lowercase text (nil if the game hasn't loaded it yet)
 local scanTip
+TO.pendingItems = {}
 local function TooltipText(id)
+    -- Until the game has loaded an item, its tooltip is incomplete (often just the
+    -- name). Ask for it and try again when it arrives, so it isn't misread.
+    if C_Item and C_Item.IsItemDataCachedByID then
+        local ok, cached = pcall(C_Item.IsItemDataCachedByID, id)
+        if ok and cached == false then
+            TO.pendingItems[id] = true
+            if C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
+            return nil
+        end
+    end
     local lines = {}
     if C_TooltipInfo and C_TooltipInfo.GetItemByID then
         local ok, data = pcall(C_TooltipInfo.GetItemByID, id)
@@ -2450,9 +2461,9 @@ events:RegisterEvent("ADDON_ACTION_FORBIDDEN")
 -- Pet events; guarded in case this client doesn't have them
 pcall(events.RegisterUnitEvent, events, "UNIT_PET", "player")
 pcall(events.RegisterUnitEvent, events, "UNIT_HAPPINESS", "pet")
--- Talent / spec changes (stat food follows your role)
+-- Talent / spec changes (stat food follows your role), and items the game finishes loading
 for _, e in ipairs({ "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED",
-    "PLAYER_SPECIALIZATION_CHANGED" }) do
+    "PLAYER_SPECIALIZATION_CHANGED", "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT" }) do
     pcall(events.RegisterEvent, events, e)
 end
 events:SetScript("OnEvent", function(_, event, arg1, ...)
@@ -2477,6 +2488,13 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
             local fn = ...   -- (addon name, function name)
             Print("WoW blocked " .. tostring(fn or "an action") .. (InCombatLockdown() and " (in combat)" or "")
                 .. ". Please report this with what you just clicked.")
+        end
+        return
+    elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT" then
+        -- An item ToppedOff was waiting for has loaded: look at the bags again
+        if TO.pendingItems[arg1] then
+            TO.pendingItems[arg1] = nil
+            if TO.built then TO:RequestUpdate() end
         end
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
