@@ -22,7 +22,7 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 - **Elixirs and flasks.** Tick the ones in your bags you want to keep up. You're reminded when the buff is missing or running out, and a click drinks it. On by default in dungeons and raids only.
 - **Pets.** Hunters and Warlocks are reminded when their pet isn't out or is dead (click to call, revive or summon). Hunters also see when their pet isn't happy: set a pet food and one click feeds it, with a reminder when the food runs low.
 - **Soulstone.** Warlocks are reminded when nobody in the group has a Soulstone. Click to put yours on the healer, or to make one.
-- **Bag space.** Warns when you're down to a few free bag slots. Click to open your bags.
+- **Bag space.** Warns when you're down to a few free bag slots.
 - **Mage conjures.** Conjured water and food below your Min, and a missing mana gem. Click to conjure your best rank.
 - **Healthstones.** Warlocks are reminded to make one. Everyone else is reminded in dungeons when a Warlock is in the group.
 - **One-click restock at vendors.** Beside the vendor window, a list of everything you're short on that the vendor sells (reagents, food, water, potions, your own items, ammo, pet food), with the cost. Untick anything you don't want, then click **Restock**. Nothing is bought until you click.

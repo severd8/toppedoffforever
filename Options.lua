@@ -658,13 +658,11 @@ local function BuildMoreTab(self, ctx, class)
     ctx.fit(ctx.toggle("bags", "Free bag slots", true))
     ctx.reagentMin("bags", self.BAGS_DEFAULT_MIN)
     ctx.row()
-    ctx.note("Click the bag icon to open your bags.")
 end
 
 ---------------------------------------------------------------------------
 -- Profiles tab: separate checks outside dungeons; copy another character
 ---------------------------------------------------------------------------
-StaticPopupDialogs = StaticPopupDialogs or {}
 StaticPopupDialogs["TOPPEDOFFFOREVER_COPY"] = {
     text = "Copy ToppedOff settings from %s?\nThis replaces this character's checks, Min counts and choices.",
     button1 = YES or "Yes",

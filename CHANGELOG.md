@@ -1,3 +1,9 @@
+## 1.5.6
+
+- Fixed: "ToppedOffForever has been blocked from an action only available to the Blizzard UI" when opening the Game Menu (Escape). The options code re-assigned one of Blizzard's own tables, which made WoW distrust Blizzard's menu code.
+- The bag space icon no longer opens your bags when clicked. Opening them from an addon could cause the same kind of blocked-action message later.
+- If WoW ever blocks an action and blames ToppedOff, it now says which one in chat, to make reports easy.
+
 ## 1.5.5
 
 - Fixed: picking a stat under "Stat food for" still tracked food with a different stat when you had none with your stat. Now only food with the stat you picked is tracked. Automatic still falls back to any stat food.

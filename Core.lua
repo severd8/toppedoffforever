@@ -1289,8 +1289,8 @@ function TO:CheckBags(list)
     local min = self:ReagentMin("bags", self.BAGS_DEFAULT_MIN)
     if free < min then
         list[#list + 1] = { id = "bags", label = "Bag space", icon = self.ICONS.bags, text = tostring(free),
-            detail = ("%d free bag slots (want %d)"):format(free, min), openBags = true,
-            clickText = "Click to open your bags", urgentNow = free == 0, low = true }
+            detail = ("%d free bag slots (want %d)"):format(free, min),
+            urgentNow = free == 0, low = true }
     end
 end
 
@@ -1790,14 +1790,6 @@ function TO:CreateButton(i)
     b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     b:SetScript("OnEnter", Button_OnEnter)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    -- Not a spell or item: the bag space icon opens your bags (once per click)
-    b:HookScript("PostClick", function(self, _, down)
-        if down then return end
-        local r = self.reminder
-        if r and r.openBags then
-            if ToggleAllBags then ToggleAllBags() elseif OpenAllBags then OpenAllBags() end
-        end
-    end)
     b:Hide()
     self.buttons[i] = b
     return b
@@ -2428,6 +2420,9 @@ events:RegisterEvent("READY_CHECK")
 events:RegisterUnitEvent("UNIT_AURA", "player")
 events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
 events:RegisterEvent("GROUP_ROSTER_UPDATE")
+-- If WoW ever blocks something and blames ToppedOff, say exactly what in chat
+events:RegisterEvent("ADDON_ACTION_BLOCKED")
+events:RegisterEvent("ADDON_ACTION_FORBIDDEN")
 -- Pet events; guarded in case this client doesn't have them
 pcall(events.RegisterUnitEvent, events, "UNIT_PET", "player")
 pcall(events.RegisterUnitEvent, events, "UNIT_HAPPINESS", "pet")
@@ -2436,7 +2431,7 @@ for _, e in ipairs({ "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE
     "PLAYER_SPECIALIZATION_CHANGED" }) do
     pcall(events.RegisterEvent, events, e)
 end
-events:SetScript("OnEvent", function(_, event, arg1)
+events:SetScript("OnEvent", function(_, event, arg1, ...)
     if event == "ADDON_LOADED" and arg1 == ADDON then
         ToppedOffForeverDB = ToppedOffForeverDB or {}
         FillDefaults(ToppedOffForeverDB, DEFAULTS)
@@ -2453,6 +2448,13 @@ events:SetScript("OnEvent", function(_, event, arg1)
         TO:ScanSpellbook()
         TO:RunOutOfCombat(function() TO:BuildFrames() end)
         print(TO.LOGO_TEXT .. " |cffffd966ToppedOff Forever|r loaded. Type /topoff for options.")
+    elseif event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
+        if arg1 == ADDON then
+            local fn = ...   -- (addon name, function name)
+            Print("WoW blocked " .. tostring(fn or "an action") .. (InCombatLockdown() and " (in combat)" or "")
+                .. ". Please report this with what you just clicked.")
+        end
+        return
     elseif event == "PLAYER_REGEN_ENABLED" then
         TO:FlushPending()
         TO:RequestUpdate()

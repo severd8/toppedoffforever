@@ -7,9 +7,25 @@ local function load_file(path)
     local chunk = assert(loadstring(src, "@" .. path))
     chunk(ADDON, ns)
 end
+-- Blizzard's global tables: the addon may add to them but must never assign the
+-- global itself (even to the same table: that taints it, and WoW then blocks
+-- Blizzard UI actions like the Escape menu and blames the addon). While the addon
+-- loads, they're served through a guard that fails on any assignment.
+local BLIZZARD_GLOBALS = { "StaticPopupDialogs", "UISpecialFrames", "SlashCmdList", "RAID_CLASS_COLORS", "SOUNDKIT" }
+local guarded = {}
+for _, n in ipairs(BLIZZARD_GLOBALS) do guarded[n] = rawget(_G, n); rawset(_G, n, nil) end
+setmetatable(_G, {
+    __index = function(_, k) return guarded[k] end,
+    __newindex = function(t, k, v)
+        if guarded[k] ~= nil then error("assigned Blizzard global " .. k .. " (taints the Blizzard UI)", 2) end
+        rawset(t, k, v)
+    end,
+})
 load_file(ADDON_DIR .. "/Core.lua")
 load_file(ADDON_DIR .. "/Options.lua")
 load_file(ADDON_DIR .. "/Vendor.lua")
+setmetatable(_G, nil)
+for n, v in pairs(guarded) do rawset(_G, n, v) end
 local TO = ns.TO
 
 local function fire(event, ...)
@@ -643,14 +659,7 @@ STATE.freeSlots = 2; refresh()
 local bs = ids().bags
 assertEq(bs and bs.text, "2", "low bag space")
 assertEq(TO:IsBuffReminder(bs), false, "bag space on the top-off row")
-local bb
-for _, b in ipairs(TO.buttons) do if b.reminder == bs then bb = b end end
-local opened = false
-ToggleAllBags = function() opened = true end
-bb.__scripts.PostClick(bb, "LeftButton", true)
-assertEq(opened, false, "not on the key-down half of a click")
-bb.__scripts.PostClick(bb, "LeftButton", false)
-assertEq(opened, true, "click opens your bags")
+assertEq(bs.openBags, nil, "bag icon doesn't open bags (that tainted the bag windows)")
 STATE.freeSlots = 10; refresh()
 assertEq(ids().bags, nil, "enough space")
 STATE.freeSlots = nil
@@ -1002,4 +1011,10 @@ assertEq(ids()["auto:statfood"], nil, "no stat food icon")
 TO:SetStatFocus(nil); refresh()
 assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Automatic falls back to any stat food")
 STATE.bags = {}; STATE.level = nil; TO.char.auto = {}
+step("blocked-action report")
+local mark = #LOG
+fire("ADDON_ACTION_FORBIDDEN", "ToppedOffForever", "UseContainerItem()")
+assert(LOG[#LOG]:find("WoW blocked UseContainerItem"), "names the blocked function")
+fire("ADDON_ACTION_FORBIDDEN", "SomeOtherAddon", "Foo()")
+assert(not LOG[#LOG]:find("Foo"), "other addons ignored")
 print("ALL TESTS PASSED")

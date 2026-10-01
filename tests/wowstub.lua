@@ -313,3 +313,7 @@ function GetMoney() return STATE.money end
 function CanMerchantRepair() return STATE.repairCost > 0 end
 function GetRepairAllCost() return STATE.repairCost, STATE.repairCost > 0 end
 function RepairAllItems() REPAIRED = true end
+
+StaticPopupDialogs = {}
+UISpecialFrames = UISpecialFrames or {}
+SlashCmdList = SlashCmdList or {}
