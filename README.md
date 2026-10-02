@@ -12,32 +12,18 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 
 ## Features
 
-- **Shows what's wrong, plus a quick-use bar.** Buffs, reagents and gear only show when something needs fixing. Your food, water, bandages and potions stay on screen as a dimmed quick-use bar you can click, and turn bright with a red count when they run low. Turn the bar off with "Always show these" on the Supplies tab.
-- **Class buffs for every class** (Rogues get poisons instead). Arcane Intellect, Fortitude, Inner Fire, Mark of the Wild, Thorns, Demon Armor, Blessings, Auras, Aspects, Lightning Shield, Priest racial buffs (Shadowguard, Touch of Weakness, Fear Ward) and more. You're warned when a buff is missing or about to run out: the icon gets an **orange border** at your warning time and turns **red** in the last 20% of it. **Click the icon to cast it on yourself.**
-- **Party buffs.** See how many party members are missing your Fortitude, Arcane Intellect, Mark of the Wild, Thorns, Divine Spirit or Shadow Protection (off by default). Arcane Intellect and Divine Spirit skip Warriors and Rogues. **Click to buff the next one in range.** In raids, turn on "check the whole raid" to cover everyone.
-- **Party blessings** for Paladins. Choose the blessing for each class (Might for Warriors and Rogues and Wisdom for everyone else by default, or any blessing you've learned). **Click to bless the next one in range.**
-- **Group buffs count.** Arcane Brilliance covers Arcane Intellect, Prayer of Fortitude covers Fortitude, and a buff from another player counts too.
-- **Choose your spell.** For Blessings, Auras, Aspects, Armors and Shaman weapon buffs, pick which one the icon casts.
-- **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and any oil or sharpening stone you choose. **Click to apply it to your weapon.** Your best rank in your bags is used automatically. Rogues are also warned when poison charges run low.
-- **Elixirs and flasks.** Tick the ones in your bags you want to keep up. You're reminded when the buff is missing or running out, and a click drinks it. On by default in dungeons and raids only.
-- **Pets.** Hunters and Warlocks are reminded when their pet isn't out or is dead (click to call, revive or summon). Hunters also see when their pet isn't happy: set a pet food and one click feeds it, with a reminder when the food runs low.
-- **Soulstone.** Warlocks are reminded when nobody in the group has a Soulstone. Click to put yours on the healer, or to make one. On by default in dungeons and raids only.
-- **Bag space.** Warns when you're down to a few free bag slots.
-- **Mage conjures.** Conjured water and food below your Min, and a missing mana gem. Click to conjure your best rank.
-- **Healthstones.** Warlocks are reminded to make one. Everyone else is reminded in dungeons when a Warlock is in the group.
-- **One-click restock at vendors.** Beside the vendor window, a list of everything you're short on that the vendor sells (reagents at the right rank for your level, food, stat food, water, bandages, potions, your own items, ammo, pet food), with the cost. Untick anything you don't want, then click **Restock**. Nothing is bought until you click.
-- **Repair button.** At a vendor who repairs, "Repair all" shows the cost. One click.
-- **Separate checks outside dungeons.** Keep a lighter set of checks while questing, and everything on in dungeons and raids.
-- **Copy another character.** Copy one character's checks, Min counts, items and choices to an alt.
-- **Reagents and class items.** Soul Shards, teleport and portal runes, Arcane Powder, candles, Light Feathers, Symbols of Kings and Divinity, Ankhs, totems, Flash Powder and more. Checked only once you've learned a spell that needs them. Set your own minimums.
-- **Ammo** for Hunters (optional for Warriors and Rogues).
-- **Low durability** warning before your gear breaks.
-- **Food, water, bandages and potions, picked for you.** ToppedOff finds the best food, water, bandage, healing potion and mana potion in your bags, plus the right **stat food for your class** (Strength for Warriors, Agility for Rogues and Hunters, spell power then Intellect for Mages and Warlocks; Priests, Shamans, Druids and Paladins get food for their role, from their talents or group role; change it in the options). When something better lands in your bags, it takes over. When you run out of the best one, the next best in your bags takes its place until you restock. Water and mana potions are only tracked for mana users.
-- **Well Fed.** Reminds you when your stat food buff is missing or running out, and a click eats your stat food. On by default in dungeons and raids; turn it on everywhere in the options.
-- **Your own items.** Add anything, like food, water, potions or bandages, with a minimum count. **Click the icon to use the item** (bandages go on you). They stay on screen as a quick-use bar (dimmed when stocked, red count when low).
-- **Combat bar.** While the reminders are hidden in combat, your healing and mana potions, Healthstone and bandage stay on screen in one row where the reminders were. Click to use, with live counts and the potion cooldown. Turn it off with "Keep potions in combat".
-- **Chat reminders.** Lists anything missing when a ready check starts or when you enter a dungeon or raid.
-- **Keybindings.** Fix the first three reminders from the keyboard or a controller.
+- **Shows what's wrong, plus a quick-use bar.** Buffs, reagents and gear only show when something needs fixing. Your food, water, bandages and potions stay on screen as a dimmed bar you can click, and turn bright with a red count when they run low.
+- **Class buffs for every class** (Rogues get poisons instead). The icon gets an **orange border** when a buff is about to run out and turns **red** near the end. **Click to cast it on yourself.** Group versions and buffs from other players count, and you pick which Blessing, Aura, Aspect, Armor or weapon buff is cast.
+- **Party buffs and blessings** (off by default). See how many party members are missing your buff and **click to buff the next one in range**. Paladins choose a blessing for each class. The whole raid can be included.
+- **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and any oil or sharpening stone you choose. **Click to apply it**; your best rank is used, and low poison charges are flagged.
+- **Food, water, bandages and potions, picked for you.** The best of each in your bags, plus the right **stat food for your class or role**. When you run out of the best one, the next best takes its place. A **Well Fed** reminder (in dungeons and raids by default) eats your stat food with a click.
+- **Combat bar.** In combat, your healing and mana potions, Healthstone and bandage stay clickable, with counts and the potion cooldown.
+- **Reagents, ammo and class items.** Soul Shards, runes, powders, candles, Ankhs, totems and more, checked once you've learned a spell that needs them, and ammo for Hunters. Set your own minimums.
+- **Class extras.** Hunter and Warlock pets (missing, dead or unhappy, with one-click feeding), Soulstones, Healthstones, Mage conjures, and the elixirs and flasks you choose.
+- **Gear and bags.** Low durability and low bag space warnings.
+- **Vendors.** One click restocks everything you're short on that the vendor sells, with the cost shown first, and a **Repair all** button. Nothing is bought until you click.
+- **Your own items.** Add anything with a minimum count, and **click the icon to use it**.
+- **Profiles and reminders.** A lighter set of checks outside dungeons, copy a character's setup to an alt, chat reminders on ready checks and when you enter a dungeon, and keybindings for the first three reminders.
 
 ## Installation
 
@@ -91,11 +77,11 @@ Go to **Options → Keybindings → ToppedOff Forever**:
 
 ## Good to know
 
-WoW: Forever runs on the modern addon system, which limits what addons can do in combat. ToppedOff Forever is built around those rules:
+WoW: Forever limits what addons can do in combat. ToppedOff Forever is built around those rules:
 
-- **It never acts on its own.** Every buff, weapon enhancement and item use is your click. It never buys, casts or uses anything by itself.
-- **Reminders update out of combat.** WoW doesn't let addons change clickable icons during combat, so the icons are hidden in combat by default (except the combat bar) and refresh as soon as it ends.
-- **Replacing a weapon enhancement** that hasn't run out yet makes WoW ask you to confirm. That's the game's normal prompt.
+- **It never acts on its own.** Every buff, weapon enhancement, purchase and item use is your click.
+- **Reminders update out of combat.** They're hidden in combat by default (except the combat bar) and refresh as soon as it ends.
+- **Replacing a weapon enhancement** that hasn't run out makes the game ask you to confirm.
 - **Spell and item names** are the Classic ones. If something isn't found in Forever, `/topoff check` shows it in yellow. Please report it.
 
 ## Troubleshooting
@@ -118,6 +104,7 @@ ToppedOff Forever is free. If it has saved you a wipe, you can [leave a small ti
 
 - **TauntMaster Forever**: one-click taunts off your healers and DPS, for tanks. Free on CurseForge.
 - **Outfitter Forever**: the classic Outfitter gear manager, ported to WoW Forever. Free on CurseForge.
+- **BattleText Forever**: scrolling combat text for your hits, heals and the damage you take. Free on CurseForge.
 
 ## License
 
