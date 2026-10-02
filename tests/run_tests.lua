@@ -997,6 +997,35 @@ TO.char.auto.healing = { name = "Recipe: Something", id = 999, score = 80, min =
 refresh()
 assertEq(TO.char.auto.healing.name, "Minor Healing Potion", "recipe out of bags dropped")
 STATE.bags = {}; STATE.level = nil; TO.char.auto = {}; TO.char.autoMins = {}
+step("gear isn't tracked")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.auto, TO.char.autoMins = {}, {}, {}
+STATE.level = 30; STATE.buffs = {}
+local bucketTip = "Held In Off-hand\nUse: Restores 1344 mana over 24 sec. Must remain seated while drinking."
+-- In your bags: an off-hand with a drink effect, and real water that restores less
+STATE.bags = {
+    { id = 970, name = "Skum's Bucket", count = 1, tip = bucketTip, equipLoc = "INVTYPE_HOLDABLE" },
+    { id = 971, name = "Melon Juice", count = 12, tip = "Use: Restores 835 mana over 24 sec. Must remain seated while drinking." },
+}
+refresh()
+assertEq(TO.char.auto.water.name, "Melon Juice", "gear skipped, real water tracked")
+-- Only the bucket: nothing tracked
+STATE.bags = { STATE.bags[1] }; TO.char.auto = {}
+refresh()
+assertEq(TO.char.auto.water, nil, "gear alone isn't water")
+assertEq(ids()["auto:water"], nil, "no water icon for gear")
+-- An older version already picked it, and it's equipped now (not in your bags)
+STATE.bags = {}; STATE.gear = { [970] = "INVTYPE_HOLDABLE" }
+TO.char.auto.water = { name = "Skum's Bucket", id = 970, score = 1344, min = 20 }
+refresh()
+assertEq(TO.char.auto.water, nil, "equipped gear dropped from water")
+assertEq(ids()["auto:water"], nil, "no icon for dropped gear")
+assertEq(TO.char.autoMins.water, 20, "your Min kept")
+-- Real water you ran out of stays tracked
+TO.char.auto.water = { name = "Melon Juice", id = 971, score = 835, min = 20 }
+refresh()
+assertEq(TO.char.auto.water.name, "Melon Juice", "water you ran out of stays tracked")
+STATE.bags = {}; STATE.gear = nil; STATE.level = nil; TO.char.auto = {}; TO.char.autoMins = {}
 step("picked stat food is strict")
 STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
 TO.char.checks, TO.char.auto, TO.char.autoMins = {}, {}, {}

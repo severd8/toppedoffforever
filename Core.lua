@@ -858,8 +858,25 @@ local function IsRecipe(id, text)
 end
 TO.IsRecipe = IsRecipe
 
+-- Gear you wear (like an off-hand with a "drink" effect on use) isn't something to
+-- stock up on, however its tooltip reads. It's never tracked.
+local NOT_WORN = { [""] = true, INVTYPE_NON_EQUIP = true, INVTYPE_NON_EQUIP_IGNORE = true }
+local function IsGear(id)
+    if not (C_Item and C_Item.GetItemInfoInstant) then return false end
+    local ok, _, _, _, equipLoc, _, classID = pcall(C_Item.GetItemInfoInstant, id)
+    if not ok then return false end
+    equipLoc, classID = Str(equipLoc), Num(classID)
+    if equipLoc and not NOT_WORN[equipLoc] then return true end
+    return classID == 2 or classID == 4   -- Weapon, Armor
+end
+TO.IsGear = IsGear
+
 function TO:ItemKind(id)
     if itemKinds[id] then return itemKinds[id] end
+    if IsGear(id) then
+        itemKinds[id] = { level = 0 }   -- nothing it's good for
+        return itemKinds[id]
+    end
     local text = TooltipText(id)
     if not text then return nil end   -- not loaded yet; try again next scan
     local k = { level = tonumber(text:match("requires level (%d+)")) or 0 }
@@ -943,10 +960,11 @@ function TO:UpdateAutoItems()
                 end
             end
             local cur = self.char.auto[slot.key]
-            -- A tracked item that doesn't qualify any more (like a recipe picked by an
-            -- older version) is dropped; your Min is kept for the next pick
+            -- A tracked item that doesn't qualify any more (like a recipe or a piece of
+            -- gear picked by an older version) is dropped; your Min is kept for the next pick
             local curKind = cur and itemKinds[cur.id]
-            if cur and (IsRecipeName(cur.name) or (curKind and self:AutoScore(slot.key, curKind) == nil)) then
+            if cur and (IsRecipeName(cur.name) or IsGear(cur.id)
+                or (curKind and self:AutoScore(slot.key, curKind) == nil)) then
                 if cur.min then self.char.autoMins[slot.key] = cur.min end
                 self.char.auto[slot.key] = nil
                 cur = nil

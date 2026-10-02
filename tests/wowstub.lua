@@ -283,9 +283,15 @@ C_Item = {
     GetItemNameByID = function(id) local e = itemById(id) return e and e.name end,
     GetItemIconByID = function(id) return "item:" .. tostring(id) end,
     GetItemSpell = function(id) local e = itemById(id) return e and e.spell, e and 1 end,
+    -- Bag items are consumables unless they say otherwise ({ equipLoc = "INVTYPE_HOLDABLE" });
+    -- STATE.gear[id] = equipLoc marks gear that isn't in your bags (it's equipped).
     GetItemInfoInstant = function(id)
-        if id == 900 then return id, "Weapon", "Dagger", "INVTYPE_WEAPON" end
-        return id, "Armor", "Shield", "INVTYPE_SHIELD"
+        if id == 900 then return id, "Weapon", "Dagger", "INVTYPE_WEAPON", nil, 2, 15 end
+        local e = itemById(id)
+        local loc = (e and e.equipLoc) or (STATE.gear and STATE.gear[id])
+        if loc then return id, "Armor", "Miscellaneous", loc, nil, 4, 0 end
+        if e or id ~= STATE.oh then return id, "Consumable", "Consumable", "", nil, 0, 0 end
+        return id, "Armor", "Shield", "INVTYPE_SHIELD", nil, 4, 6
     end,
 }
 NUM_BAG_SLOTS = 4

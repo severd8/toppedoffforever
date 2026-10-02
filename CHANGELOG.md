@@ -1,3 +1,7 @@
+## 1.5.10
+
+- Fixed: gear with a "drinking" or "eating" effect on use (like Skum's Bucket) could be picked as your best water, food or potion, and then asked you to carry 20 of it. Anything you can equip is never tracked now, and gear that was already tracked is dropped. Your Min is kept.
+
 ## 1.5.9
 
 - New: **combat bar**. While the reminders are hidden in combat, your healing potion, mana potion, Healthstone and bandage stay on screen in one row, in the same spot. Click to use them. Counts and the potion cooldown update during combat, and an item you run out of turns grey. On by default; turn it off with "Keep potions in combat" under "Hide in combat".
