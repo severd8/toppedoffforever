@@ -1,3 +1,8 @@
+## 1.5.12
+
+- Fixed: right after logging in, food, water, bandages and potions could all show "none in bags yet" until a `/reload`. The game hadn't finished filling in what those items do, and ToppedOff took that as final. It now looks again until the game has caught up (within a few seconds).
+- New: when you run out of your best food, water, bandage or potion, the next best one in your bags takes its place, in the reminders and on the combat bar, so there's always something to click. The better one is still what a vendor restocks, and it takes over again when you have some.
+
 ## 1.5.11
 
 - Fixed: dragging the ToppedOff window in combat printed "WoW blocked ToppedOffForeverFrame:StopMovingOrSizing()" messages in chat. WoW doesn't allow the window to be moved in combat, so a drag in combat now does nothing and says so in chat. A drag that's still going when combat starts drops the window where it is and saves that spot.

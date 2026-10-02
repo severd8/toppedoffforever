@@ -437,13 +437,34 @@ TO:SetStatFocus("sta"); refresh()
 assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Stamina focus picks the Stamina food")
 TO:SetStatFocus(nil); refresh()
 assertEq(TO.char.auto.statfood.name, "Smoked Desert Dumplings", "back to class default")
--- Run out: still tracked
+-- Run out of the best: the next best in your bags is shown and used, and the best is still what's tracked
 A = TO.char.auto
-local woolIdx
-for i, e in ipairs(STATE.bags) do if e.id == 108 then woolIdx = i end end
-table.remove(STATE.bags, woolIdx); refresh()
-assertEq(A.bandage.name, "Wool Bandage", "kept when you run out")
+local function takeOut(id)
+    for i, e in ipairs(STATE.bags) do
+        if e.id == id then return table.remove(STATE.bags, i) end
+    end
+end
+local wool = takeOut(108); refresh()
+assertEq(A.bandage.name, "Wool Bandage", "still tracked when you run out (it's what a vendor restocks)")
+R = ids()
+assertEq(R["auto:bandage"].label, "Heavy Linen Bandage", "the next best in your bags takes its place")
+assertEq(R["auto:bandage"].text, "12/20", "with its own count")
+assertEq(R["auto:bandage"].action.use, "item:107", "and a click uses it")
+assert(R["auto:bandage"].detail:find("Out of Wool Bandage", 1, true), "the tooltip says why")
+local needs = {}
+for _, n in ipairs(TO:RestockNeeds()) do needs[n.label] = n.need end
+assertEq(needs["Wool Bandage"], 20, "a vendor would still restock the better one")
+assertEq(needs["Heavy Linen Bandage"], nil, "not the stand-in")
+local linen = takeOut(107); refresh()
+assertEq(ids()["auto:bandage"].label, "Wool Bandage", "none of any kind: the tracked one")
 assertEq(ids()["auto:bandage"].text, "0/20", "shows 0 so you restock")
+assertEq(ids()["auto:bandage"].action, nil, "nothing to click")
+table.insert(STATE.bags, linen); refresh()
+assertEq(ids()["auto:bandage"].label, "Heavy Linen Bandage", "back to the next best when you pick some up")
+table.insert(STATE.bags, wool); refresh()
+assertEq(ids()["auto:bandage"].label, "Wool Bandage", "and to the best when you have it again")
+assertEq(ids()["auto:bandage"].text, "2/20", "with its count")
+takeOut(108); refresh()
 -- Level up: better food takes over, custom Min kept
 A.food.min = 40
 STATE.level = 35; refresh()
@@ -1124,6 +1145,65 @@ STATE.uncached = nil
 fire("GET_ITEM_INFO_RECEIVED", 130, true)
 tick()
 assertEq(TO.char.auto.statfood and TO.char.auto.statfood.name, "Spiced Wolf Meat", "Agility food is the fallback for Stamina")
+step("supplies are found after a fresh login, when their tooltips fill in late")
+-- Right after logging in, the game has the items but not yet the text of what
+-- they do ("Use: ..."). They mustn't be written off as nothing.
+STATE.class = "PRIEST"; STATE.level = 20; STATE.buffs = {}; STATE.uncached = nil
+TO.char.auto = {}; TO.char.custom = {}; TO.char.customAlways = true
+STATE.bags = {
+    { id = 150, name = "Lesser Healing Potion", count = 1, tip = "Requires Level 3\nUse: Restores 140 to 180 health." },
+    { id = 151, name = "Minor Healing Potion", count = 4, tip = "Use: Restores 70 to 90 health." },
+    { id = 152, name = "Lesser Mana Potion", count = 1, tip = "Requires Level 14\nUse: Restores 140 to 180 mana." },
+    { id = 153, name = "Melon Juice", count = 25, tip = "Requires Level 15\nUse: Restores 835 mana over 27 sec. Must remain seated while drinking." },
+    { id = 154, name = "Strange Dust", count = 3, tip = "Crafting Reagent" },
+}
+-- 1. The game says the use text is still loading: wait for it
+STATE.spellsLoading = { [150] = true, [151] = true, [152] = true, [153] = true }
+refresh()
+assertEq(TO.char.auto.healing, nil, "not judged while its use text is loading")
+assertEq(STATE.requestedSpells and STATE.requestedSpells[50150], true, "asked the game to load it")
+STATE.spellsLoading = nil
+FAKE_TIME = FAKE_TIME + 5; tick()   -- (nothing announces it; the bags are looked at every few seconds)
+assertEq(TO.char.auto.healing and TO.char.auto.healing.name, "Lesser Healing Potion", "found once it has loaded")
+assertEq(TO.char.auto.mana and TO.char.auto.mana.name, "Lesser Mana Potion", "mana potion too")
+assertEq(TO.char.auto.water and TO.char.auto.water.name, "Melon Juice", "and water")
+-- 2. The game says everything is loaded, but the tooltip is still missing that line
+TO.char.auto = {}
+STATE.bags[1].id, STATE.bags[2].id, STATE.bags[3].id, STATE.bags[4].id = 160, 161, 162, 163   -- (items not seen before)
+STATE.thinTooltips = { [160] = true, [161] = true, [162] = true, [163] = true }
+refresh()
+assertEq(TO.char.auto.healing, nil, "nothing to go on yet")
+STATE.thinTooltips = nil
+FAKE_TIME = FAKE_TIME + 5; tick()
+assertEq(TO.char.auto.healing and TO.char.auto.healing.name, "Lesser Healing Potion", "found once the tooltip is complete")
+assertEq(TO.char.auto.water and TO.char.auto.water.name, "Melon Juice", "water too")
+assertEq(ids()["auto:healing"].text, "1/5", "and shown")
+-- An item that really is nothing to track stops being re-read after a while
+for _ = 1, 30 do FAKE_TIME = FAKE_TIME + 5; tick() end
+STATE.tooltipReads = 0
+for _ = 1, 6 do FAKE_TIME = FAKE_TIME + 5; tick() end
+assertEq(STATE.tooltipReads, 0, "settled: no tooltip is read again")
+
+step("out of your best potion: the next best in your bags")
+STATE.bags[1].count = 0
+table.remove(STATE.bags, 1)   -- you drank the Lesser Healing Potion
+refresh()
+assertEq(TO.char.auto.healing.name, "Lesser Healing Potion", "the better potion is still the one tracked")
+assertEq(ids()["auto:healing"].label, "Minor Healing Potion", "but the one you have is shown")
+assertEq(ids()["auto:healing"].text, "4/5", "with its count")
+assertEq(ids()["auto:healing"].action.use, "item:161", "and used when you click")
+TO.db.shown = true; TO.db.hideInCombat = true; TO.db.combatBar = true; TO.db.onlyInInstance = false
+TO:ApplySettings(); refresh()
+assertEq(TO.combat.buttons[1]:GetAttribute("item"), "item:161", "the combat bar has it too")
+-- You also track Minor Healing Potion yourself: it isn't shown a second time
+TO:AddCustom("Minor Healing Potion", 5); refresh()
+local shownTimes = 0
+for _, r in ipairs(TO.reminders) do if r.label == "Minor Healing Potion" then shownTimes = shownTimes + 1 end end
+assertEq(shownTimes, 1, "no duplicate icon")
+assertEq(ids()["auto:healing"].label, "Lesser Healing Potion", "the tracked one shows as out")
+TO:RemoveCustom("Minor Healing Potion")
+TO.char.customAlways = false
+
 step("combat bar: potions, Healthstone and bandage stay in combat")
 STATE.class = "PRIEST"; STATE.level = 40; STATE.buffs = {}; STATE.uncached = nil
 TO.db.shown = true; TO.db.hideInCombat = true; TO.db.combatBar = true; TO.db.onlyInInstance = false

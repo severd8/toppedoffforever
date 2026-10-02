@@ -465,6 +465,11 @@ function TO:ScanBags()
             local id, count, icon = ContainerItem(b, s)
             if id then
                 local name = ItemName(id)
+                if not name then
+                    -- Not loaded yet (right after login): ask for it, and look again when it arrives
+                    TO.pendingItems[id] = true
+                    if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
+                end
                 if name then
                     local key = name:lower()
                     local e = bag[key]
@@ -834,9 +839,30 @@ local function TooltipText(id)
     return table.concat(lines, "\n"):lower()
 end
 
+-- An item's "Use:" line comes from a spell, which the game can load a moment
+-- after the item itself (right after logging in). False while it's still loading.
+local function UseTextLoaded(id)
+    if not (C_Item and C_Item.GetItemSpell and C_Spell and C_Spell.IsSpellDataCached) then return true end
+    local ok, _, spellID = pcall(C_Item.GetItemSpell, id)
+    spellID = ok and Num(spellID) or nil
+    if not spellID then return true end
+    local ok2, cached = pcall(C_Spell.IsSpellDataCached, spellID)
+    if ok2 and not IsSecret(cached) and cached == false then
+        if C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, spellID) end
+        return false
+    end
+    return true
+end
+
 -- What an item is good for: { food = amount, water = ..., bandage = ..., healing = ...,
 -- mana = ..., stats = { sta = 6, spi = 6 } (stat food), level = required level }
 local itemKinds = {}
+-- Items whose tooltip showed nothing to track. That can be the tooltip still
+-- filling in after login, so they're read again for a while (the bags are looked
+-- at every few seconds anyway) before it's final:
+-- unsure[id] = { first = when first read, at = when last read, k = what it said }
+local unsure = {}
+local UNSURE_FOR, UNSURE_EVERY = 120, 2
 -- Recipes, patterns and the like show the tooltip of what they make, so they'd
 -- look like food or potions. They're never tracked.
 local RECIPE_PREFIXES = { "recipe:", "pattern:", "plans:", "schematic:", "formula:", "manual:", "design:" }
@@ -877,6 +903,10 @@ function TO:ItemKind(id)
         itemKinds[id] = { level = 0 }   -- nothing it's good for
         return itemKinds[id]
     end
+    local now = GetTime()
+    local u = unsure[id]
+    if u and now - u.at < UNSURE_EVERY then return u.k end   -- read a moment ago
+    if not UseTextLoaded(id) then return nil end   -- its "Use:" line isn't there yet; try again next scan
     local text = TooltipText(id)
     if not text then return nil end   -- not loaded yet; try again next scan
     local k = { level = tonumber(text:match("requires level (%d+)")) or 0 }
@@ -917,6 +947,16 @@ function TO:ItemKind(id)
     local mLo, mHi = text:match("restores (%d+) to (%d+) mana")
     if hLo and not mLo then k.healing = (tonumber(hLo) + tonumber(hHi)) / 2 end
     if mLo and not hLo then k.mana = (tonumber(mLo) + tonumber(mHi)) / 2 end
+    if not (k.food or k.water or k.bandage or k.healing or k.mana or k.stats) then
+        -- Nothing to track, as far as this tooltip says. Look again for a while.
+        u = u or { first = now }
+        u.at, u.k = now, k
+        if now - u.first < UNSURE_FOR then
+            unsure[id] = u
+            return k
+        end
+    end
+    unsure[id] = nil
     itemKinds[id] = k
     return k
 end
@@ -945,6 +985,7 @@ function TO:UpdateAutoItems()
     local rescore = self.char.statBasis ~= basis
     self.char.statBasis = basis
     local hasMana = self.MANA_CLASSES[self:PlayerClass()]
+    self.autoInBags = {}   -- the best of each kind that's in your bags right now
     for _, slot in ipairs(self.AUTO_SLOTS) do
         if not slot.mana or hasMana then
             local best, bestScore
@@ -959,6 +1000,7 @@ function TO:UpdateAutoItems()
                     end
                 end
             end
+            self.autoInBags[slot.key] = best
             local cur = self.char.auto[slot.key]
             -- A tracked item that doesn't qualify any more (like a recipe or a piece of
             -- gear picked by an older version) is dropped; your Min is kept for the next pick
@@ -1461,6 +1503,19 @@ function TO:CheckWellFed(list)
     list[#list + 1] = r
 end
 
+-- The item to show and use for an auto-tracked slot: the tracked one while you
+-- have any, otherwise the next best of that kind in your bags. (The tracked one
+-- is still what gets restocked at a vendor.) Returns the bag entry, or nil.
+function TO:AutoItemInBags(key, own)
+    local a = self.char.auto[key]
+    if not a then return nil end
+    local e = self.bag[a.name:lower()]
+    if e and e.count > 0 then return e end
+    local alt = self.autoInBags and self.autoInBags[key]
+    if alt and alt.count > 0 and not (own and own[alt.name:lower()]) then return alt, true end
+    return nil
+end
+
 function TO:CheckAutoItems(list)
     local hasMana = self.MANA_CLASSES[self:PlayerClass()]
     local own = {}
@@ -1470,15 +1525,19 @@ function TO:CheckAutoItems(list)
         local id = "auto:" .. slot.key
         -- Skip items you've also added yourself, so they don't show twice
         if a and (not slot.mana or hasMana) and self:IsEnabled(id, true) and not own[a.name:lower()] then
-            local have, icon = self:BagCount({ a.name })
+            local e, nextBest = self:AutoItemInBags(slot.key, own)
+            local name = e and e.name or a.name
+            local have = e and e.count or 0
             local min = a.min or slot.min
             local low = have < min
             if low or self.char.customAlways then
-                local r = { id = id, label = a.name, icon = icon or ItemIcon(a.id) or self:ItemIconByName(a.name),
+                local detail = low and ("%d in your bags (want %d)"):format(have, min)
+                    or ("%d in your bags. Topped off."):format(have)
+                if nextBest then detail = detail .. "\nOut of " .. a.name .. ": this is the next best in your bags" end
+                local r = { id = id, label = name,
+                    icon = (e and e.icon) or ItemIcon(e and e.id or a.id) or self:ItemIconByName(name),
                     text = have .. "/" .. min, low = low, stocked = not low, ownItem = true,
-                    detail = (low and ("%d in your bags (want %d)"):format(have, min)
-                        or ("%d in your bags. Topped off."):format(have)) .. "\nAuto-tracked: best " .. slot.label:lower() }
-                local e = self.bag[a.name:lower()]
+                    detail = detail .. "\nAuto-tracked: best " .. slot.label:lower() }
                 if e then r.action = { use = "item:" .. e.id, useName = e.name } end
                 list[#list + 1] = r
             end
@@ -2038,8 +2097,7 @@ function TO:CombatItems()
         if slot.key == "healthstone" then
             e = self:FindBagItem("Healthstone")
         elseif not slot.mana or hasMana then
-            local a = self.char.auto[slot.key]
-            e = a and self.bag[a.name:lower()]
+            e = self:AutoItemInBags(slot.key)
         end
         if e and e.count > 0 then
             items[#items + 1] = { slot = slot, id = e.id, name = e.name, icon = e.icon, count = e.count }

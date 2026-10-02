@@ -188,7 +188,14 @@ C_TooltipInfo = { GetItemByID = function(id)
         if e.id == id then
             local lines = { { leftText = e.name } }
             if STATE.uncached and STATE.uncached[id] then return { lines = lines } end
-            for l in (e.tip or ""):gmatch("[^\n]+") do lines[#lines + 1] = { leftText = l } end
+            STATE.tooltipReads = (STATE.tooltipReads or 0) + 1
+            -- Right after login an item's "Use:" line can be missing: its spell text hasn't
+            -- loaded (STATE.spellsLoading[id]), or the tooltip just isn't complete yet
+            -- (STATE.thinTooltips[id]) while the game reports everything as loaded
+            local thin = (STATE.spellsLoading and STATE.spellsLoading[id]) or (STATE.thinTooltips and STATE.thinTooltips[id])
+            for l in (e.tip or ""):gmatch("[^\n]+") do
+                if not (thin and l:find("^Use:")) then lines[#lines + 1] = { leftText = l } end
+            end
             return { lines = lines }
         end
     end
@@ -230,6 +237,9 @@ C_SpellBook = {
     end,
 }
 C_Spell = {
+    -- STATE.spellsLoading[item ID] = true: that item's use spell hasn't loaded yet
+    IsSpellDataCached = function(spellID) return not (STATE.spellsLoading and STATE.spellsLoading[spellID - 50000]) end,
+    RequestLoadSpellData = function(spellID) STATE.requestedSpells = STATE.requestedSpells or {}; STATE.requestedSpells[spellID] = true end,
     GetSpellInfo = function(n)
         local s = SPELLS[n]
         if not s then return nil end
@@ -284,7 +294,13 @@ C_Item = {
     RequestLoadItemDataByID = function(id) STATE.requested = STATE.requested or {}; STATE.requested[id] = true end,
     GetItemNameByID = function(id) local e = itemById(id) return e and e.name end,
     GetItemIconByID = function(id) return "item:" .. tostring(id) end,
-    GetItemSpell = function(id) local e = itemById(id) return e and e.spell, e and 1 end,
+    -- An item with a "Use:" line has a spell behind it (spell ID = 50000 + item ID here)
+    GetItemSpell = function(id)
+        local e = itemById(id)
+        if not e then return nil end
+        if e.spell or (e.tip or ""):find("Use:", 1, true) then return e.spell, 50000 + id end
+        return nil
+    end,
     -- Bag items are consumables unless they say otherwise ({ equipLoc = "INVTYPE_HOLDABLE" });
     -- STATE.gear[id] = equipLoc marks gear that isn't in your bags (it's equipped).
     GetItemInfoInstant = function(id)

@@ -29,6 +29,8 @@ A reminder addon for **World of Warcraft: Forever** (interface 16001, client 1.6
 - Spells are matched by **name** from a spellbook scan (ranks share a name). Unlearned spells the modern spellbook shows (`Enum.SpellBookItemType.FutureSpell`) are skipped.
 - Weapon items match any bag item whose name *contains* the text; the highest item ID wins (usually the best rank).
 - Reagent checks only run once a spell in `requires` is learned.
+- Food, water, bandages and potions are picked by reading each bag item's tooltip (`TO:ItemKind`). Right after login a tooltip can be incomplete: the item is loaded but its "Use:" line (which comes from a spell) isn't yet. So `ItemKind` waits while the item's spell text is loading (`UseTextLoaded`), and an item whose tooltip shows nothing to track is read again every couple of seconds for two minutes (`unsure`) before that's final.
+- Each auto-tracked slot remembers one item (`char.auto[key]`, the one a vendor restocks). When you have none of it, the reminder and the combat bar use the next best of that kind in your bags instead (`TO:AutoItemInBags`).
 
 ## WoW Forever rules the code must follow
 
