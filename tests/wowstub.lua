@@ -227,12 +227,15 @@ SPELLS = {}
 local nextSpell = 1000
 local function spell(name) if not SPELLS[name] then nextSpell = nextSpell + 1 SPELLS[name] = { id = nextSpell, icon = "icon:" .. name } end return SPELLS[name] end
 SPELLBOOK, FUTURE = {}, {}
+PASSIVE = {}   -- PASSIVE["Omen of Clarity"] = true: in your spellbook, but passive
 function LEARN(...) for _, n in ipairs({ ... }) do spell(n) table.insert(SPELLBOOK, n) end end
 C_SpellBook = {
     GetNumSpellBookSkillLines = function() return 1 end,
     GetSpellBookSkillLineInfo = function(i) return { itemIndexOffset = 0, numSpellBookItems = #SPELLBOOK + #FUTURE } end,
     GetSpellBookItemInfo = function(j)
-        if j <= #SPELLBOOK then return { name = maybeSecret(SPELLBOOK[j]), itemType = 1 } end
+        if j <= #SPELLBOOK then
+            return { name = maybeSecret(SPELLBOOK[j]), itemType = 1, isPassive = PASSIVE[SPELLBOOK[j]] == true }
+        end
         return { name = FUTURE[j - #SPELLBOOK], itemType = 2 }
     end,
 }

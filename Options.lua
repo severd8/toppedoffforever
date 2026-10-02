@@ -310,7 +310,8 @@ local function BuildBuffsTab(self, ctx, class)
         ctx.header("Your buffs")
         for _, buff in ipairs(buffs) do
             local known = self:KnownOptions(buff.cast)
-            if not (buff.racial and #known == 0) then   -- racial buffs only for races that have them
+            -- Racial buffs only for races that have them; a passive spell needs no check at all
+            if not ((buff.racial or self:AllPassive(buff.cast)) and #known == 0) then
                 local cb = ctx.toggle("buff:" .. buff.id, buff.label, not buff.off)
                 if #known == 0 then
                     NotLearned(cb, buff.label)

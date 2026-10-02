@@ -27,6 +27,7 @@ A reminder addon for **World of Warcraft: Forever** (interface 16001, client 1.6
 - `TO:Update()` runs out of combat only: scans buffs (`C_UnitAuras.GetAuraDataByIndex`), bags (`C_Container`), weapon enchants (`GetWeaponEnchantInfo`), ammo and durability, builds a list of reminders and lays out the icons.
 - Events only mark the list dirty (`TO:RequestUpdate()`); a 1-second ticker refreshes when dirty, and every 5 seconds anyway for countdowns.
 - Spells are matched by **name** from a spellbook scan (ranks share a name). Unlearned spells the modern spellbook shows (`Enum.SpellBookItemType.FutureSpell`) are skipped.
+- **Passive spells** (`isPassive` in the spellbook; Omen of Clarity on Forever) can't be cast, so `TO:KnownOptions` leaves them out: no buff reminder, and no row in the options (`TO:AllPassive`). `TO:Knows` still counts them, because a passive can need a reagent (Reincarnation and Ankhs).
 - Weapon items match any bag item whose name *contains* the text; the highest item ID wins (usually the best rank).
 - Reagent checks only run once a spell in `requires` is learned.
 - Food, water, bandages and potions are picked by reading each bag item's tooltip (`TO:ItemKind`). Right after login a tooltip can be incomplete: the item is loaded but its "Use:" line (which comes from a spell) isn't yet. So `ItemKind` waits while the item's spell text is loading (`UseTextLoaded`), and an item whose tooltip shows nothing to track is read again every couple of seconds for two minutes (`unsure`) before that's final.

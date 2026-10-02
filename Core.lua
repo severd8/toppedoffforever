@@ -298,6 +298,7 @@ end
 -- works no matter which rank you have.
 function TO:ScanSpellbook()
     local known = {}
+    local passive, castable = {}, {}
     local sb = C_SpellBook
     if sb and sb.GetNumSpellBookSkillLines and sb.GetSpellBookSkillLineInfo and sb.GetSpellBookItemInfo then
         local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
@@ -313,13 +314,44 @@ function TO:ScanSpellbook()
                     if type(info) == "table" then
                         local name = Str(info.name)
                         local isFuture = future ~= nil and info.itemType == future
-                        if name and not isFuture then known[name:lower()] = true end
+                        if name and not isFuture then
+                            local key = name:lower()
+                            known[key] = true
+                            -- A passive spell is always on: there's nothing to cast or keep up
+                            local isPassive = info.isPassive
+                            if not IsSecret(isPassive) and isPassive == true then
+                                passive[key] = true
+                            else
+                                castable[key] = true
+                            end
+                        end
                     end
                 end
             end
         end
     end
+    for key in pairs(castable) do passive[key] = nil end   -- ranks share a name
     self.known = known
+    self.passive = passive
+end
+
+-- True for a spell you have that's passive (always on, nothing to cast). On
+-- Forever some classic buffs are: Omen of Clarity, for one.
+function TO:IsPassive(name)
+    if not name or name == "" then return false end
+    return self.passive ~= nil and self.passive[name:lower()] == true
+end
+
+-- True if every spell in the list that you have is passive (and you have one)
+function TO:AllPassive(list)
+    local any = false
+    for _, name in ipairs(list or {}) do
+        if self:Knows(name) then
+            if not self:IsPassive(name) then return false end
+            any = true
+        end
+    end
+    return any
 end
 
 function TO:Knows(name)
@@ -344,10 +376,11 @@ function TO:FirstKnown(list)
     return nil
 end
 
+-- The spells in the list that you can cast (learned, and not passive)
 function TO:KnownOptions(list)
     local out = {}
     for _, name in ipairs(list or {}) do
-        if self:Knows(name) then out[#out + 1] = name end
+        if self:Knows(name) and not self:IsPassive(name) then out[#out + 1] = name end
     end
     return out
 end
@@ -2575,6 +2608,8 @@ function TO:Check()
         local on = self:IsEnabled("buff:" .. buff.id, not buff.off)
         if spell then
             print("  " .. Colored(true, buff.label .. ": " .. spell) .. (on and "" or " (off)"))
+        elseif self:AllPassive(buff.cast) then
+            print("  " .. Colored(true, buff.label .. ": passive, always on (nothing to cast)"))
         else
             print("  " .. Colored(false, buff.label .. ": not learned yet (" .. table.concat(buff.cast, ", ") .. ")"))
         end

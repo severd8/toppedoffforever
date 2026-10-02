@@ -1,3 +1,7 @@
+## 1.5.13
+
+- Passive spells are no longer checked. On WoW: Forever, Omen of Clarity is passive (always on, nothing to cast), so the reminder to cast it is gone, and so is its row in the options. This applies to any class buff the game marks as passive.
+
 ## 1.5.12
 
 - Fixed: right after logging in, food, water, bandages and potions could all show "none in bags yet" until a `/reload`. The game hadn't finished filling in what those items do, and ToppedOff took that as final. It now looks again until the game has caught up (within a few seconds).

@@ -1061,6 +1061,42 @@ assertEq(ids()["auto:statfood"], nil, "no stat food icon")
 TO:SetStatFocus(nil); refresh()
 assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Automatic falls back to any stat food")
 STATE.bags = {}; STATE.level = nil; TO.char.auto = {}
+step("passive spells need no reminder")
+-- On Forever, Omen of Clarity is a passive: it's in the spellbook, always on, and can't be cast
+STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}
+TO.char.checks = {}; STATE.buffs = {}
+LEARN("Mark of the Wild", "Omen of Clarity")
+fire("SPELLS_CHANGED"); refresh()
+assert(ids()["buff:omen"], "castable Omen of Clarity (the classic one): reminded when it's missing")
+assert(ids()["buff:mark"] or ids()["buff:motw"] or ids()["buff:wild"], "Mark of the Wild reminder")
+PASSIVE["Omen of Clarity"] = true
+fire("SPELLS_CHANGED"); refresh()
+assertEq(ids()["buff:omen"], nil, "passive Omen of Clarity: no reminder")
+assertEq(TO:Knows("Omen of Clarity"), true, "it's still a spell you have")
+local markStill = false
+for id in pairs(ids()) do if id:find("^buff:") then markStill = true end end
+assert(markStill, "the castable buffs are still checked")
+SlashCmdList.TOPPEDOFFFOREVER("check")
+assert(lastLog("Omen of Clarity: passive, always on"), "/topoff check says it's passive, not \"not learned\"")
+local function optionsRow(text)
+    for _, f in ipairs(ALL_FRAMES) do
+        if f.__kind == "CheckButton" and f:IsVisible() and f.label and f.label:GetText() and f.label:GetText():find(text, 1, true) then
+            return f
+        end
+    end
+end
+TO:OpenConfig(); TO:ShowOptionsTab("buffs")
+assert(optionsRow("Mark of the Wild"), "the options list your castable buffs")
+assertEq(optionsRow("Omen of Clarity"), nil, "and leave out the passive one")
+TO:OpenConfig()
+-- A passive that needs a reagent still gets its reagent check (Reincarnation and Ankhs)
+STATE.class = "SHAMAN"; SPELLBOOK, FUTURE = {}, {}
+TO.char.checks = {}; STATE.bags = {}
+LEARN("Reincarnation"); PASSIVE["Reincarnation"] = true
+fire("SPELLS_CHANGED"); refresh()
+assertEq(ids()["reagent:ankh"] and ids()["reagent:ankh"].text, "0/1", "passive Reincarnation still needs an Ankh")
+PASSIVE = {}; SPELLBOOK, FUTURE = {}, {}; STATE.class = "DRUID"; TO.char.checks = {}
+fire("SPELLS_CHANGED"); refresh()
 step("moving the window and combat")
 local dragHeader
 for _, f in ipairs(ALL_FRAMES) do
