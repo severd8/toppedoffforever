@@ -1,6 +1,7 @@
 ## 1.5.10
 
 - Fixed: gear with a "drinking" or "eating" effect on use (like Skum's Bucket) could be picked as your best water, food or potion, and then asked you to carry 20 of it. Anything you can equip is never tracked now, and gear that was already tracked is dropped. Your Min is kept.
+- Fixed: dragging the ToppedOff window in combat printed "WoW blocked ToppedOffForeverFrame:StopMovingOrSizing()" messages in chat. WoW doesn't allow the window to be moved in combat, so a drag in combat now does nothing and says so once. A drag that's still going when combat starts drops the window where it is and saves that spot.
 
 ## 1.5.9
 

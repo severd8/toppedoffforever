@@ -21,7 +21,8 @@ function issecretvalue(v) return type(v) == "table" and getmetatable(v) == Secre
 local function maybeSecret(v) if SECRET_MODE then return secret(v) end return v end
 
 local PROTECTED_WHEN_COMBAT = { SetPoint = true, ClearAllPoints = true, SetSize = true, SetWidth = true,
-    SetHeight = true, SetAttribute = true, Show = true, Hide = true, SetShown = true, SetScale = true }
+    SetHeight = true, SetAttribute = true, Show = true, Hide = true, SetShown = true, SetScale = true,
+    StartMoving = true, StopMovingOrSizing = true }
 
 local ObjMT = {}
 local Methods = {}
@@ -124,7 +125,8 @@ function Methods:GetFontString() return nil end
 function Methods:SetEnabled(v) self.__enabled = v end
 function Methods:SetDesaturated(v) self.__desat = v end
 function Methods:SetTexture(t) self.__texture = t end
-function Methods:StartMoving() end
+function Methods:StartMoving() protectedCheck(self, "StartMoving") self.__moving = true end
+function Methods:StopMovingOrSizing() protectedCheck(self, "StopMovingOrSizing") self.__moving = false end
 
 function CreateFrame(kind, name, parent, template) return newObj(kind, name, parent, template) end
 UIParent = newObj("Frame", "UIParent")

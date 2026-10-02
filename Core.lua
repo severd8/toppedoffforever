@@ -2192,6 +2192,19 @@ function TO:SavePosition()
     self.db.point = { p, rp, x, y }
 end
 
+-- Ends a drag of the window and saves where it is. WoW doesn't let the window be
+-- moved in combat, so nothing happens unless a drag really started, and a drag
+-- still going when combat starts is ended right then (see PLAYER_REGEN_DISABLED).
+function TO:StopMoving()
+    if not self.moving then return end
+    self:RunOutOfCombat(function()
+        if not TO.moving then return end
+        TO.moving = false
+        TO.main:StopMovingOrSizing()
+        TO:SavePosition()
+    end)
+end
+
 function TO:RestorePosition()
     local pt = self.db.point
     self.main:ClearAllPoints()
@@ -2318,13 +2331,15 @@ function TO:BuildFrames()
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
-        if TO.db.locked or InCombatLockdown() then return end
+        if TO.db.locked then return end
+        if InCombatLockdown() then
+            Print("The window can't be moved in combat.")
+            return
+        end
+        TO.moving = true
         main:StartMoving()
     end)
-    header:SetScript("OnDragStop", function()
-        main:StopMovingOrSizing()
-        TO:SavePosition()
-    end)
+    header:SetScript("OnDragStop", function() TO:StopMoving() end)
     header:SetScript("OnMouseUp", function(self, button)
         if button == "RightButton" then TO:ShowHeaderMenu(self) end
     end)
@@ -2663,6 +2678,8 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
     elseif not TO.built then
         return
     elseif event == "PLAYER_REGEN_DISABLED" or event == "BAG_UPDATE_COOLDOWN" then
+        -- Combat is about to start: drop the window where it is while that's still allowed
+        if event == "PLAYER_REGEN_DISABLED" then TO:StopMoving() end
         TO:UpdateCombatCounts()
     elseif event == "BAG_UPDATE_DELAYED" and InCombatLockdown() then
         TO:UpdateCombatCounts()

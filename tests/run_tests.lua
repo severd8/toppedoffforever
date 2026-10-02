@@ -1040,6 +1040,43 @@ assertEq(ids()["auto:statfood"], nil, "no stat food icon")
 TO:SetStatFocus(nil); refresh()
 assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Automatic falls back to any stat food")
 STATE.bags = {}; STATE.level = nil; TO.char.auto = {}
+step("moving the window and combat")
+local dragHeader
+for _, f in ipairs(ALL_FRAMES) do
+    if f.__scripts.OnMouseUp and f.__scripts.OnDragStart and f.__parent == TO.box then dragHeader = f end
+end
+assert(dragHeader, "header found")
+TO.db.locked = false
+-- Out of combat: a drag moves the window and saves where it ends up
+TO.main.__left, TO.main.__top = 300, 400
+dragHeader.__scripts.OnDragStart(dragHeader)
+assertEq(TO.main.__moving, true, "drag starts out of combat")
+dragHeader.__scripts.OnDragStop(dragHeader)
+assertEq(TO.main.__moving, false, "drag ends")
+assertEq(TO.db.point[3], 300, "position saved")
+-- In combat: dragging touches nothing protected, and says why
+COMBAT = true; BLOCKED = {}
+dragHeader.__scripts.OnDragStart(dragHeader)
+assert(LOG[#LOG]:find("can't be moved in combat"), "says why it won't move")
+dragHeader.__scripts.OnDragStop(dragHeader)
+assertEq(#BLOCKED, 0, "dragging in combat touched protected things: " .. table.concat(BLOCKED, ", "))
+assertEq(TO.main.__moving, false, "no drag in combat")
+COMBAT = false; fire("PLAYER_REGEN_ENABLED"); tick()
+-- Combat starts in the middle of a drag: the window is dropped and saved before lockdown
+TO.main.__left, TO.main.__top = 500, 600
+dragHeader.__scripts.OnDragStart(dragHeader)
+fire("PLAYER_REGEN_DISABLED")
+assertEq(TO.main.__moving, false, "drag ended as combat starts")
+assertEq(TO.db.point[3], 500, "position saved as combat starts")
+COMBAT = true; BLOCKED = {}
+dragHeader.__scripts.OnDragStop(dragHeader)
+assertEq(#BLOCKED, 0, "releasing the mouse in combat touched protected things: " .. table.concat(BLOCKED, ", "))
+-- Locked: no drag
+COMBAT = false; fire("PLAYER_REGEN_ENABLED"); tick()
+TO.db.locked = true
+dragHeader.__scripts.OnDragStart(dragHeader)
+assertEq(TO.main.__moving, false, "locked window doesn't move")
+TO.db.locked = false; TO.main.__left, TO.main.__top = nil, nil
 step("blocked-action report")
 local mark = #LOG
 fire("ADDON_ACTION_FORBIDDEN", "ToppedOffForever", "UseContainerItem()")
