@@ -844,6 +844,12 @@ STATE.merchant = {
 }
 STATE.repairCost = 12345
 BOUGHT = {}; REPAIRED = false
+-- What the vendor sells for gold; things you can't buy (or that cost something else) are left out
+STATE.merchant[5] = { name = "Locked Thing", price = 1, purchasable = false }
+local sold = {}
+for _, m in ipairs(TO:MerchantItems()) do sold[#sold + 1] = m.index .. ":" .. m.name .. ":" .. m.price .. ":" .. m.stack end
+assertEq(table.concat(sold, " "), "1:Sacred Candle:500:1 2:Light Feather:10:1 3:Morning Glory Dew:400:5", "vendor items read")
+STATE.merchant[5] = nil
 fire("MERCHANT_SHOW")
 local vp = TO.vendor
 assert(vp and vp.__shown, "restock panel shown")
@@ -1288,4 +1294,263 @@ TO.db.combatBar = true; TO.db.hideInCombat = false; TO:ApplySettings(); refresh(
 assertEq(CB.__driver, "hide", "not needed when the reminders stay in combat")
 TO.db.hideInCombat = true; STATE.bags = {}; TO:ApplySettings(); refresh()
 assertEq(CB.__driver, "hide", "nothing to show")
+step("settings changed in combat are applied once")
+STATE.class = "WARRIOR"; TO.char.auto = {}; TO.db.combatBar = true; TO.db.hideInCombat = true; refresh()
+COMBAT = true; BLOCKED = {}; fire("PLAYER_REGEN_DISABLED")
+local updates, realUpdate = 0, TO.Update
+TO.Update = function(...) updates = updates + 1 return realUpdate(...) end
+for _ = 1, 25 do TO:ApplySettings() end
+SlashCmdList.TOPPEDOFFFOREVER("reset")
+assert(lastLog("position will reset when combat ends"), "/topoff reset in combat says it waits")
+assertEq(updates, 0, "nothing is redrawn in combat")
+assertEq(#TO.pending.keys, 3, "one waiting job per kind of change, not one per change")
+assertEq(#BLOCKED, 0, "no protected calls in combat: " .. table.concat(BLOCKED, ", "))
+COMBAT = false; fire("PLAYER_REGEN_ENABLED")
+assertEq(updates, 1, "and redrawn once when combat ends")
+assertEq(TO.pending, nil, "nothing left waiting")
+TO.Update = realUpdate
+-- Jobs run in the order they were first asked for (the frames are built before anything is done to them)
+COMBAT = true
+local ran = {}
+TO:RunOutOfCombat("first", function() ran[#ran + 1] = "first, as asked the first time" end)
+TO:RunOutOfCombat("second", function() ran[#ran + 1] = "second" end)
+TO:RunOutOfCombat("first", function() ran[#ran + 1] = "first" end)
+COMBAT = false; TO:FlushPending()
+assertEq(table.concat(ran, ", "), "first, second", "the latest request of each kind, in the order first asked")
+SlashCmdList.TOPPEDOFFFOREVER("reset")
+assert(lastLog("position reset."), "out of combat it resets right away")
+
+step("each group member's buffs are read once per check")
+STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Mark of the Wild", "Thorns"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.bags = {}; STATE.party = { "party1", "party2" }
+STATE.partyClass = {}; STATE.partyBuffs = { party1 = { ["Mark of the Wild"] = 900 }, party2 = { ["Thorns"] = 500 } }
+STATE.buffs = { ["Mark of the Wild"] = 1800, ["Thorns"] = 500 }
+local reads, realAura = {}, C_UnitAuras.GetAuraDataByIndex
+C_UnitAuras.GetAuraDataByIndex = function(unit, i, ...)
+    if i == 1 then reads[unit] = (reads[unit] or 0) + 1 end
+    return realAura(unit, i, ...)
+end
+refresh()
+assertEq(ids()["party:thorns"] and ids()["party:thorns"].text, "1", "two party buff checks ran")
+assertEq(ids()["party:motw"] and ids()["party:motw"].text, "1", "(Mark of the Wild too)")
+assertEq(reads.party1, 1, "party1's buffs read once for both checks")
+assertEq(reads.party2, 1, "party2's buffs read once for both checks")
+assertEq(TO.unitBuffs, nil, "and not kept for the next check")
+STATE.partyBuffs.party2["Mark of the Wild"] = 900
+refresh()
+assertEq(ids()["party:motw"], nil, "the next check reads them afresh")
+-- A member whose buffs the game hides is looked at once too, and not guessed at
+STATE.hiddenAuras = { party1 = true }; reads = {}
+refresh()
+assertEq(reads.party1, 1, "hidden buffs: one look")
+assertEq(ids()["party:thorns"], nil, "hidden buffs: no guessing")
+STATE.hiddenAuras = {}
+-- Offline, dead or out of sight: can't be buffed now, so not counted
+STATE.partyBuffs = { party1 = {}, party2 = {} }
+refresh()
+assertEq(ids()["party:motw"].text, "2", "both in reach: both counted")
+for _, why in ipairs({ "offline", "dead", "unseen" }) do
+    STATE[why] = { party1 = true }
+    refresh()
+    assertEq(ids()["party:motw"].text, "1", why .. ": not counted")
+    assertEq(ids()["party:motw"].action.unit, "party2", why .. ": the click goes to the other one")
+    STATE[why] = {}
+end
+C_UnitAuras.GetAuraDataByIndex = realAura; STATE.party = {}; STATE.partyBuffs = {}
+
+step("a buff that doesn't run out counts, whichever aura is found first")
+STATE.class = "WARRIOR"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.char.wellFedInstanceOnly = false; TO.db.warnMinutes = 5
+STATE.buffs = { ["Well Fed"] = 0 }
+refresh()
+assertEq(ids()["wellfed"], nil, "a Well Fed that never expires is not 'running out'")
+STATE.buffs = { ["Well Fed"] = 60 }
+refresh()
+assert(ids()["wellfed"], "one minute left is")
+TO.char.elixirs = { { name = "Elixir of Fortitude", auras = { "Health", "Health II" } } }; TO.char.elixirInstanceOnly = false
+for _, both in ipairs({ { 0, 60 }, { 60, 0 } }) do
+    STATE.buffs = { ["Health"] = both[1], ["Health II"] = both[2], ["Well Fed"] = 0 }
+    refresh()
+    assertEq(ids()["elixir:elixir of fortitude"], nil, "elixir aura that never expires, found " .. (both[1] == 0 and "first" or "last"))
+end
+STATE.buffs = {}; TO.char.wellFedInstanceOnly = true; TO.char.elixirs = {}; TO.char.elixirInstanceOnly = true
+
+step("a refused read doesn't break the ready check reminder")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}; LEARN("Power Word: Fortitude"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.buffs = {}; refresh()
+assert(ids()["buff:fortitude"], "Fortitude is missing")
+local realBuild = TO.BuildReminders
+TO.BuildReminders = function() error("Auras cannot be accessed") end
+local okRemind, errRemind = pcall(TO.Remind, TO, "Ready check")
+TO.BuildReminders = realBuild
+assert(okRemind, "Remind must not throw: " .. tostring(errRemind))
+assert(lastLog("Ready check — missing: .*Fortitude"), "and it reports the last check instead")
+
+step("buffs hidden from the first look: no error and no guessing")
+local lastList, lastBuffs, hiddenErrors = TO.reminders, TO.buffs, 0
+TO.buffs, TO.errorsSeen = nil, nil
+geterrorhandler = function() return function() hiddenErrors = hiddenErrors + 1 end end
+STATE.aurasLocked = true
+refresh()
+assertEq(hiddenErrors, 0, "no error when your buffs have never been readable")
+assertEq(TO.reminders, lastList, "the reminders are left as they were")
+STATE.aurasLocked = false; geterrorhandler = nil
+refresh()
+assert(TO.buffs and TO.reminders ~= lastList, "and checked again once the game shows them")
+
+step("option tooltips")
+STATE.class = "PALADIN"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Blessing of Might", "Blessing of Wisdom", "Seal of Righteousness", "Seal of the Crusader"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.char.splitProfiles = false; MenuUtil = nil
+STATE.bags = {}; TO.char.auto = {}; refresh()
+TO:AddCustom("Healing Potion", 3)
+if not (TO.config and TO.config:IsShown()) then TO:OpenConfig() end
+local tipLines
+rawset(GameTooltip, "AddLine", function(_, text, r, g, b, wrap)
+    tipLines[#tipLines + 1] = text .. (r and (" [" .. r .. g .. b .. (wrap and " wrap" or "") .. "]") or "")
+end)
+local function hover(kind, text)   -- every tooltip of the visible widgets with this text ("" = any), top to bottom
+    local found, shown = {}, nil
+    for _, w in ipairs(TO.config.checks.__children) do
+        local label = w.label and w.label:GetText() or w.__text or ""
+        if w.__kind == kind and w:IsVisible() and (w.__template ~= "UIPanelButtonTemplate" or text ~= "")
+            and label:find(text, 1, true) then
+            if w.__scripts.OnEnter == TEMPLATE_HOVER then
+                found[#found + 1] = { y = w.__pos[2], tip = "the button's own" }
+            else
+                tipLines = {}
+                GameTooltip.__shown = false
+                if w.__scripts.OnEnter then w.__scripts.OnEnter(w) end
+                shown = GameTooltip.__shown
+                if w.__scripts.OnLeave then w.__scripts.OnLeave(w) end
+                assertEq(GameTooltip.__shown, false, text .. ": tooltip hidden when the mouse leaves")
+                found[#found + 1] = { y = w.__pos[2], tip = table.concat(tipLines, " / ") }
+            end
+        end
+    end
+    table.sort(found, function(x, y) return x.y > y.y end)
+    for i, f in ipairs(found) do found[i] = f.tip end
+    return table.concat(found, " || "), shown
+end
+TO:ShowOptionsTab("supplies")
+local tipText, tipShown = hover("CheckButton", "Always show these")
+assertEq(tipText:find("Always show these, as a quick-use bar / Show your food, water, potions and items ", 1, true), 1, "checkbox: title, then the tip")
+assert(tipText:find("%[111 wrap%]$"), "the tip is white and wraps")
+assertEq(tipShown, true, "and the tooltip is shown")
+assertEq(hover("CheckButton", "Healing Potion"), "", "a checkbox without a tip has no tooltip")
+assertEq(hover("Button", ""), "Remove", "the X says what it does")
+assertEq(hover("Button", ": "):find("Stat food / Automatic picks food for your role, and falls back to any stat food. Pick a stat", 1, true), 1,
+    "stat food button: title and explanation")
+assertEq(hover("Button", "Add"), "the button's own", "plain buttons keep the game's hover")
+TO:ShowOptionsTab("buffs")
+assertEq(hover("Button", "Blessing of Might"):find("Click to choose which spell to cast || Blessing to give Warriors in your party [111 wrap] || Blessing to give ", 1, true), 1,
+    "a spell choice button, then the list buttons, which show only their tip")
+rawset(GameTooltip, "AddLine", nil)
+TO:RemoveCustom("Healing Potion"); TO:OpenConfig()
+
+step("the options list reuses its rows")
+if TO.config and TO.config:IsShown() then TO:OpenConfig() end
+MenuUtil = nil
+-- Everything a row shows or does, for every visible widget in the list
+local function listState()
+    local function text(fs)
+        local width = fs.__width ~= 0 and fs.__width or nil   -- 0 = as wide as its text, like one never set
+        return table.concat({ tostring(fs.__text), tostring(width), tostring(fs.__justify), tostring(fs.__wrap),
+            fs.__tcolor and table.concat(fs.__tcolor, "/") or "-" }, " ")
+    end
+    local out = {}
+    for _, w in ipairs(TO.config.checks.__children) do
+        if w.label then w.label.__owner = w end
+    end
+    for _, w in ipairs(TO.config.checks.__children) do
+        if w.__owner then   -- a checkbox's label is listed with its checkbox
+            if w:IsVisible() and not w.__owner:IsVisible() then out[#out + 1] = "LABEL LEFT BEHIND " .. tostring(w.__text) end
+        elseif w:IsVisible() then
+            local scripts = {}
+            for k, fn in pairs(w.__scripts) do scripts[#scripts + 1] = k .. (fn == TEMPLATE_HOVER and "=template" or "") end
+            table.sort(scripts)
+            out[#out + 1] = table.concat({ w.__kind, tostring(w.__template), tostring(w.__point),
+                w.__pos and table.concat(w.__pos, ",") or "-", w.__size and table.concat(w.__size, "x") or "-",
+                tostring(w.__checked), tostring(w.__numeric), w.__kind == "FontString" and text(w) or tostring(w.__text),
+                w.label and (w.label:IsVisible() and text(w.label) or "LABEL HIDDEN") or "", table.concat(scripts, ",") }, " | ")
+        end
+    end
+    table.sort(out)
+    return table.concat(out, "\n")
+end
+local function freshList(tab)   -- a list with nothing to reuse, as every build used to be
+    if TO.config.checks then
+        TO.config.checks:Hide()
+        TO.config.checks = nil
+    end
+    TO:ShowOptionsTab(tab)
+    return listState()
+end
+TO:OpenConfig()
+TO:AddCustom("Healing Potion", 3)
+for _, class in ipairs({ "PALADIN", "HUNTER", "MAGE", "WARLOCK", "ROGUE", "DRUID" }) do
+    STATE.class = class
+    for _, split in ipairs({ false, true }) do
+        TO.char.splitProfiles = split
+        for _, t in ipairs(TO.OPTION_TABS) do
+            local fresh = freshList(t.key)
+            -- Then a list whose rows were all made for other tabs
+            local first = true
+            for _, other in ipairs(TO.OPTION_TABS) do
+                if other.key ~= t.key then
+                    if first then freshList(other.key) else TO:ShowOptionsTab(other.key) end
+                    first = false
+                end
+            end
+            TO.char.splitProfiles = not split; TO:ShowOptionsTab("buffs"); TO.char.splitProfiles = split
+            TO:ShowOptionsTab(t.key)
+            local reused = listState()
+            if reused ~= fresh then   -- say which rows differ
+                local seen, diff = {}, {}
+                for line in fresh:gmatch("[^\n]+") do seen[line] = (seen[line] or 0) + 1 end
+                for line in reused:gmatch("[^\n]+") do
+                    if (seen[line] or 0) > 0 then seen[line] = seen[line] - 1 else diff[#diff + 1] = "reused: " .. line end
+                end
+                for line, n in pairs(seen) do for _ = 1, n do diff[#diff + 1] = "new:    " .. line end end
+                error(class .. " " .. t.key .. (split and " (split)" or "") .. ": reused rows differ from new ones\n"
+                    .. table.concat(diff, "\n"))
+            end
+        end
+    end
+end
+TO.char.splitProfiles = false
+local frames = #ALL_FRAMES
+for _ = 1, 3 do
+    for _, t in ipairs(TO.OPTION_TABS) do TO:ShowOptionsTab(t.key) end
+    TO:OpenConfig(); TO:OpenConfig()
+end
+assertEq(#ALL_FRAMES, frames, "opening the window and switching tabs makes no new frames")
+TO:RemoveCustom("Healing Potion"); TO:OpenConfig()
+
+step("a damaged settings file falls back to defaults")
+local savedDB, savedChar = ToppedOffForeverDB, ToppedOffForeverCharDB
+ToppedOffForeverDB = "oops"
+ToppedOffForeverCharDB = { checks = 7, customAlways = "yes", prefs = "x", elixirs = { 5, { name = "Elixir of the Mongoose" }, { name = false } },
+    auto = { food = 3, water = { name = "Spring Water", min = 4 } },
+    custom = { "junk", { name = 5, min = 2 }, { name = "Sacred Candle", min = "7" }, { name = "Rune of Portals" } } }
+fire("ADDON_LOADED", ADDON)
+assertEq(type(TO.db), "table", "a settings file that isn't a table is replaced")
+assertEq(TO.db.iconSize, 40, "with the defaults")
+assertEq(type(TO.char.checks), "table", "a wrong-typed table is replaced")
+assertEq(TO.char.customAlways, true, "a wrong-typed setting gets its default")
+assertEq(type(TO.char.prefs), "table", "(every one of them)")
+assertEq(#TO.char.elixirs, 1, "elixirs that can't be used are dropped")
+assertEq(TO.char.elixirs[1].name, "Elixir of the Mongoose", "and the good one kept")
+assertEq(#TO.char.custom, 2, "list entries that can't be used are dropped")
+assertEq(TO.char.custom[1].name .. " " .. TO.char.custom[1].min, "Sacred Candle 7", "a Min saved as text is read as a number")
+assertEq(TO.char.custom[2].min, 20, "a missing Min gets the Add box's default")
+assertEq(TO.char.auto.food, nil, "a damaged auto-tracked item is dropped")
+assertEq(TO.char.auto.water.name, "Spring Water", "good ones are kept")
+STATE.class = "PRIEST"; STATE.bags = {}
+refresh()   -- and the checks run on what's left
+assertEq(ids()["custom:sacred candle"] and ids()["custom:sacred candle"].text, "0/7", "the repaired item is checked")
+ToppedOffForeverDB, ToppedOffForeverCharDB = savedDB, savedChar
+fire("ADDON_LOADED", ADDON)
+refresh()
 print("ALL TESTS PASSED")

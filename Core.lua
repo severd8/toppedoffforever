@@ -19,7 +19,7 @@ TO.COLORS = {
     expiring  = { 1.00, 0.55, 0.00 },   -- #ff8c00 buff running out
     urgent    = { 1.00, 0.13, 0.13 },   -- #ff2121 buff almost gone
 }
-TO.GOLD_HEX, TO.CYAN_HEX = "ffd966", "28b6e8"
+TO.GOLD_HEX = "ffd966"
 local PREFIX = "|cffffd966ToppedOff|r: "
 local function Print(msg) print((TO.LOGO_TEXT or "") .. " " .. PREFIX .. msg) end
 TO.Print = Print
@@ -29,7 +29,6 @@ TO.Print = Print
 local function IsSecret(v)
     return issecretvalue ~= nil and issecretvalue(v)
 end
-TO.IsSecret = IsSecret
 
 -- A plain number, or nil if the value is missing, secret or not a number.
 local function Num(v)
@@ -42,6 +41,13 @@ local function Str(v)
     if IsSecret(v) or type(v) ~= "string" then return nil end
     return v
 end
+
+-- A value the game let us read, or nil when it's hidden (secret)
+local function Plain(v)
+    if IsSecret(v) then return nil end
+    return v
+end
+TO.IsSecretValue, TO.Num = IsSecret, Num   -- for Vendor.lua
 
 ---------------------------------------------------------------------------
 -- What gets checked
@@ -230,19 +236,23 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     repairAtVendor = true,    -- repair button at vendors
 }
 
+-- Fills in missing settings. A saved value of the wrong type (a damaged or
+-- hand-edited settings file) is replaced by its default.
 local function FillDefaults(dst, src)
     for k, v in pairs(src) do
-        if dst[k] == nil then
-            if type(v) == "table" then
-                dst[k] = {}
-                FillDefaults(dst[k], v)
-            else
-                dst[k] = v
-            end
+        if type(dst[k]) ~= type(v) then
+            dst[k] = type(v) == "table" and {} or v
         end
+        if type(v) == "table" then FillDefaults(dst[k], v) end
     end
 end
-TO.DEFAULTS = DEFAULTS
+
+-- Removes list entries that aren't what the code expects (same reason)
+local function KeepValid(list, valid)
+    for i = #list, 1, -1 do
+        if type(list[i]) ~= "table" or not valid(list[i]) then table.remove(list, i) end
+    end
+end
 
 function TO:PlayerClass()
     local _, class = UnitClass("player")
@@ -272,23 +282,27 @@ function TO:SetEnabled(id, on, outside)
 end
 
 ---------------------------------------------------------------------------
--- Combat-safe queue: secure buttons can't be changed in combat
+-- Combat-safe queue: secure buttons can't be changed in combat. Work queued
+-- under the same key replaces the earlier request, so it runs once when the
+-- fight ends.
 ---------------------------------------------------------------------------
-function TO:RunOutOfCombat(fn)
-    if InCombatLockdown() then
-        self.pending = self.pending or {}
-        table.insert(self.pending, fn)
-        return false
+function TO:RunOutOfCombat(key, fn)
+    if not InCombatLockdown() then
+        fn()
+        return true
     end
-    fn()
-    return true
+    self.pending = self.pending or { keys = {}, fns = {} }
+    local p = self.pending
+    if not p.fns[key] then p.keys[#p.keys + 1] = key end
+    p.fns[key] = fn
+    return false
 end
 
 function TO:FlushPending()
-    if not self.pending then return end
-    local list = self.pending
+    local p = self.pending
+    if not p then return end
     self.pending = nil
-    for _, fn in ipairs(list) do fn() end
+    for _, key in ipairs(p.keys) do p.fns[key]() end
 end
 
 ---------------------------------------------------------------------------
@@ -385,8 +399,6 @@ function TO:KnownOptions(list)
     return out
 end
 
--- Your buffs, keyed by lowercase name -> seconds left (0 = doesn't expire)
--- Buff names on any unit (lowercase -> seconds left). nil if the game hides them.
 -- One aura, or false when the game hides auras right now. Forever throws an error
 -- (instead of returning a hidden value) when an addon asks while they're hidden.
 local function AuraAt(unit, i)
@@ -395,83 +407,61 @@ local function AuraAt(unit, i)
     return a
 end
 
-function TO:UnitBuffs(unit)
-    local buffs = {}
-    local now = GetTime()
-    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
-    for i = 1, 40 do
-        local a = AuraAt(unit, i)
-        if a == false then return nil end   -- hidden: can't tell
-        if a == nil then break end
-        if IsSecret(a) or type(a) ~= "table" then return nil end
-        local name = a.name
-        if IsSecret(name) then return nil end
-        name = Str(name)
-        if name then
-            local left, exp = 0, Num(a.expirationTime)
-            if exp and exp > 0 then left = math.max(0, exp - now) end
-            buffs[name:lower()] = left
-        end
-    end
-    return buffs
+-- Seconds left on an aura (0 = doesn't expire)
+local function TimeLeft(expires, now)
+    expires = Num(expires)
+    if expires and expires > 0 then return math.max(0, expires - now) end
+    return 0
 end
 
+-- Buffs on a party or raid member: lowercase name -> seconds left. nil if any of
+-- it is hidden (then there's no telling what they're missing). Looked up once
+-- per round of checks, however many checks ask.
+function TO:UnitBuffs(unit)
+    local cache = self.unitBuffs
+    if cache and cache[unit] ~= nil then return cache[unit] or nil end
+    local buffs = {}
+    local now = GetTime()
+    for i = 1, 40 do
+        local a = AuraAt(unit, i)
+        if not IsSecret(a) and a == nil then break end
+        if IsSecret(a) or a == false or type(a) ~= "table" or IsSecret(a.name) then
+            buffs = false   -- hidden: can't tell
+            break
+        end
+        local name = Str(a.name)
+        if name then buffs[name:lower()] = TimeLeft(a.expirationTime, now) end
+    end
+    if cache then cache[unit] = buffs end
+    return buffs or nil
+end
+
+-- Your own buffs (self.buffs). While the game hides them, the last list is kept.
 function TO:ScanBuffs()
     local buffs = {}
     local now = GetTime()
-    local function add(name, expires)
-        name = Str(name)
-        if not name then return end
-        local left = 0
-        expires = Num(expires)
-        if expires and expires > 0 then left = math.max(0, expires - now) end
-        buffs[name:lower()] = left
-    end
-    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-        for i = 1, 40 do
-            local a = AuraAt("player", i)
-            -- Hidden right now: keep the last list we could read
-            if a == false then return end
-            if a == nil or IsSecret(a) or type(a) ~= "table" then break end
-            add(a.name, a.expirationTime)
-        end
-    elseif UnitBuff then
-        for i = 1, 40 do
-            local ok, name, _, _, _, _, expires = pcall(UnitBuff, "player", i)
-            if not ok then return end
-            if name == nil or IsSecret(name) then break end
-            add(name, expires)
-        end
+    for i = 1, 40 do
+        local a = AuraAt("player", i)
+        if a == false then return end
+        if a == nil or IsSecret(a) or type(a) ~= "table" then break end
+        local name = Str(a.name)
+        if name then buffs[name:lower()] = TimeLeft(a.expirationTime, now) end
     end
     self.buffs = buffs
 end
 
 local function ContainerSlots(bag)
-    if C_Container and C_Container.GetContainerNumSlots then return Num(C_Container.GetContainerNumSlots(bag)) or 0 end
-    if GetContainerNumSlots then return Num(GetContainerNumSlots(bag)) or 0 end
-    return 0
+    return Num(C_Container.GetContainerNumSlots(bag)) or 0
 end
 
 local function ContainerItem(bag, slot)
-    if C_Container and C_Container.GetContainerItemInfo then
-        local info = C_Container.GetContainerItemInfo(bag, slot)
-        if type(info) == "table" then return Num(info.itemID), Num(info.stackCount) or 1, info.iconFileID end
-        return nil
-    end
-    if GetContainerItemInfo and GetContainerItemID then
-        local _, count = GetContainerItemInfo(bag, slot)
-        return Num(GetContainerItemID(bag, slot)), Num(count) or 1
-    end
-    return nil
+    local info = C_Container.GetContainerItemInfo(bag, slot)
+    if type(info) ~= "table" then return nil end
+    return Num(info.itemID), Num(info.stackCount) or 1, info.iconFileID
 end
 
 local function ItemName(id)
-    if C_Item and C_Item.GetItemNameByID then
-        local n = Str(C_Item.GetItemNameByID(id))
-        if n then return n end
-    end
-    if GetItemInfo then return Str((GetItemInfo(id))) end
-    return nil
+    return Str(C_Item.GetItemNameByID(id))
 end
 
 -- Mage- and Warlock-made items (can't be bought): conjured food and water,
@@ -481,12 +471,9 @@ local function IsConjured(name)
     local n = name:lower()
     return n:find("^conjured ") ~= nil or MADE_ITEMS[n] == true or n:find("healthstone", 1, true) ~= nil
 end
-TO.IsConjured = IsConjured
 
 local function ItemIcon(id)
-    if C_Item and C_Item.GetItemIconByID then return C_Item.GetItemIconByID(id) end
-    if GetItemIcon then return GetItemIcon(id) end
-    return nil
+    return C_Item.GetItemIconByID(id)
 end
 
 -- Everything in your bags: bag[lowercase name] = { name, id, count, icon }
@@ -501,9 +488,8 @@ function TO:ScanBags()
                 if not name then
                     -- Not loaded yet (right after login): ask for it, and look again when it arrives
                     TO.pendingItems[id] = true
-                    if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
-                end
-                if name then
+                    if C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, id) end
+                else
                     local key = name:lower()
                     local e = bag[key]
                     if not e then
@@ -543,13 +529,10 @@ function TO:FindBagItem(text)
 end
 
 local function SpellIcon(name)
-    if C_Spell and C_Spell.GetSpellInfo then
-        local info = C_Spell.GetSpellInfo(name)
-        if type(info) == "table" and info.iconID then return info.iconID end
-    end
+    local info = C_Spell.GetSpellInfo(name)
+    if type(info) == "table" and info.iconID then return info.iconID end
     return TO.ICONS.unknown
 end
-TO.SpellIcon = SpellIcon
 
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
     INVTYPE_WEAPONOFFHAND = true }
@@ -558,25 +541,31 @@ local function HasWeapon(slot)
     local id = Num(GetInventoryItemID("player", slot))
     if not id then return false end
     if slot == 16 then return true end
-    if C_Item and C_Item.GetItemInfoInstant then
-        local _, _, _, equipLoc = C_Item.GetItemInfoInstant(id)
-        return Str(equipLoc) ~= nil and WEAPON_LOCS[equipLoc] == true
-    end
-    return false
+    local _, _, _, equipLoc = C_Item.GetItemInfoInstant(id)
+    return Str(equipLoc) ~= nil and WEAPON_LOCS[equipLoc] == true
 end
 
 local function FormatTime(sec)
     if sec >= 60 then return math.ceil(sec / 60) .. "m" end
     return math.floor(sec) .. "s"
 end
-TO.FormatTime = FormatTime
-TO.Num = Num
-TO.IsSecretValue = IsSecret
 
 ---------------------------------------------------------------------------
 -- Building the list of reminders
 ---------------------------------------------------------------------------
 -- Each reminder: { id, label, icon, text, detail, action = { spell = } or { item = , slot = }, noItem }
+
+-- The longest time left among the auras in `names` that you have (0 = one that
+-- doesn't expire), or nil if you have none of them
+local function LongestLeft(buffs, names)
+    local left
+    for _, aura in ipairs(names) do
+        local l = buffs[aura:lower()]
+        if l and (not left or l == 0 or l > left) then left = l end
+        if left == 0 then break end
+    end
+    return left
+end
 
 function TO:BuffPreference(buff)
     local known = self:KnownOptions(buff.cast)
@@ -606,12 +595,7 @@ function TO:CheckBuffs(list)
         local id = "buff:" .. buff.id
         local spell = self:BuffPreference(buff)
         if spell and self:IsEnabled(id, not buff.off) then
-            local left
-            for _, aura in ipairs(buff.auras or buff.cast) do
-                local l = self.buffs[aura:lower()]
-                if l and (not left or l == 0 or l > left) then left = l end
-                if left == 0 then break end
-            end
+            local left = LongestLeft(self.buffs, buff.auras or buff.cast)
             if not left then
                 list[#list + 1] = { id = id, label = buff.label, icon = SpellIcon(spell),
                     detail = "Missing", action = { spell = spell } }
@@ -915,7 +899,6 @@ local function IsRecipe(id, text)
     end
     return text:find("teaches you", 1, true) ~= nil
 end
-TO.IsRecipe = IsRecipe
 
 -- Gear you wear (like an off-hand with a "drink" effect on use) isn't something to
 -- stock up on, however its tooltip reads. It's never tracked.
@@ -928,7 +911,6 @@ local function IsGear(id)
     if equipLoc and not NOT_WORN[equipLoc] then return true end
     return classID == 2 or classID == 4   -- Weapon, Armor
 end
-TO.IsGear = IsGear
 
 function TO:ItemKind(id)
     if itemKinds[id] then return itemKinds[id] end
@@ -1018,43 +1000,49 @@ function TO:UpdateAutoItems()
     local rescore = self.char.statBasis ~= basis
     self.char.statBasis = basis
     local hasMana = self.MANA_CLASSES[self:PlayerClass()]
-    self.autoInBags = {}   -- the best of each kind that's in your bags right now
+    local slots = {}
     for _, slot in ipairs(self.AUTO_SLOTS) do
-        if not slot.mana or hasMana then
-            local best, bestScore
-            for _, e in pairs(self.bag or {}) do
-                -- Conjured items can't be bought, so they're not tracked here (Mages: see conjures)
-                local k = not IsConjured(e.name) and self:ItemKind(e.id)
-                if k and k.level <= level then
-                    local score = self:AutoScore(slot.key, k)
-                    if score and (not bestScore or score > bestScore
-                        or (score == bestScore and e.id > best.id)) then
-                        best, bestScore = e, score
-                    end
+        if not slot.mana or hasMana then slots[#slots + 1] = slot end
+    end
+    -- One pass over the bags: the best of each kind that's there right now
+    local inBags, scores = {}, {}
+    for _, e in pairs(self.bag or {}) do
+        -- Conjured items can't be bought, so they're not tracked here (Mages: see conjures)
+        local k = not IsConjured(e.name) and self:ItemKind(e.id)
+        if k and k.level <= level then
+            for _, slot in ipairs(slots) do
+                local key = slot.key
+                local score = self:AutoScore(key, k)
+                if score and (not scores[key] or score > scores[key]
+                    or (score == scores[key] and e.id > inBags[key].id)) then
+                    inBags[key], scores[key] = e, score
                 end
             end
-            self.autoInBags[slot.key] = best
-            local cur = self.char.auto[slot.key]
-            -- A tracked item that doesn't qualify any more (like a recipe or a piece of
-            -- gear picked by an older version) is dropped; your Min is kept for the next pick
-            local curKind = cur and itemKinds[cur.id]
-            if cur and (IsRecipeName(cur.name) or IsGear(cur.id)
-                or (curKind and self:AutoScore(slot.key, curKind) == nil)) then
-                if cur.min then self.char.autoMins[slot.key] = cur.min end
-                self.char.auto[slot.key] = nil
-                cur = nil
-            end
-            if cur and rescore and slot.key == "statfood" then
-                local k = itemKinds[cur.id]
-                cur.score = k and self:AutoScore("statfood", k) or 0
-            end
-            if best and (not cur or cur.id ~= best.id) and (not cur or bestScore > (cur.score or 0)
-                or not self:StillGood(cur, level)) then
-                self.char.auto[slot.key] = { name = best.name, id = best.id, score = bestScore,
-                    min = cur and cur.min or self.char.autoMins[slot.key] or slot.min }
-            elseif cur and best and cur.id == best.id then
-                cur.score = bestScore
-            end
+        end
+    end
+    self.autoInBags = inBags
+    for _, slot in ipairs(slots) do
+        local best, bestScore = inBags[slot.key], scores[slot.key]
+        local cur = self.char.auto[slot.key]
+        -- A tracked item that doesn't qualify any more (like a recipe or a piece of
+        -- gear picked by an older version) is dropped; your Min is kept for the next pick
+        local curKind = cur and itemKinds[cur.id]
+        if cur and (IsRecipeName(cur.name) or IsGear(cur.id)
+            or (curKind and self:AutoScore(slot.key, curKind) == nil)) then
+            if cur.min then self.char.autoMins[slot.key] = cur.min end
+            self.char.auto[slot.key] = nil
+            cur = nil
+        end
+        if cur and rescore and slot.key == "statfood" then
+            local k = itemKinds[cur.id]
+            cur.score = k and self:AutoScore("statfood", k) or 0
+        end
+        if best and (not cur or cur.id ~= best.id) and (not cur or bestScore > (cur.score or 0)
+            or not self:StillGood(cur, level)) then
+            self.char.auto[slot.key] = { name = best.name, id = best.id, score = bestScore,
+                min = cur and cur.min or self.char.autoMins[slot.key] or slot.min }
+        elseif cur and best and cur.id == best.id then
+            cur.score = bestScore
         end
     end
 end
@@ -1065,7 +1053,6 @@ function TO:StillGood(cur, level)
     return not k or k.level <= level
 end
 
--- Stat focus changed: pick the stat food again
 -- You picked a stat: choose the stat food again (your Min is kept)
 function TO:SetStatFocus(focus)
     self.char.statFocus = focus
@@ -1086,12 +1073,6 @@ TO.WARLOCK_PETS = { "Summon Imp", "Summon Voidwalker", "Summon Succubus", "Summo
 TO.HAPPINESS = { "unhappy", "content", "happy" }
 TO.SOULSTONE_SPELLS = { "Create Soulstone (Major)", "Create Soulstone (Greater)", "Create Soulstone",
     "Create Soulstone (Lesser)", "Create Soulstone (Minor)" }
-
--- A value the game let us read, or nil when it's hidden (secret)
-local function Plain(v)
-    if IsSecret(v) then return nil end
-    return v
-end
 
 -- Your party (your own subgroup in a raid): party1 to party4
 local function PartyUnits()
@@ -1118,6 +1099,12 @@ function TO:GroupUnits()
     return PartyUnits(), false
 end
 
+-- Online, alive and near enough to see
+local function CanBeBuffed(u)
+    return Plain(UnitIsConnected(u)) ~= false and Plain(UnitIsDeadOrGhost(u)) ~= true
+        and Plain(UnitIsVisible(u)) ~= false
+end
+
 local function HasAnyAura(buffs, names)
     for _, n in ipairs(names) do
         if buffs[n:lower()] then return true end
@@ -1135,8 +1122,7 @@ function TO:CheckPartyBuffs(list)
         if spell and self:IsEnabled(id, not buff.off) then
             local names, target = {}, nil
             for _, u in ipairs(units) do
-                local usable = Plain(UnitIsConnected(u)) ~= false and Plain(UnitIsDeadOrGhost(u)) ~= true
-                    and Plain(UnitIsVisible(u)) ~= false
+                local usable = CanBeBuffed(u)
                 if usable and buff.skip then
                     local _, cls = UnitClass(u)
                     cls = Str(cls)
@@ -1188,10 +1174,8 @@ function TO:CheckPartyBlessings(list)
     if #units == 0 then return end
     local names, target, targetSpell, anySpell = {}, nil, nil, nil
     for _, u in ipairs(units) do
-        local usable = Plain(UnitIsConnected(u)) ~= false and Plain(UnitIsDeadOrGhost(u)) ~= true
-            and Plain(UnitIsVisible(u)) ~= false
         local _, cls = UnitClass(u)
-        cls = usable and Str(cls)   -- hidden class: can't tell which blessing, skip
+        cls = CanBeBuffed(u) and Str(cls)   -- hidden class: can't tell which blessing, skip
         local spell = cls and self:BlessingFor(cls)
         local b = spell and self:UnitBuffs(u)
         if b and not (b[spell:lower()] or b[("Greater " .. spell):lower()]) then
@@ -1259,11 +1243,7 @@ function TO:CheckElixirs(list)
     if self.char.elixirInstanceOnly and not self:InInstance() then return end
     local warn = self.db.warnMinutes * 60
     for _, el in ipairs(self.char.elixirs) do
-        local left
-        for _, aura in ipairs(el.auras or { el.name }) do
-            local l = self.buffs[aura:lower()]
-            if l and (not left or l == 0 or l > left) then left = l end
-        end
+        local left = LongestLeft(self.buffs, el.auras or { el.name })
         if not left or (left > 0 and left < warn) then
             local r = { id = "elixir:" .. el.name:lower(), label = el.name,
                 detail = left and ("Runs out in " .. FormatTime(left)) or "Missing" }
@@ -1359,7 +1339,7 @@ function TO:CheckSoulstone(list)
     if self.char.soulstoneInstanceOnly and not self:InInstance() then return end
     local create = self:FirstKnown(self.SOULSTONE_SPELLS)
     if not create then return end
-    if (self.buffs or {})["soulstone resurrection"] then return end
+    if self.buffs["soulstone resurrection"] then return end
     local healer
     for _, u in ipairs((self:GroupUnits())) do
         local b = self:UnitBuffs(u)
@@ -1388,12 +1368,7 @@ end
 function TO:FreeBagSlots()
     local free = 0
     for b = 0, NUM_BAG_SLOTS or 4 do
-        local n, family
-        if C_Container and C_Container.GetContainerNumFreeSlots then
-            n, family = C_Container.GetContainerNumFreeSlots(b)
-        elseif GetContainerNumFreeSlots then
-            n, family = GetContainerNumFreeSlots(b)
-        end
+        local n, family = C_Container.GetContainerNumFreeSlots(b)
         n, family = Num(n), Num(family)
         if n and (not family or family == 0) then free = free + n end
     end
@@ -1502,15 +1477,11 @@ function TO:CheckWellFed(list)
     local id = "wellfed"
     if not self:IsEnabled(id, true) then return end
     if self.char.wellFedInstanceOnly and not self:InInstance() then return end
-    local buffs = self.buffs or {}
+    local buffs = self.buffs
     for _, a in ipairs(self.EATING_AURAS) do
         if buffs[a] then return end   -- eating right now
     end
-    local left
-    for _, a in ipairs(self.WELL_FED_AURAS) do
-        local l = buffs[a]
-        if l and (not left or l == 0 or l > left) then left = l end
-    end
+    local left = LongestLeft(buffs, self.WELL_FED_AURAS)
     local warn = self.db.warnMinutes * 60
     if left and (left == 0 or left >= warn) then return end
 
@@ -1698,21 +1669,14 @@ function TO:MerchantItems()
     local items = {}
     local n = Num(GetMerchantNumItems and GetMerchantNumItems()) or 0
     for i = 1, n do
-        local name, icon, price, stack, avail, purchasable, extended
-        if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
-            local info = C_MerchantFrame.GetItemInfo(i)
-            if type(info) == "table" then
-                name, icon, price, stack, avail, purchasable, extended = info.name, info.texture, info.price,
-                    info.stackCount, info.numAvailable, info.isPurchasable, info.hasExtendedCost
+        local info = C_MerchantFrame.GetItemInfo(i)
+        if type(info) == "table" then
+            local name, price = Str(info.name), Num(info.price)
+            if name and price and not Plain(info.hasExtendedCost) and Plain(info.isPurchasable) ~= false then
+                items[#items + 1] = { index = i, name = name, price = price,
+                    stack = math.max(1, Num(info.stackCount) or 1),
+                    available = Num(info.numAvailable) or -1, icon = info.texture }
             end
-        elseif GetMerchantItemInfo then
-            local _
-            name, icon, price, stack, avail, purchasable, _, extended = GetMerchantItemInfo(i)
-        end
-        name, price = Str(name), Num(price)
-        if name and price and not Plain(extended) and Plain(purchasable) ~= false then
-            items[#items + 1] = { index = i, name = name, price = price, stack = math.max(1, Num(stack) or 1),
-                available = Num(avail) or -1, icon = icon }
         end
     end
     return items
@@ -1781,10 +1745,8 @@ function TO:BuyRestock(plan)
 end
 
 function TO:ItemIconByName(name)
-    if C_Item and C_Item.GetItemIconByID then
-        local icon = C_Item.GetItemIconByID(name)
-        if icon and not IsSecret(icon) then return icon end
-    end
+    local icon = C_Item.GetItemIconByID(name)
+    if not IsSecret(icon) and icon then return icon end
     return self.ICONS.unknown
 end
 
@@ -1827,8 +1789,11 @@ end
 -- own buffs and bags are readable.
 function TO:BuildReminders()
     self:ScanBuffs()
+    -- Your buffs haven't been readable yet this session: nothing to go on
+    if not self.buffs then return self.reminders or {} end
     self:ScanBags()
     local list = {}
+    self.unitBuffs = {}   -- each group member's buffs are read once for all the checks below
     self:UpdateAutoItems()
     -- Row 1: buffs
     self:CheckBuffs(list)
@@ -1847,6 +1812,7 @@ function TO:BuildReminders()
     self:CheckAmmo(list)
     self:CheckBags(list)
     self:CheckDurability(list)
+    self.unitBuffs = nil
     return list
 end
 
@@ -2288,7 +2254,7 @@ end
 -- still going when combat starts is ended right then (see PLAYER_REGEN_DISABLED).
 function TO:StopMoving()
     if not self.moving then return end
-    self:RunOutOfCombat(function()
+    self:RunOutOfCombat("drop", function()
         if not TO.moving then return end
         TO.moving = false
         TO.main:StopMovingOrSizing()
@@ -2313,7 +2279,7 @@ function TO:ApplyVisibility()
     else
         driver = "show"
     end
-    self:RunOutOfCombat(function()
+    self:RunOutOfCombat("visibility", function()
         UnregisterStateDriver(self.main, "visibility")
         RegisterStateDriver(self.main, "visibility", driver)
     end)
@@ -2359,7 +2325,7 @@ function TO:ApplySettings()
     self:SetLocked(self.db.locked)
     self:UpdateMinimapButton()
     self:RequestUpdate()
-    self:RunOutOfCombat(function() self:Update() end)
+    self:RunOutOfCombat("update", function() self:Update() end)
 end
 
 -- The red "ToppedOff" strip along the top of a frame
@@ -2541,7 +2507,11 @@ end
 function TO:Remind(reason)
     -- In combat your buffs may be hidden from addons, so use the last check
     local list = self.reminders or {}
-    if not InCombatLockdown() then list = self:BuildReminders() end
+    if not InCombatLockdown() then
+        -- The game can refuse a read (see Update): then the last check is used too
+        local ok, fresh = pcall(self.BuildReminders, self)
+        if ok then list = fresh end
+    end
     -- Items shown only because "always show" is on aren't missing
     local missing = {}
     for _, r in ipairs(list) do if not r.stocked then missing[#missing + 1] = r end end
@@ -2692,8 +2662,8 @@ SlashCmdList.TOPPEDOFFFOREVER = function(msg)
         end
     elseif cmd == "reset" then
         TO.db.point = { unpack(DEFAULTS.point) }
-        TO:RunOutOfCombat(function() TO:RestorePosition() end)
-        Print("position reset.")
+        TO:RunOutOfCombat("position", function() TO:RestorePosition() end)
+        Print(InCombatLockdown() and "position will reset when combat ends." or "position reset.")
     else
         Help()
     end
@@ -2736,20 +2706,28 @@ for _, e in ipairs({ "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE
 end
 events:SetScript("OnEvent", function(_, event, arg1, ...)
     if event == "ADDON_LOADED" and arg1 == ADDON then
-        ToppedOffForeverDB = ToppedOffForeverDB or {}
+        if type(ToppedOffForeverDB) ~= "table" then ToppedOffForeverDB = {} end
         FillDefaults(ToppedOffForeverDB, DEFAULTS)
         TO.db = ToppedOffForeverDB
         if (TO.db.schema or 0) < 2 then
             if TO.db.iconSize == 36 then TO.db.iconSize = 40 end   -- old default: use the new, larger one
             TO.db.schema = 2
         end
-        ToppedOffForeverCharDB = ToppedOffForeverCharDB or {}
+        if type(ToppedOffForeverCharDB) ~= "table" then ToppedOffForeverCharDB = {} end
         FillDefaults(ToppedOffForeverCharDB, CHAR_DEFAULTS)
         TO.char = ToppedOffForeverCharDB
+        KeepValid(TO.char.custom, function(c)
+            c.min = tonumber(c.min) or 20   -- the Add box's default
+            return type(c.name) == "string"
+        end)
+        KeepValid(TO.char.elixirs, function(e) return type(e.name) == "string" end)
+        for key, a in pairs(TO.char.auto) do
+            if type(a) ~= "table" or type(a.name) ~= "string" then TO.char.auto[key] = nil end
+        end
     elseif event == "PLAYER_LOGIN" then
         TO:RegisterCharacter()
         TO:ScanSpellbook()
-        TO:RunOutOfCombat(function() TO:BuildFrames() end)
+        TO:RunOutOfCombat("build", function() TO:BuildFrames() end)
         print(TO.LOGO_TEXT .. " |cffffd966ToppedOff Forever|r loaded. Type /topoff for options.")
     elseif event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
         if arg1 == ADDON then

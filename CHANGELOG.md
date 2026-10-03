@@ -1,3 +1,16 @@
+## 1.5.14
+
+Under the hood: a code review, with fixes and lighter work in groups. Nothing changes in how the addon looks or is used.
+
+- Fixed: every time the options window was opened or a tab was clicked, a whole new set of checkboxes and buttons was made and the old set was kept, hidden, until the next `/reload`. The list now reuses them.
+- Fixed: changing settings during a fight queued every change, and all of them were re-applied one after another when the fight ended. Each kind of change is now applied once.
+- Fixed: the chat reminder on a ready check or on entering a dungeon could fail with an error when the game refused to show your buffs at that moment. It now uses the last check, like the icons do.
+- Fixed: if the game hid your buffs from the first moment after logging in or a `/reload`, an error was reported. ToppedOff now waits until it can read them.
+- Fixed: with two buffs that count for the same elixir or Well Fed check, one that never expires could be shown as "running out", depending on which the game listed first.
+- `/topoff reset` in combat now says the position will reset when combat ends, instead of saying it already has.
+- A damaged settings file (a setting of the wrong kind, or a broken entry in your own items or elixirs) no longer causes errors; the damaged part goes back to its default or is dropped.
+- Lighter in groups: each member's buffs are read once per check instead of once for every party buff.
+
 ## 1.5.13
 
 - Passive spells are no longer checked. On WoW: Forever, Omen of Clarity is passive (always on, nothing to cast), so the reminder to cast it is gone, and so is its row in the options. This applies to any class buff the game marks as passive.

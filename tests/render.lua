@@ -34,10 +34,10 @@ function M:SetAllPoints(rel)
         { p = "BOTTOMRIGHT", rel = rel, rp = "BOTTOMRIGHT", x = 0, y = 0 } }
 end
 function M:SetSize(w, h) baseSetSize(self, w, h) self.__w, self.__h = w, h end
-function M:SetWidth(w) self.__w = w end
+function M:SetWidth(w) self.__w = (w ~= 0 or self.__kind ~= "FontString") and w or nil end   -- 0 = as wide as the text
 function M:SetHeight(h) self.__h = h end
 function M:SetColorTexture(r, g, b, a) self.__color = { r, g, b, a or 1 } end
-function M:SetTextColor(r, g, b) self.__tcolor = { r, g, b } end
+function M:SetTextColor(r, g, b) self.__tcolor = r and { r, g, b } or nil end
 function M:SetJustifyH(j) self.__justify = j end
 function M:SetFont(_, size) self.__fsize = size end
 function M:SetFontObject(f) self.__font = f and f.__name end

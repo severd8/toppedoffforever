@@ -12,8 +12,80 @@ local function RunRefreshers() for _, fn in ipairs(refreshers) do fn() end end
 ---------------------------------------------------------------------------
 -- Widget helpers
 ---------------------------------------------------------------------------
+-- The checks list is rebuilt every time it's shown, and the game never frees a
+-- frame, so its widgets are reused: a parent with a `pool` hands back the
+-- widgets of the last build before making new ones. Each helper puts a reused
+-- widget back to how a new one starts.
+local function Acquire(parent, kind, create)
+    local pool = parent.pool
+    if not pool then return create(), true end
+    local p = pool[kind]
+    if not p then p = { used = 0 } pool[kind] = p end
+    p.used = p.used + 1
+    local w = p[p.used]
+    if w then
+        w:Show()
+        if w.label then w.label:Show() end
+        return w, false
+    end
+    w = create()
+    p[p.used] = w
+    return w, true
+end
+
+local function ReleasePool(parent)
+    for _, p in pairs(parent.pool) do
+        for i = 1, p.used do
+            p[i]:Hide()
+            if p[i].label then p[i].label:Hide() end
+        end
+        p.used = 0
+    end
+end
+
+-- A text line remembers how it was made, so a reused one can go back to it:
+-- no fixed width, and the justify, wrap and colour its font gave it
+local function NewText(parent, template)
+    local fs = parent:CreateFontString(nil, "OVERLAY", template)
+    fs.made = { justify = fs:GetJustifyH(), wrap = fs:CanWordWrap(), color = { fs:GetTextColor() } }
+    return fs
+end
+
+local function ResetText(fs)
+    local made = fs.made
+    fs:SetWidth(0)
+    fs:SetJustifyH(made.justify)
+    fs:SetWordWrap(made.wrap)
+    fs:SetTextColor(unpack(made.color))
+end
+
+-- Hover scripts are only set on some widgets; a reused one gets its template's back
+local function RememberHover(w)
+    w.madeEnter, w.madeLeave = w:GetScript("OnEnter"), w:GetScript("OnLeave")
+    return w
+end
+
+local function ResetHover(w)
+    w:SetScript("OnEnter", w.madeEnter)
+    w:SetScript("OnLeave", w.madeLeave)
+end
+
+-- Hover tooltip: a title line and/or a wrapped white one
+local function HideTooltip() GameTooltip:Hide() end
+local function Tooltip(w, title, body)
+    w:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if title then GameTooltip:AddLine(title) end
+        if body then GameTooltip:AddLine(body, 1, 1, 1, true) end
+        GameTooltip:Show()
+    end)
+    w:SetScript("OnLeave", HideTooltip)
+end
+
 local function Label(parent, text, x, y, template)
-    local fs = parent:CreateFontString(nil, "OVERLAY", template or "GameFontHighlight")
+    template = template or "GameFontHighlight"
+    local fs, new = Acquire(parent, template, function() return NewText(parent, template) end)
+    if not new then ResetText(fs) end
     fs:SetPoint("TOPLEFT", x, y)
     fs:SetText(text)
     return fs
@@ -27,23 +99,21 @@ local function Heading(parent, text, x, y)
 end
 
 local function CheckBox(parent, text, x, y, getter, setter, tip)
-    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    cb:SetSize(24, 24)
-    cb:SetPoint("TOPLEFT", x, y)
-    local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    fs:SetPoint("LEFT", cb, "RIGHT", 2, 0)
-    fs:SetText(text)
-    cb.label = fs
-    cb:SetScript("OnClick", function(self) setter(self:GetChecked() and true or false) end)
-    if tip then
-        cb:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:AddLine(text)
-            GameTooltip:AddLine(tip, 1, 1, 1, true)
-            GameTooltip:Show()
-        end)
-        cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local cb, new = Acquire(parent, "check", function()
+        local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+        cb:SetSize(24, 24)
+        cb.label = NewText(parent, "GameFontHighlight")
+        cb.label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+        return RememberHover(cb)
+    end)
+    if not new then
+        ResetText(cb.label)
+        ResetHover(cb)
     end
+    cb:SetPoint("TOPLEFT", x, y)
+    cb.label:SetText(text)
+    cb:SetScript("OnClick", function(self) setter(self:GetChecked() and true or false) end)
+    if tip then Tooltip(cb, text, tip) end
     cb:SetChecked(getter())
     return cb
 end
@@ -103,11 +173,15 @@ local function Slider(parent, text, x, y, key, min, max, suffix)
 end
 
 local function EditBox(parent, width, x, y, text, numeric, onCommit)
-    local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    -- Number boxes and text boxes are reused separately
+    local e = Acquire(parent, numeric and "number" or "edit", function()
+        local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        e:SetAutoFocus(false)
+        if numeric then e:SetNumeric(true) e:SetMaxLetters(4) end
+        return e
+    end)
     e:SetSize(width, 20)
     e:SetPoint("TOPLEFT", x, y)
-    e:SetAutoFocus(false)
-    if numeric then e:SetNumeric(true) e:SetMaxLetters(4) end
     e:SetText(text or "")
     local function commit(self)
         if onCommit then onCommit(self:GetText()) end
@@ -120,7 +194,10 @@ local function EditBox(parent, width, x, y, text, numeric, onCommit)
 end
 
 local function PanelButton(parent, text, width, x, y, onClick)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    local b, new = Acquire(parent, "button", function()
+        return RememberHover(CreateFrame("Button", nil, parent, "UIPanelButtonTemplate"))
+    end)
+    if not new then ResetHover(b) end
     b:SetSize(width, 22)
     b:SetPoint("TOPLEFT", x, y)
     b:SetText(text)
@@ -140,12 +217,7 @@ local function SpellCycle(parent, x, y, options, getter, setter)
         setter(options[nextIdx])
         refresh()
     end)
-    b:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Click to choose which spell to cast")
-        GameTooltip:Show()
-    end)
-    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    Tooltip(b, "Click to choose which spell to cast")
     refresh()
     return b
 end
@@ -182,10 +254,13 @@ local function Builder(c)
     function ctx.header(text, minLabel)
         ctx.y = ctx.y - (ctx.y == 0 and 2 or 12)
         local h = Heading(c, text, 0, ctx.y)
-        local line = c:CreateTexture(nil, "ARTWORK")
-        local g = TO.COLORS.goldDark
-        line:SetColorTexture(g[1], g[2], g[3], 0.5)
-        line:SetHeight(1)
+        local line = Acquire(c, "line", function()
+            local line = c:CreateTexture(nil, "ARTWORK")
+            local g = TO.COLORS.goldDark
+            line:SetColorTexture(g[1], g[2], g[3], 0.5)
+            line:SetHeight(1)
+            return line
+        end)
         line:SetPoint("TOPLEFT", 0, ctx.y - 17)
         line:SetPoint("TOPRIGHT", c, "TOPLEFT", RIGHT, ctx.y - 17)
         if minLabel then
@@ -274,29 +349,20 @@ local function Dropdown(parent, x, y, width, choices, getter, setter, tip)
             pick(choices[nextIdx].value)
         end
     end)
-    if tip then
-        b:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:AddLine(tip, 1, 1, 1, true)
-            GameTooltip:Show()
-        end)
-        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    end
+    if tip then Tooltip(b, nil, tip) end
     return b
 end
 
 -- Small red X that removes a row
 local function RemoveButton(parent, x, y, onClick)
-    local b = CreateFrame("Button", nil, parent, "UIPanelCloseButton")
-    b:SetSize(22, 22)
+    local b = Acquire(parent, "remove", function()
+        local b = CreateFrame("Button", nil, parent, "UIPanelCloseButton")
+        b:SetSize(22, 22)
+        return b
+    end)
     b:SetPoint("TOPLEFT", x, y)
     b:SetScript("OnClick", onClick)
-    b:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Remove")
-        GameTooltip:Show()
-    end)
-    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    Tooltip(b, "Remove")
     return b
 end
 
@@ -511,15 +577,8 @@ local function BuildSuppliesTab(self, ctx, class)
             choose(focusKeys[nextIdx])
         end
     end)
-    focusBtn:SetScript("OnEnter", function(b)
-        GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Stat food")
-        GameTooltip:AddLine("Automatic picks food for your role, and falls back to any stat food. "
-            .. "Pick a stat yourself (like Strength for a Protection Paladin) to track only food with that stat.",
-            1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    focusBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    Tooltip(focusBtn, "Stat food", "Automatic picks food for your role, and falls back to any stat food. "
+        .. "Pick a stat yourself (like Strength for a Protection Paladin) to track only food with that stat.")
     ctx.row()
     ctx.note("The best of each in your bags is picked for you, and better ones take over as you level. "
         .. "Stat food follows your talents (or group role). Untick one to stop tracking it.")
@@ -732,11 +791,16 @@ local TAB_BUILDERS = { buffs = BuildBuffsTab, supplies = BuildSuppliesTab, more 
 
 function TO:BuildChecksList()
     local frame = self.config
-    if frame.checks then frame.checks:Hide() end
-    local c = CreateFrame("Frame", nil, frame.scrollChild)
-    c:SetPoint("TOPLEFT")
+    local c = frame.checks
+    if c then
+        ReleasePool(c)
+    else
+        c = CreateFrame("Frame", nil, frame.scrollChild)
+        c:SetPoint("TOPLEFT")
+        c.pool = {}
+        frame.checks = c
+    end
     c:SetSize(RIGHT + 4, 10)
-    frame.checks = c
     local ctx = Builder(c)
     local tab = self.optionsTab or "buffs"
     if self.char.splitProfiles and tab ~= "profiles" then

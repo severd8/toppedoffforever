@@ -47,10 +47,13 @@ ObjMT.__index = function(t, k)
     return nil
 end
 
+function TEMPLATE_HOVER() end
 function newObj(kind, name, parent, template)
     local o = setmetatable({ __kind = kind, __name = name, __parent = parent, __template = template,
         __scripts = {}, __shown = true, __attrs = {}, __children = {} }, ObjMT)
     if template and (template:find("Secure") or template:find("SecureUnitButton")) then o.__protected = true end
+    -- The real template shows its own tooltip on hover
+    if template == "UIPanelButtonTemplate" then o.__scripts.OnEnter, o.__scripts.OnLeave = TEMPLATE_HOVER, TEMPLATE_HOVER end
     if parent and parent.__children then table.insert(parent.__children, o) end
     ALL_FRAMES[#ALL_FRAMES + 1] = o
     if name then _G[name] = o end
@@ -94,6 +97,7 @@ function Methods:SetFormattedText(fmt, ...)
     self.__text = fmt:format(...)
 end
 function Methods:GetText() return self.__text end
+function Methods:SetNumeric(v) self.__numeric = v end
 function Methods:SetChecked(v) self.__checked = v and true or false end
 function Methods:GetChecked() return self.__checked end
 function Methods:GetFont() return "Fonts\\FRIZQT__.TTF", 10, "" end
@@ -110,6 +114,15 @@ function Methods:SetPoint(p, rel, rp, x, y)
     if type(rel) == "table" then self.__pos = { x or 0, y or 0 } else self.__pos = { rel or 0, rp or 0 } end
 end
 function Methods:GetWidth() return 140 end
+-- Text layout and colour, so a test can see what a reused widget still carries
+-- (nil = whatever the font gives it)
+function Methods:SetWidth(w) protectedCheck(self, "SetWidth") self.__width = w end
+function Methods:SetJustifyH(j) self.__justify = j end
+function Methods:GetJustifyH() return self.__justify end
+function Methods:SetWordWrap(v) self.__wrap = v end
+function Methods:CanWordWrap() return self.__wrap end
+function Methods:SetTextColor(r, g, b, a) self.__tcolor = r and { r, g, b, a } or nil end
+function Methods:GetTextColor() return unpack(self.__tcolor or {}) end
 function Methods:GetCenter() return 0, 0 end
 function Methods:GetEffectiveScale() return 1 end
 function Methods:GetName() return self.__name end
@@ -169,10 +182,12 @@ function UnitExists(u)
     return inParty(u)
 end
 function UnitName(u) if u == "player" then return "Me" end return "Name_" .. u end
-function UnitIsConnected(u) return true end
-function UnitIsDeadOrGhost(u) return u == "player" and STATE.playerDead or false end
+-- STATE.offline[unit], STATE.dead[unit], STATE.unseen[unit]: can't be buffed right now
+STATE.offline, STATE.dead, STATE.unseen = {}, {}, {}
+function UnitIsConnected(u) return not STATE.offline[u] end
+function UnitIsDeadOrGhost(u) return u == "player" and STATE.playerDead or STATE.dead[u] or false end
 function UnitIsDead(u) if u == "pet" then return STATE.pet == "dead" end return false end
-function UnitIsVisible(u) return true end
+function UnitIsVisible(u) return not STATE.unseen[u] end
 function UnitInRange(u) return not STATE.outOfRange[u], true end
 function UnitGroupRolesAssigned(u) return STATE.roles[u] or "NONE" end
 function IsMounted() return STATE.mounted or false end
@@ -341,10 +356,14 @@ end
 STATE.merchant, BOUGHT = {}, {}
 STATE.money, STATE.repairCost = 100000, 0
 function GetMerchantNumItems() return #STATE.merchant end
-function GetMerchantItemInfo(i)
+-- The Mainline client's merchant API (the old GetMerchantItemInfo global is gone)
+C_MerchantFrame = { GetItemInfo = function(i)
     local m = STATE.merchant[i]
-    return m.name, m.icon or "icon", m.price, m.stack or 1, -1, true, true, m.extended or false
-end
+    if not m then return nil end
+    return { name = m.name, texture = m.icon or "icon", price = m.price, stackCount = m.stack or 1,
+        numAvailable = m.available or -1, isPurchasable = m.purchasable ~= false, isUsable = true,
+        hasExtendedCost = m.extended or false }
+end }
 function GetMerchantItemMaxStack(i) return 20 end
 function BuyMerchantItem(i, q) BOUGHT[#BOUGHT + 1] = STATE.merchant[i].name .. ":" .. tostring(q) end
 function GetMoney() return STATE.money end

@@ -17,7 +17,6 @@ local function Money(copper)
     if c > 0 or #parts == 0 then parts[#parts + 1] = c .. "c" end
     return table.concat(parts, " ")
 end
-TO.Money = Money
 
 local function Button(parent, text, width)
     local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
