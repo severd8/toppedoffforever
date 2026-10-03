@@ -1,9 +1,12 @@
--- ToppedOff Forever: options window
--- Left side: display settings (account-wide). Right side: what to check for this
--- character, in three tabs: Buffs, Supplies, and Pet & gear.
+-- ToppedOff Forever: options window (/topoff), in the shared look (Theme.lua).
+-- Tabs down the left: what to check for this character (Buffs, Supplies,
+-- Pet & gear, Profiles), then the display settings all your characters share
+-- (Display, General).
 
-local _, ns = ...
+local ADDON, ns = ...
 local TO = ns.TO
+local T = ns.Theme
+local C, Text, FlatButton, Card = T.C, T.Text, T.FlatButton, T.Card
 
 local refreshers = {}
 local function AddRefresher(fn) table.insert(refreshers, fn) end
@@ -12,10 +15,10 @@ local function RunRefreshers() for _, fn in ipairs(refreshers) do fn() end end
 ---------------------------------------------------------------------------
 -- Widget helpers
 ---------------------------------------------------------------------------
--- The checks list is rebuilt every time it's shown, and the game never frees a
--- frame, so its widgets are reused: a parent with a `pool` hands back the
--- widgets of the last build before making new ones. Each helper puts a reused
--- widget back to how a new one starts.
+-- The check lists are drawn again every time they're shown, and the game never
+-- frees a frame, so their widgets are reused: a parent with a `pool` hands back
+-- the widgets of the last build before making new ones. Each helper puts a
+-- reused widget back to how a new one starts.
 local function Acquire(parent, kind, create)
     local pool = parent.pool
     if not pool then return create(), true end
@@ -44,22 +47,21 @@ local function ReleasePool(parent)
 end
 
 -- A text line remembers how it was made, so a reused one can go back to it:
--- no fixed width, and the justify, wrap and colour its font gave it
+-- no fixed width, and the justify and wrap it started with. (A colour is either
+-- never set on a kind of line, or set every time: see Label.)
 local function NewText(parent, template)
-    local fs = parent:CreateFontString(nil, "OVERLAY", template)
-    fs.made = { justify = fs:GetJustifyH(), wrap = fs:CanWordWrap(), color = { fs:GetTextColor() } }
+    local fs = Text(parent, "", template)
+    fs.made = { justify = fs:GetJustifyH(), wrap = fs:CanWordWrap() }
     return fs
 end
 
 local function ResetText(fs)
-    local made = fs.made
     fs:SetWidth(0)
-    fs:SetJustifyH(made.justify)
-    fs:SetWordWrap(made.wrap)
-    fs:SetTextColor(unpack(made.color))
+    fs:SetJustifyH(fs.made.justify)
+    fs:SetWordWrap(fs.made.wrap)
 end
 
--- Hover scripts are only set on some widgets; a reused one gets its template's back
+-- Hover scripts are only set on some widgets; a reused one gets its own back
 local function RememberHover(w)
     w.madeEnter, w.madeLeave = w:GetScript("OnEnter"), w:GetScript("OnLeave")
     return w
@@ -70,57 +72,42 @@ local function ResetHover(w)
     w:SetScript("OnLeave", w.madeLeave)
 end
 
--- Hover tooltip: a title line and/or a wrapped white one
-local function HideTooltip() GameTooltip:Hide() end
-local function Tooltip(w, title, body)
-    w:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        if title then GameTooltip:AddLine(title) end
-        if body then GameTooltip:AddLine(body, 1, 1, 1, true) end
-        GameTooltip:Show()
-    end)
-    w:SetScript("OnLeave", HideTooltip)
-end
-
-local function Label(parent, text, x, y, template)
+local function Label(parent, text, x, y, template, color)
     template = template or "GameFontHighlight"
     local fs, new = Acquire(parent, template, function() return NewText(parent, template) end)
     if not new then ResetText(fs) end
+    if color then fs:SetTextColor(color[1], color[2], color[3]) end
     fs:SetPoint("TOPLEFT", x, y)
     fs:SetText(text)
     return fs
 end
 
--- Section heading in the logo's gold
-local function Heading(parent, text, x, y)
-    local fs = Label(parent, text, x, y, "GameFontNormal")
-    fs:SetTextColor(unpack(TO.COLORS.gold))
-    return fs
-end
-
-local function CheckBox(parent, text, x, y, getter, setter, tip)
-    local cb, new = Acquire(parent, "check", function()
-        local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-        cb:SetSize(24, 24)
-        cb.label = NewText(parent, "GameFontHighlight")
-        cb.label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
-        return RememberHover(cb)
+-- On/off switch with its label. get() reads the setting, set(on) saves it.
+local function Toggle(parent, text, x, y, get, set, tip)
+    local sw, new = Acquire(parent, "switch", function()
+        local sw = T.SwitchWidget(parent)
+        sw.label = NewText(parent, "GameFontHighlight")
+        sw.label:SetPoint("TOPLEFT", sw, "TOPRIGHT", 8, 1)
+        return RememberHover(sw)
     end)
     if not new then
-        ResetText(cb.label)
-        ResetHover(cb)
+        ResetText(sw.label)
+        ResetHover(sw)
     end
-    cb:SetPoint("TOPLEFT", x, y)
-    cb.label:SetText(text)
-    cb:SetScript("OnClick", function(self) setter(self:GetChecked() and true or false) end)
-    if tip then Tooltip(cb, text, tip) end
-    cb:SetChecked(getter())
-    return cb
+    sw:SetPoint("TOPLEFT", x, y)
+    sw.label:SetText(text)
+    sw:SetScript("OnClick", function(self)
+        self:SetOn(not self:IsOn())
+        set(self:IsOn())
+    end)
+    if tip then T.Tooltip(sw, text, tip) end
+    sw:SetOn(get())
+    return sw
 end
 
--- A checkbox bound to an account-wide display setting
-local function SettingCheck(parent, text, x, y, key, tip)
-    local cb = CheckBox(parent, text, x, y, function() return TO.db[key] end, function(v)
+-- A switch bound to an account-wide display setting
+local function Setting(parent, text, x, y, key, tip)
+    local sw = Toggle(parent, text, x, y, function() return TO.db[key] end, function(v)
         if key == "locked" then
             TO:SetLocked(v)
         else
@@ -128,112 +115,79 @@ local function SettingCheck(parent, text, x, y, key, tip)
             TO:ApplySettings()
         end
     end, tip)
-    AddRefresher(function() cb:SetChecked(TO.db[key] and true or false) end)
-    return cb
+    AddRefresher(function() sw:SetOn(TO.db[key]) end)
+    return sw
 end
 
 local function Slider(parent, text, x, y, key, min, max, suffix)
-    suffix = suffix or ""
-    local title = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    title:SetPoint("TOPLEFT", x, y)
-
-    local s = CreateFrame("Slider", nil, parent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    s:SetOrientation("HORIZONTAL")
-    s:SetSize(180, 17)
-    s:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
-    s:SetHitRectInsets(0, 0, -8, -8)
-    if s.SetBackdrop and BACKDROP_SLIDER_8_8 then
-        s:SetBackdrop(BACKDROP_SLIDER_8_8)
-    else
-        local track = s:CreateTexture(nil, "BACKGROUND")
-        local n = TO.COLORS.navy
-        track:SetColorTexture(n[1], n[2], n[3], 1)
-        track:SetHeight(6)
-        track:SetPoint("LEFT")
-        track:SetPoint("RIGHT")
-    end
-    s:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-    s:SetMinMaxValues(min, max)
-    s:SetValueStep(1)
-    if s.SetObeyStepsOnDrag then s:SetObeyStepsOnDrag(true) end   -- missing on Forever
-
-    s:SetScript("OnValueChanged", function(_, v)
-        v = math.floor(v + 0.5)
-        title:SetText(text .. ": |cff" .. TO.GOLD_HEX .. v .. suffix .. "|r")
-        if TO.db[key] ~= v then
-            TO.db[key] = v
-            TO:ApplySettings()
-        end
-    end)
-    AddRefresher(function()
-        s:SetValue(TO.db[key])
-        title:SetText(text .. ": |cff" .. TO.GOLD_HEX .. TO.db[key] .. suffix .. "|r")
-    end)
+    local s = T.Slider(parent, text, x, y, 244,
+        function() return TO.db[key] end,
+        function(v) TO.db[key] = v TO:ApplySettings() end, min, max, suffix)
+    AddRefresher(s.Refresh)
     return s
 end
 
+-- Text box. Number boxes and text boxes are reused separately.
 local function EditBox(parent, width, x, y, text, numeric, onCommit)
-    -- Number boxes and text boxes are reused separately
     local e = Acquire(parent, numeric and "number" or "edit", function()
-        local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-        e:SetAutoFocus(false)
-        if numeric then e:SetNumeric(true) e:SetMaxLetters(4) end
+        local e = T.EditBox(parent, width)
+        if numeric then
+            e:SetNumeric(true)
+            e:SetMaxLetters(4)
+            e:SetJustifyH("CENTER")
+        end
         return e
     end)
-    e:SetSize(width, 20)
     e:SetPoint("TOPLEFT", x, y)
     e:SetText(text or "")
-    local function commit(self)
-        if onCommit then onCommit(self:GetText()) end
-        self:ClearFocus()
-    end
-    e:SetScript("OnEnterPressed", commit)
-    e:SetScript("OnEditFocusLost", function(self) if onCommit then onCommit(self:GetText()) end end)
-    e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    local function commit(self) if onCommit then onCommit(self:GetText()) end end
+    e:SetScript("OnEnterPressed", function(self) commit(self) self:ClearFocus() end)
+    e:SetScript("OnEditFocusLost", commit)
     return e
 end
 
-local function PanelButton(parent, text, width, x, y, onClick)
-    local b, new = Acquire(parent, "button", function()
-        return RememberHover(CreateFrame("Button", nil, parent, "UIPanelButtonTemplate"))
-    end)
+local function Button(parent, text, width, x, y, onClick, height)
+    local b, new = Acquire(parent, "button", function() return RememberHover(FlatButton(parent, text, width)) end)
     if not new then ResetHover(b) end
-    b:SetSize(width, 22)
+    b:SetSize(width, height or 22)
     b:SetPoint("TOPLEFT", x, y)
     b:SetText(text)
     b:SetScript("OnClick", onClick)
     return b
 end
 
--- Button that cycles through a list of spell names
-local function SpellCycle(parent, x, y, options, getter, setter)
-    local b = PanelButton(parent, "", 170, x, y)
-    local function refresh() b:SetText(getter() or "") end
-    b:SetScript("OnClick", function()
-        local cur, nextIdx = getter(), 1
-        for i, v in ipairs(options) do
-            if v == cur then nextIdx = (i % #options) + 1 break end
-        end
-        setter(options[nextIdx])
-        refresh()
+-- A box showing the current choice; click for a list of them.
+-- labels: table key -> text, or a function(key) returning it.
+local function Dropdown(parent, x, y, width, keys, labels, getter, setter, tip)
+    local b, new = Acquire(parent, "dropdown", function()
+        return RememberHover(T.Dropdown(parent, width, keys, labels, getter, setter))
     end)
-    Tooltip(b, "Click to choose which spell to cast")
-    refresh()
+    if not new then ResetHover(b) end
+    b.keys, b.labels, b.getter, b.setter = keys, labels, getter, setter
+    b.menuTitle, b.menuLabels = nil, nil
+    b:SetWidth(width)
+    b:SetPoint("TOPLEFT", x, y)
+    if tip then T.Tooltip(b, nil, tip) end
+    b.Refresh()
     return b
 end
 
 ---------------------------------------------------------------------------
--- Checks (right side), split into three tabs. Rebuilt every time the window
--- opens or the tab changes, since it depends on your class, spells and bags.
+-- Check lists (Buffs, Supplies, Pet & gear, Profiles). Each fills its own
+-- scrolling page with cards, and is drawn again every time it's shown, since
+-- it depends on your class, spells and bags.
 ---------------------------------------------------------------------------
+local PAGE_W = T.WINDOW.PAGE_W
+local LIST_W = PAGE_W - 16       -- cards in a list leave room for the scroll bar
 local ROW = 26
-local RIGHT = 320     -- right edge of every row
-local MIN_X = 236     -- "Min" boxes line up in one column
-local MIN_W = 40
-local X_X = 298       -- remove buttons line up at the far right
-local CYCLE_X = 150   -- spell choice buttons
-local CYCLE_W = RIGHT - CYCLE_X
-local LABEL_W = MIN_X - 34   -- a checkbox label that stops before the Min column
+local PAD = 12                   -- inside a card
+local SUB = PAD + 24             -- a setting that belongs to the one above it
+local X_X = LIST_W - PAD - 20    -- remove buttons line up at the far right
+local MIN_W = 44
+local MIN_X = X_X - 6 - MIN_W    -- "Min" boxes line up in one column
+local PICK_X = 250               -- spell and blessing choices
+local PICK_W = LIST_W - PAD - PICK_X
+local LABEL_W = MIN_X - (PAD + 38) - 8   -- a switch label that stops before the Min column
 
 TO.OPTION_TABS = {
     { key = "buffs",    label = "Buffs" },
@@ -247,66 +201,91 @@ function TO:EditingOutside()
     return (self.char.splitProfiles and self.editOutside) and true or false
 end
 
--- Row helpers shared by the tabs. `ctx` holds the frame being filled and the y cursor.
+-- Row helpers shared by the lists. `ctx` holds the list being filled and the y cursor.
 local function Builder(c)
     local ctx = { c = c, y = 0 }
+    local card
 
-    function ctx.header(text, minLabel)
-        ctx.y = ctx.y - (ctx.y == 0 and 2 or 12)
-        local h = Heading(c, text, 0, ctx.y)
-        local line = Acquire(c, "line", function()
-            local line = c:CreateTexture(nil, "ARTWORK")
-            local g = TO.COLORS.goldDark
-            line:SetColorTexture(g[1], g[2], g[3], 0.5)
-            line:SetHeight(1)
-            return line
+    local function closeCard()
+        if not card then return end
+        card.edge:SetHeight(card.top - ctx.y + 6)
+        ctx.y = ctx.y - 16
+        card = nil
+    end
+
+    -- Starts a card: a panel with a small orange title, and "Min" over the Min column
+    function ctx.card(title, minLabel)
+        closeCard()
+        card = Acquire(c, "card", function()
+            local k = {}
+            k.edge = c:CreateTexture(nil, "BACKGROUND", nil, -8)
+            k.edge:SetColorTexture(unpack(C.line))
+            k.fill = c:CreateTexture(nil, "BACKGROUND", nil, -7)
+            k.fill:SetColorTexture(unpack(C.card))
+            k.fill:SetPoint("TOPLEFT", k.edge, "TOPLEFT", 1, -1)
+            k.fill:SetPoint("BOTTOMRIGHT", k.edge, "BOTTOMRIGHT", -1, 1)
+            k.title = Text(c, "", "GameFontNormalSmall", C.orange)
+            function k:Show() self.edge:Show() self.fill:Show() self.title:Show() end
+            function k:Hide() self.edge:Hide() self.fill:Hide() self.title:Hide() end
+            return k
         end)
-        line:SetPoint("TOPLEFT", 0, ctx.y - 17)
-        line:SetPoint("TOPRIGHT", c, "TOPLEFT", RIGHT, ctx.y - 17)
+        card.top = ctx.y
+        card.edge:SetPoint("TOPLEFT", 0, ctx.y)
+        card.edge:SetWidth(LIST_W)
+        card.title:SetPoint("TOPLEFT", PAD, ctx.y - 10)
+        card.title:SetText(title:upper())
         if minLabel then
-            local m = Label(c, minLabel, MIN_X, ctx.y - 3, "GameFontDisableSmall")
+            local m = Label(c, minLabel, MIN_X, ctx.y - 10, "GameFontDisableSmall")
             m:SetWidth(MIN_W)
             m:SetJustifyH("CENTER")
         end
-        ctx.y = ctx.y - 24
-        return h
+        ctx.y = ctx.y - 28
     end
 
     function ctx.note(text)
-        local n = Label(c, text, 26, ctx.y - 2, "GameFontDisableSmall")
-        n:SetWidth(RIGHT - 26)
-        n:SetJustifyH("LEFT")
+        local n = Label(c, text, PAD + 38, ctx.y - 2, "GameFontDisableSmall")
+        n:SetWidth(LIST_W - PAD - (PAD + 38))
         n:SetWordWrap(true)
-        ctx.y = ctx.y - math.max(16, math.ceil((n:GetStringHeight() or 12)) + 4)
+        ctx.y = ctx.y - math.max(16, math.ceil((n:GetStringHeight() or 12)) + 6)
         return n
     end
 
-    -- Checkbox bound to a check id (on/off per character, in the set being edited)
+    -- A plain line of text in a row (beside a choice box, or on its own)
+    function ctx.text(text, x, color)
+        return Label(c, text, x or (PAD + 38), ctx.y - 6, "GameFontHighlight", color or C.muted)
+    end
+
+    -- Switch bound to a check id (on/off per character, in the set being edited)
     c.toggles = {}
     function ctx.toggle(id, label, default, x)
         local function get() return TO:IsEnabled(id, default, TO:EditingOutside()) end
-        local cb = CheckBox(c, label, x or 0, ctx.y, get, function(v) TO:SetEnabled(id, v, TO:EditingOutside()) end)
-        cb.refresh = function() cb:SetChecked(get()) end
-        c.toggles[#c.toggles + 1] = cb
-        return cb
+        local sw = Toggle(c, label, x or PAD, ctx.y - 4, get, function(v) TO:SetEnabled(id, v, TO:EditingOutside()) end)
+        sw.refresh = function() sw:SetOn(get()) end
+        c.toggles[#c.toggles + 1] = sw
+        return sw
     end
 
-    -- Checkbox bound to a per-character setting
+    -- Switch bound to a per-character setting
     function ctx.charCheck(label, key, x, tip)
-        return CheckBox(c, label, x or 0, ctx.y, function() return TO.char[key] and true or false end,
+        return Toggle(c, label, x or PAD, ctx.y - 4, function() return TO.char[key] and true or false end,
             function(v) TO.char[key] = v TO:RequestUpdate() end, tip)
     end
 
-    -- Keep a label clear of the Min column
-    function ctx.fit(cb)
-        cb.label:SetWidth(LABEL_W)
-        cb.label:SetWordWrap(false)
-        cb.label:SetJustifyH("LEFT")
+    -- Switch that isn't a saved check (elixirs to track, the Profiles choice)
+    function ctx.switch(label, get, set)
+        return Toggle(c, label, PAD, ctx.y - 4, get, set)
+    end
+
+    -- Keep a label clear of the Min column (or of a choice box at `untilX`)
+    function ctx.fit(sw, untilX)
+        sw.label:SetWidth(untilX and (untilX - (PAD + 38) - 8) or LABEL_W)
+        sw.label:SetWordWrap(false)
+        return sw
     end
 
     -- Min box in the Min column; onCommit gets the new number
     function ctx.minBox(value, onCommit, allowZero)
-        return EditBox(c, MIN_W, MIN_X, ctx.y - 2, tostring(value), true, function(text)
+        return EditBox(c, MIN_W, MIN_X, ctx.y - 1, tostring(value), true, function(text)
             local n = tonumber(text)
             if n and (n >= 1 or (allowZero and n >= 0)) then onCommit(math.floor(n)) TO:RequestUpdate() end
         end)
@@ -315,55 +294,25 @@ local function Builder(c)
         return ctx.minBox(TO:ReagentMin(id, default), function(n) TO.char.mins[id] = n end, true)
     end
 
+    -- A choice of spells: a list to pick from
+    function ctx.spellPick(known, getter, setter)
+        local b = Dropdown(c, PICK_X, ctx.y - 1, PICK_W, known, function(k) return k or "" end, getter, setter)
+        T.Tooltip(b, "Click to choose which spell to cast")
+        return b
+    end
+
     function ctx.row() ctx.y = ctx.y - ROW end
+
+    -- Ends the list; returns its height
+    function ctx.finish()
+        closeCard()
+        return -ctx.y - 10
+    end
     return ctx
 end
 
-local function NotLearned(cb, text)
-    cb.label:SetText(text .. " |cff808080(not learned)|r")
-end
-
--- A button that opens a list to pick from (steps through the choices if menus
--- aren't available). choices = { { value = , text = }, ... }
-local function Dropdown(parent, x, y, width, choices, getter, setter, tip)
-    local b = PanelButton(parent, "", width, x, y)
-    local function label()
-        local cur = getter()
-        for _, ch in ipairs(choices) do if ch.value == cur then return ch.text end end
-        return choices[1] and choices[1].text or ""
-    end
-    b:SetText(label())
-    b:SetScript("OnClick", function(self)
-        local function pick(v) setter(v) self:SetText(label()) end
-        if MenuUtil and MenuUtil.CreateContextMenu then
-            MenuUtil.CreateContextMenu(self, function(_, root)
-                for _, ch in ipairs(choices) do
-                    root:CreateRadio(ch.text, function() return getter() == ch.value end, function() pick(ch.value) end)
-                end
-            end)
-        else
-            local cur, nextIdx = getter(), 1
-            for i, ch in ipairs(choices) do
-                if ch.value == cur then nextIdx = (i % #choices) + 1 break end
-            end
-            pick(choices[nextIdx].value)
-        end
-    end)
-    if tip then Tooltip(b, nil, tip) end
-    return b
-end
-
--- Small red X that removes a row
-local function RemoveButton(parent, x, y, onClick)
-    local b = Acquire(parent, "remove", function()
-        local b = CreateFrame("Button", nil, parent, "UIPanelCloseButton")
-        b:SetSize(22, 22)
-        return b
-    end)
-    b:SetPoint("TOPLEFT", x, y)
-    b:SetScript("OnClick", onClick)
-    Tooltip(b, "Remove")
-    return b
+local function NotLearned(sw, text)
+    sw.label:SetText(text .. " |cff808080(not learned)|r")
 end
 
 ---------------------------------------------------------------------------
@@ -373,19 +322,17 @@ local function BuildBuffsTab(self, ctx, class)
     local c = ctx.c
     local buffs = self.CLASS_BUFFS[class] or {}
     if #buffs > 0 then
-        ctx.header("Your buffs")
+        ctx.card("Your buffs")
         for _, buff in ipairs(buffs) do
             local known = self:KnownOptions(buff.cast)
             -- Racial buffs only for races that have them; a passive spell needs no check at all
             if not ((buff.racial or self:AllPassive(buff.cast)) and #known == 0) then
-                local cb = ctx.toggle("buff:" .. buff.id, buff.label, not buff.off)
+                local sw = ctx.toggle("buff:" .. buff.id, buff.label, not buff.off)
                 if #known == 0 then
-                    NotLearned(cb, buff.label)
+                    NotLearned(sw, buff.label)
                 elseif #known > 1 then
-                    cb.label:SetWidth(CYCLE_X - 30)
-                    cb.label:SetWordWrap(false)
-                    cb.label:SetJustifyH("LEFT")
-                    SpellCycle(c, CYCLE_X, ctx.y, known, function() return TO:BuffPreference(buff) end,
+                    ctx.fit(sw, PICK_X)
+                    ctx.spellPick(known, function() return TO:BuffPreference(buff) end,
                         function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end)
                 end
                 ctx.row()
@@ -395,13 +342,13 @@ local function BuildBuffsTab(self, ctx, class)
         local partyBuffs = {}
         for _, buff in ipairs(buffs) do if buff.party then partyBuffs[#partyBuffs + 1] = buff end end
         if #partyBuffs > 0 then
-            ctx.header("Party buffs")
+            ctx.card("Party buffs")
             for _, buff in ipairs(partyBuffs) do
-                local cb = ctx.toggle("party:" .. buff.id, buff.label .. " on your party", not buff.off)
-                if #self:KnownOptions(buff.cast) == 0 then NotLearned(cb, buff.label .. " on your party") end
+                local sw = ctx.toggle("party:" .. buff.id, buff.label .. " on your party", not buff.off)
+                if #self:KnownOptions(buff.cast) == 0 then NotLearned(sw, buff.label .. " on your party") end
                 ctx.row()
             end
-            ctx.charCheck("In raids, check the whole raid", "wholeRaid", 24)
+            ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
             ctx.row()
             ctx.note("Shows how many party members are missing it. Click to buff the next one in range.")
         end
@@ -409,19 +356,21 @@ local function BuildBuffsTab(self, ctx, class)
 
     -- Paladin: which blessing each class in your party gets
     if class == "PALADIN" then
-        ctx.header("Party blessings")
+        ctx.card("Party blessings")
         ctx.toggle("party:blessing", "Bless your party", true)
         ctx.row()
-        local choices = {}
+        local keys, labels = {}, { none = "None" }
         for _, b in ipairs(self.BLESSING_NAMES) do
-            if self:Knows("Blessing of " .. b) then choices[#choices + 1] = { value = b, text = "Blessing of " .. b } end
+            if self:Knows("Blessing of " .. b) then
+                keys[#keys + 1] = b
+                labels[b] = "Blessing of " .. b
+            end
         end
-        choices[#choices + 1] = { value = "none", text = "None" }
+        keys[#keys + 1] = "none"
         for _, cls in ipairs(self.BLESSING_CLASSES) do
             local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[cls]
-            local name = Label(c, self.CLASS_PLURALS[cls], 26, ctx.y - 5, "GameFontHighlight")
-            if color then name:SetTextColor(color.r, color.g, color.b) end
-            Dropdown(c, CYCLE_X, ctx.y, CYCLE_W, choices,
+            ctx.text(self.CLASS_PLURALS[cls], nil, color and { color.r, color.g, color.b } or { 1, 1, 1 })
+            Dropdown(c, PICK_X, ctx.y - 1, PICK_W, keys, labels,
                 function()
                     local spell = TO:BlessingFor(cls)
                     return spell and spell:gsub("^Blessing of ", "") or "none"
@@ -430,37 +379,36 @@ local function BuildBuffsTab(self, ctx, class)
                 "Blessing to give " .. self.CLASS_PLURALS[cls] .. " in your party")
             ctx.row()
         end
-        ctx.charCheck("In raids, check the whole raid", "wholeRaid", 24)
+        ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
         ctx.row()
         ctx.note("Shows how many party members are missing their blessing. Click to bless the next one in range. "
             .. "A Greater Blessing, or the same blessing from another Paladin, counts.")
     end
 
     -- Weapon enhancement
-    ctx.header("Weapon enhancement", class == "ROGUE" and "Min" or nil)
+    ctx.card("Weapon enhancement", class == "ROGUE" and "Min" or nil)
     local w = self:WeaponConfig()
     if w.kind == "spell" then
         local known = self:KnownOptions(w.cast)
-        local cb = ctx.toggle("weapon:mh", "Weapon buff", true)
+        local sw = ctx.toggle("weapon:mh", "Weapon buff", true)
         if #known == 0 then
-            NotLearned(cb, "Weapon buff")
+            NotLearned(sw, "Weapon buff")
         elseif #known > 1 then
-            SpellCycle(c, CYCLE_X, ctx.y, known, function() return TO:WeaponConfig().spell end,
+            ctx.spellPick(known, function() return TO:WeaponConfig().spell end,
                 function(v) TO.char.weapon.spell = v TO:RequestUpdate() end)
         end
         ctx.row()
     else
         for _, key in ipairs({ "mh", "oh" }) do
             ctx.toggle("weapon:" .. key, key == "mh" and "Main hand" or "Off hand", true)
-            EditBox(c, CYCLE_W - 6, CYCLE_X + 6, ctx.y - 2, w[key], false, function(text)
+            EditBox(c, PICK_W, PICK_X, ctx.y - 1, w[key], false, function(text)
                 TO.char.weapon[key] = strtrim and strtrim(text) or text
                 TO:RequestUpdate()
             end)
             ctx.row()
         end
         if class == "ROGUE" then
-            local cb = ctx.toggle("charges", "Warn when poison charges run low", true)
-            ctx.fit(cb)
+            ctx.fit(ctx.toggle("charges", "Warn when poison charges run low", true))
             ctx.reagentMin("charges", self.CHARGES_DEFAULT_MIN)
             ctx.row()
         end
@@ -469,39 +417,34 @@ local function BuildBuffsTab(self, ctx, class)
     end
 
     -- Well Fed
-    ctx.header("Food buff")
+    ctx.card("Food buff")
     ctx.toggle("wellfed", "Well Fed", true)
     ctx.row()
-    ctx.charCheck("Only in dungeons and raids", "wellFedInstanceOnly", 24)
+    ctx.charCheck("Only in dungeons and raids", "wellFedInstanceOnly", SUB)
     ctx.row()
     ctx.note("Click the icon to eat your stat food (set on the Supplies tab).")
 
     -- Elixirs and flasks
-    ctx.header("Elixirs and flasks")
+    ctx.card("Elixirs and flasks")
     local shown = {}
     for _, el in ipairs(self.char.elixirs) do
         shown[el.name:lower()] = true
-        local cb = CheckBox(c, el.name, 0, ctx.y, function() return true end,
-            function(v) TO:TrackElixir(el.name, v) end)
-        ctx.fit(cb)
+        ctx.fit(ctx.switch(el.name, function() return true end, function(v) TO:TrackElixir(el.name, v) end))
         ctx.row()
     end
     for _, e in ipairs(self:BagElixirs()) do
         if not shown[e.name:lower()] then
-            local cb = CheckBox(c, e.name, 0, ctx.y, function() return false end,
-                function(v) TO:TrackElixir(e.name, v) end)
-            ctx.fit(cb)
+            ctx.fit(ctx.switch(e.name, function() return false end, function(v) TO:TrackElixir(e.name, v) end))
             ctx.row()
         end
     end
     if #self.char.elixirs == 0 and #self:BagElixirs() == 0 then
-        Label(c, "|cff808080No elixirs or flasks in your bags.|r", 26, ctx.y - 4, "GameFontHighlightSmall")
+        ctx.text("|cff808080No elixirs or flasks in your bags.|r")
         ctx.row()
     end
-    ctx.y = ctx.y - 4
-    ctx.charCheck("Only in dungeons and raids", "elixirInstanceOnly", 24)
+    ctx.charCheck("Only in dungeons and raids", "elixirInstanceOnly", SUB)
     ctx.row()
-    ctx.note("Elixirs and flasks in your bags are listed here. Tick one to be reminded when its buff is "
+    ctx.note("Elixirs and flasks in your bags are listed here. Turn one on to be reminded when its buff is "
         .. "missing or running out. Click the icon to drink it.")
 end
 
@@ -511,7 +454,7 @@ end
 local function BuildSuppliesTab(self, ctx, class)
     local c = ctx.c
 
-    ctx.header("Food, water and potions", "Min")
+    ctx.card("Food, water and potions", "Min")
     self:UpdateAutoItems()
     local hasMana = self.MANA_CLASSES[class]
     local autoRows = {}
@@ -522,9 +465,8 @@ local function BuildSuppliesTab(self, ctx, class)
     for _, slot in ipairs(self.AUTO_SLOTS) do
         if not slot.mana or hasMana then
             local a = self.char.auto[slot.key]
-            local cb = ctx.toggle("auto:" .. slot.key, slotText(slot), true)
-            ctx.fit(cb)
-            autoRows[slot.key] = { cb = cb, slot = slot }
+            local sw = ctx.fit(ctx.toggle("auto:" .. slot.key, slotText(slot), true))
+            autoRows[slot.key] = { sw = sw, slot = slot }
             if a then ctx.minBox(a.min or slot.min, function(n) a.min = n TO.char.autoMins[slot.key] = n end) end
             ctx.row()
         end
@@ -539,7 +481,7 @@ local function BuildSuppliesTab(self, ctx, class)
         ctx.fit(ctx.toggle("healthstone", "Healthstone, if a Warlock is along", true))
         ctx.row()
     end
-    Label(c, "Stat food for", 26, ctx.y - 5, "GameFontHighlightSmall")
+    ctx.text("Stat food for")
     local focusKeys = { false }
     for _, k in ipairs(self.STAT_KEYS) do focusKeys[#focusKeys + 1] = k end
     local function focusLabel(k)
@@ -550,75 +492,59 @@ local function BuildSuppliesTab(self, ctx, class)
         end
         return TO.STAT_LABELS[k] .. " (your pick)"
     end
-    local focusBtn = PanelButton(c, focusLabel(self.char.statFocus), CYCLE_W, CYCLE_X, ctx.y)
-    local function choose(k)
-        TO:SetStatFocus(k or nil)
-        TO:UpdateAutoItems()
-        focusBtn:SetText(focusLabel(TO.char.statFocus))
-        local row = autoRows.statfood
-        if row then row.cb.label:SetText(slotText(row.slot)) end
-    end
-    -- A list to pick from (or step through the choices if menus aren't available)
-    focusBtn:SetScript("OnClick", function(b)
-        if MenuUtil and MenuUtil.CreateContextMenu then
-            MenuUtil.CreateContextMenu(b, function(_, root)
-                root:CreateTitle("Stat food")
-                for _, k in ipairs(focusKeys) do
-                    local text = k and TO.STAT_LABELS[k] or ("Automatic (" .. focusLabel(nil) .. ")")
-                    root:CreateRadio(text, function() return (TO.char.statFocus or false) == k end,
-                        function() choose(k) end)
-                end
-            end)
-        else
-            local cur, nextIdx = TO.char.statFocus or false, 1
-            for i, k in ipairs(focusKeys) do
-                if k == cur then nextIdx = (i % #focusKeys) + 1 break end
-            end
-            choose(focusKeys[nextIdx])
-        end
-    end)
-    Tooltip(focusBtn, "Stat food", "Automatic picks food for your role, and falls back to any stat food. "
+    local focus = Dropdown(c, PICK_X, ctx.y - 1, PICK_W, focusKeys, focusLabel,
+        function() return TO.char.statFocus or false end,
+        function(k)
+            TO:SetStatFocus(k or nil)
+            TO:UpdateAutoItems()
+            local row = autoRows.statfood
+            if row then row.sw.label:SetText(slotText(row.slot)) end
+        end)
+    focus.menuTitle = "Stat food"
+    focus.menuLabels = setmetatable({}, { __index = function(_, k)
+        return k and TO.STAT_LABELS[k] or ("Automatic (" .. focusLabel(nil) .. ")")
+    end })
+    T.Tooltip(focus, "Stat food", "Automatic picks food for your role, and falls back to any stat food. "
         .. "Pick a stat yourself (like Strength for a Protection Paladin) to track only food with that stat.")
     ctx.row()
     ctx.note("The best of each in your bags is picked for you, and better ones take over as you level. "
-        .. "Stat food follows your talents (or group role). Untick one to stop tracking it.")
+        .. "Stat food follows your talents (or group role). Turn one off to stop tracking it.")
 
     -- Mage conjures
     if class == "MAGE" then
-        ctx.header("Conjured food and water", "Min")
+        ctx.card("Conjured food and water", "Min")
         for _, cj in ipairs(self.CONJURES) do
             local id = "conjure:" .. cj.key
-            local cb = ctx.toggle(id, cj.label, true)
-            ctx.fit(cb)
-            if not self:Knows(cj.spell) then NotLearned(cb, cj.label) end
+            local sw = ctx.fit(ctx.toggle(id, cj.label, true))
+            if not self:Knows(cj.spell) then NotLearned(sw, cj.label) end
             ctx.reagentMin(id, cj.min)
             ctx.row()
         end
         local gem
         for _, g in ipairs(self.MANA_GEMS) do if self:Knows(g.spell) then gem = g break end end
-        local cb = ctx.toggle("conjure:gem", gem and ("Mana gem: " .. gem.item) or "Mana gem", true)
-        ctx.fit(cb)
-        if not gem then NotLearned(cb, "Mana gem") end
+        local sw = ctx.fit(ctx.toggle("conjure:gem", gem and ("Mana gem: " .. gem.item) or "Mana gem", true))
+        if not gem then NotLearned(sw, "Mana gem") end
         ctx.row()
         ctx.note("Click to conjure your best rank.")
     end
 
-    ctx.header("Your own items", "Min")
+    ctx.card("Your own items", "Min")
     for _, item in ipairs(self.char.custom) do
         local name = item.name
-        local cb = ctx.toggle("custom:" .. name:lower(), name, true)
-        ctx.fit(cb)
+        ctx.fit(ctx.toggle("custom:" .. name:lower(), name, true))
         ctx.minBox(item.min, function(n) item.min = n end)
-        RemoveButton(c, X_X, ctx.y, function()
+        local x = Button(c, "X", 20, X_X, ctx.y - 2, function()
             TO:RemoveCustom(name)
             TO:ShowOptionsTab("supplies")
-        end)
+        end, 20)
+        T.Tooltip(x, "Remove")
         ctx.row()
     end
-    Label(c, "Item", 4, ctx.y - 5, "GameFontHighlightSmall")
-    local nameBox = EditBox(c, MIN_X - 44, 38, ctx.y - 2, "", false)
-    local minEdit = EditBox(c, MIN_W, MIN_X, ctx.y - 2, "20", true)
-    PanelButton(c, "Add", RIGHT - (MIN_X + MIN_W + 6), MIN_X + MIN_W + 6, ctx.y - 1, function()
+    ctx.text("Item", PAD)
+    local nameBox = EditBox(c, MIN_X - 8 - (PAD + 38), PAD + 38, ctx.y - 1, "", false)
+    local minEdit = EditBox(c, MIN_W, MIN_X, ctx.y - 1, "20", true)
+    ctx.row()
+    Button(c, "Add", 90, PAD + 38, ctx.y - 1, function()
         if TO:AddCustom(nameBox:GetText(), minEdit:GetText()) then
             TO:ShowOptionsTab("supplies")
         else
@@ -626,7 +552,7 @@ local function BuildSuppliesTab(self, ctx, class)
         end
     end)
     ctx.row()
-    ctx.charCheck("Always show these, as a quick-use bar", "customAlways", 0,
+    ctx.charCheck("Always show these, as a quick-use bar", "customAlways", PAD,
         "Show your food, water, potions and items even when you have enough, dimmed, so you can click to use them. "
         .. "Low ones are bright with a red count.")
     ctx.row()
@@ -634,22 +560,12 @@ local function BuildSuppliesTab(self, ctx, class)
 
     local reagents = self.CLASS_REAGENTS[class] or {}
     local showAmmo = self.AMMO_CLASSES[class] or class == "WARRIOR" or class == "ROGUE"
-    local function vendorSection()
-        ctx.header("At vendors")
-        ctx.charCheck("Show a restock list", "restockAtVendor")
-        ctx.row()
-        ctx.charCheck("Show a Repair all button", "repairAtVendor")
-        ctx.row()
-        ctx.note("Beside the vendor window: everything above that's below its Min and this vendor sells. "
-            .. "Nothing is bought until you click Restock.")
-    end
     if #reagents > 0 or showAmmo then
-        ctx.header("Reagents and ammo", "Min")
+        ctx.card("Reagents and ammo", "Min")
         for _, rg in ipairs(reagents) do
             local id = "reagent:" .. rg.id
-            local cb = ctx.toggle(id, rg.label, true)
-            ctx.fit(cb)
-            if not self:FirstKnown(rg.requires) then NotLearned(cb, rg.label) end
+            local sw = ctx.fit(ctx.toggle(id, rg.label, true))
+            if not self:FirstKnown(rg.requires) then NotLearned(sw, rg.label) end
             ctx.reagentMin(id, rg.min)
             ctx.row()
         end
@@ -659,7 +575,14 @@ local function BuildSuppliesTab(self, ctx, class)
             ctx.row()
         end
     end
-    vendorSection()
+
+    ctx.card("At vendors")
+    ctx.charCheck("Show a restock list", "restockAtVendor")
+    ctx.row()
+    ctx.charCheck("Show a Repair all button", "repairAtVendor")
+    ctx.row()
+    ctx.note("Beside the vendor window: everything above that's below its Min and this vendor sells. "
+        .. "Nothing is bought until you click Restock.")
 end
 
 ---------------------------------------------------------------------------
@@ -668,16 +591,16 @@ end
 local function BuildMoreTab(self, ctx, class)
     local c = ctx.c
     if self.PET_CLASSES[class] then
-        ctx.header("Pet", class == "HUNTER" and "Min" or nil)
+        ctx.card("Pet", class == "HUNTER" and "Min" or nil)
         if class == "HUNTER" then
-            local cb = ctx.toggle("pet:summon", "Pet is out and alive", true)
-            if not self:Knows("Call Pet") then NotLearned(cb, "Pet is out and alive") end
+            local sw = ctx.toggle("pet:summon", "Pet is out and alive", true)
+            if not self:Knows("Call Pet") then NotLearned(sw, "Pet is out and alive") end
             ctx.row()
             ctx.toggle("pet:happy", "Pet is happy", true)
             ctx.row()
-            local fcb = ctx.toggle("pet:food", "Pet food", true)
-            fcb.label:SetWidth(70)
-            EditBox(c, MIN_X - 110, 102, ctx.y - 2, self.char.petFood or "", false, function(text)
+            local food = ctx.toggle("pet:food", "Pet food", true)
+            food.label:SetWidth(90)
+            EditBox(c, MIN_X - 8 - 150, 150, ctx.y - 1, self.char.petFood or "", false, function(text)
                 TO.char.petFood = strtrim and strtrim(text) or text
                 TO:RequestUpdate()
             end)
@@ -687,11 +610,11 @@ local function BuildMoreTab(self, ctx, class)
                 .. "and you're reminded when you're low.")
         else
             local known = self:KnownOptions(self.WARLOCK_PETS)
-            local cb = ctx.toggle("pet:summon", "Demon is out", true)
+            local sw = ctx.toggle("pet:summon", "Demon is out", true)
             if #known == 0 then
-                NotLearned(cb, "Demon is out")
+                NotLearned(sw, "Demon is out")
             elseif #known > 1 then
-                SpellCycle(c, CYCLE_X, ctx.y, known, function() return TO:PetSummonSpell() end,
+                ctx.spellPick(known, function() return TO:PetSummonSpell() end,
                     function(v) TO.char.prefs.pet = v TO:RequestUpdate() end)
             end
             ctx.row()
@@ -700,20 +623,20 @@ local function BuildMoreTab(self, ctx, class)
     end
 
     if class == "WARLOCK" then
-        ctx.header("Soulstone")
-        local cb = ctx.toggle("soulstone", "Someone in the group has one", true)
-        if not self:FirstKnown(self.SOULSTONE_SPELLS) then NotLearned(cb, "Someone in the group has one") end
+        ctx.card("Soulstone")
+        local sw = ctx.toggle("soulstone", "Someone in the group has one", true)
+        if not self:FirstKnown(self.SOULSTONE_SPELLS) then NotLearned(sw, "Someone in the group has one") end
         ctx.row()
-        ctx.charCheck("Only in dungeons and raids", "soulstoneInstanceOnly", 24)
+        ctx.charCheck("Only in dungeons and raids", "soulstoneInstanceOnly", SUB)
         ctx.row()
-        ctx.charCheck("In raids, check the whole raid", "wholeRaid", 24)
+        ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
         ctx.row()
         ctx.note("Click to put your Soulstone on the healer (or your friendly target), or to make one.")
     end
 
-    ctx.header("Gear and bags", "Min")
-    ctx.fit(ctx.toggle("durability", "Low durability", true))
-    Label(c, "|cff808080set % on the left|r", MIN_X - 20, ctx.y - 5, "GameFontHighlightSmall")
+    ctx.card("Gear and bags", "Min")
+    ctx.fit(ctx.toggle("durability", "Low durability", true), 350)
+    Label(c, "|cff808080set % on the Display tab|r", 350, ctx.y - 7, "GameFontHighlightSmall")
     ctx.row()
     ctx.fit(ctx.toggle("bags", "Free bag slots", true))
     ctx.reagentMin("bags", self.BAGS_DEFAULT_MIN)
@@ -740,8 +663,8 @@ StaticPopupDialogs["TOPPEDOFFFOREVER_COPY"] = {
 
 local function BuildProfilesTab(self, ctx)
     local c = ctx.c
-    ctx.header("Dungeons and the open world")
-    CheckBox(c, "Separate checks outside dungeons and raids", 0, ctx.y,
+    ctx.card("Dungeons and the open world")
+    ctx.switch("Separate checks outside dungeons and raids",
         function() return TO.char.splitProfiles and true or false end,
         function(v)
             TO.char.splitProfiles = v
@@ -749,28 +672,29 @@ local function BuildProfilesTab(self, ctx)
             TO:RequestUpdate()
         end)
     ctx.row()
-    ctx.note("Turn this on to have a lighter set of checks while questing. Each tab then has an "
-        .. "\"Editing\" choice at the top: tick and untick checks for dungeons and raids, or for everywhere else. "
-        .. "Anything you don't change outside follows the dungeon setting.")
+    ctx.note("Turn this on to have a lighter set of checks while questing. The Buffs, Supplies and Pet & gear tabs "
+        .. "then have an \"Editing\" choice at the top: turn checks on and off for dungeons and raids, or for "
+        .. "everywhere else. Anything you don't change outside follows the dungeon setting.")
 
-    ctx.header("Copy another character")
+    ctx.card("Copy another character")
     local others = self:OtherCharacters()
     if #others == 0 then
-        Label(c, "|cff808080No other characters yet. Log in with them once.|r", 26, ctx.y - 4, "GameFontHighlightSmall")
+        ctx.text("|cff808080No other characters yet. Log in with them once.|r")
         ctx.row()
     else
-        local choices = {}
+        local keys, labels = {}, {}
         for _, o in ipairs(others) do
             local cls = o.class and o.class:sub(1, 1) .. o.class:sub(2):lower() or "?"
-            choices[#choices + 1] = { value = o.key, text = o.key .. " (" .. cls .. ")" }
+            keys[#keys + 1] = o.key
+            labels[o.key] = o.key .. " (" .. cls .. ")"
         end
         self.copySource = self.copySource or others[1].key
         local ok = false
         for _, o in ipairs(others) do if o.key == self.copySource then ok = true end end
         if not ok then self.copySource = others[1].key end
-        Dropdown(c, 0, ctx.y, RIGHT - 76, choices, function() return TO.copySource end,
+        Dropdown(c, PAD, ctx.y - 1, LIST_W - PAD * 2 - 100, keys, labels, function() return TO.copySource end,
             function(v) TO.copySource = v end)
-        PanelButton(c, "Copy", 70, RIGHT - 70, ctx.y, function()
+        Button(c, "Copy", 90, LIST_W - PAD - 90, ctx.y - 1, function()
             local key = TO.copySource
             if not key then return end
             if StaticPopup_Show then
@@ -783,51 +707,105 @@ local function BuildProfilesTab(self, ctx)
         ctx.row()
     end
     ctx.note("Copies checks, Min counts, your own items, blessing and stat food choices. "
-        .. "Display settings on the left are already shared by all your characters.")
+        .. "The Display and General tabs are already shared by all your characters.")
 end
 
-local TAB_BUILDERS = { buffs = BuildBuffsTab, supplies = BuildSuppliesTab, more = BuildMoreTab,
+local LIST_BUILDERS = { buffs = BuildBuffsTab, supplies = BuildSuppliesTab, more = BuildMoreTab,
     profiles = BuildProfilesTab }
 
+---------------------------------------------------------------------------
+-- Display and General tabs: settings every character shares. Built once.
+---------------------------------------------------------------------------
+local function BuildDisplayTab(p)
+    local rem = Card(p, "Reminders", 0, 0, PAGE_W, 150)
+    Setting(rem, "Show reminders", 12, -30, "shown")
+    Setting(rem, "Lock position", 12, -56, "locked", "Unlock to drag the reminders by the ToppedOff header above them.")
+    Setting(rem, "Show header and frame", 12, -82, "showHeader",
+        "The ToppedOff frame around the icons. It always shows while unlocked, so you can drag it by the header.")
+    Setting(rem, "Only in dungeons and raids", 284, -30, "onlyInInstance")
+    Setting(rem, "Hide in combat", 284, -56, "hideInCombat",
+        "Reminders can only change out of combat, so hiding them in combat keeps things tidy.")
+    Setting(rem, "Keep potions in combat", 308, -82, "combatBar",
+        "While the reminders are hidden in combat, your healing and mana potions, Healthstone and bandage stay on screen in one row, with live counts and cooldowns.")
+    local reset = FlatButton(rem, "Reset position", 130)
+    reset:SetPoint("TOPLEFT", 12, -114)
+    reset:SetScript("OnClick", function() SlashCmdList.TOPPEDOFFFOREVER("reset") end)
+    T.Note(rem, "Position changes wait until combat ends.", 154, -119)
+
+    local size = Card(p, "Size", 0, -160, PAGE_W, 80)
+    Slider(size, "Icon size", 12, -30, "iconSize", 20, 64)
+    Slider(size, "Icons per row", 284, -30, "iconsPerRow", 4, 16)
+
+    local warn = Card(p, "Warnings", 0, -250, PAGE_W, 80)
+    Slider(warn, "Warn before buffs run out", 12, -30, "warnMinutes", 1, 10, " min")
+    Slider(warn, "Durability warning below", 284, -30, "durabilityPct", 5, 75, "%")
+end
+
+local function BuildGeneralTab(p)
+    local chat = Card(p, "Chat reminders", 0, 0, PAGE_W, 110)
+    Setting(chat, "On ready check", 12, -30, "readyCheck", "Lists anything missing in chat when a ready check starts.")
+    Setting(chat, "On entering a dungeon or raid", 12, -56, "instanceReminder")
+    Setting(chat, "Play a sound with chat reminders", 12, -82, "sound")
+
+    local other = Card(p, "Other", 0, -120, PAGE_W, 88)
+    Setting(other, "Show minimap icon", 12, -30, "minimap")
+    local check = FlatButton(other, "Check spells", 130)
+    check:SetPoint("TOPLEFT", 12, -54)
+    check:SetScript("OnClick", function() TO:Check() end)
+    T.Note(other, "Lists this character's checks in chat.", 154, -59)
+
+    local cmds = Card(p, "Commands", 0, -218, PAGE_W, 150)
+    local lines = {
+        "|cff8fd3ff/topoff|r  open or close these options",
+        "|cff8fd3ff/topoff toggle|r  show or hide the reminders",
+        "|cff8fd3ff/topoff lock|r / |cff8fd3ff/topoff unlock|r  lock or unlock the reminders",
+        "|cff8fd3ff/topoff check|r  list what's checked for your class",
+        "|cff8fd3ff/topoff add 20 Item Name|r  keep an item stocked",
+        "|cff8fd3ff/topoff remove Item Name|r  stop checking it",
+        "|cff8fd3ff/topoff reset|r  reset the reminders' position",
+    }
+    for i, l in ipairs(lines) do
+        local fs = Text(cmds, l, "GameFontHighlightSmall")
+        fs:SetPoint("TOPLEFT", 12, -26 - (i - 1) * 17)
+    end
+end
+
+---------------------------------------------------------------------------
+-- Window
+---------------------------------------------------------------------------
+local lists = {}   -- tab key -> its scrolling list
+
+-- Draws the list on the tab that's showing (nothing to do on Display and General).
+-- A list drawn again while you're on it stays where you'd scrolled to.
 function TO:BuildChecksList()
-    local frame = self.config
-    local c = frame.checks
-    if c then
-        ReleasePool(c)
-    else
-        c = CreateFrame("Frame", nil, frame.scrollChild)
-        c:SetPoint("TOPLEFT")
-        c.pool = {}
-        frame.checks = c
-    end
-    c:SetSize(RIGHT + 4, 10)
-    local ctx = Builder(c)
     local tab = self.optionsTab or "buffs"
+    for key, other in pairs(lists) do if key ~= tab then other.shown = nil end end
+    local scroll = lists[tab]
+    if not scroll then return end
+    local c = scroll.child
+    ReleasePool(c)
+    local ctx = Builder(c)
     if self.char.splitProfiles and tab ~= "profiles" then
-        Label(c, "Editing checks for", 0, -6, "GameFontNormal")
-        Dropdown(c, CYCLE_X, -2, CYCLE_W, {
-            { value = false, text = "Dungeons and raids" },
-            { value = true, text = "Everywhere else" },
-        }, function() return TO.editOutside and true or false end,
-        function(v)
-            TO.editOutside = v
-            for _, cb in ipairs(c.toggles) do cb.refresh() end
-        end)
-        ctx.y = -30
+        ctx.card("Editing checks for")
+        Dropdown(c, PAD, ctx.y - 1, 220, { false, true },
+            { [false] = "Dungeons and raids", [true] = "Everywhere else" },
+            function() return TO.editOutside and true or false end,
+            function(v)
+                TO.editOutside = v
+                for _, sw in ipairs(c.toggles) do sw.refresh() end
+            end)
+        ctx.row()
     end
-    TAB_BUILDERS[tab](self, ctx, self:PlayerClass())
-    local h = -ctx.y + 10
-    c:SetHeight(h)
-    frame.scrollChild:SetHeight(h)
-    if frame.scroll.SetVerticalScroll then frame.scroll:SetVerticalScroll(0) end
+    LIST_BUILDERS[tab](self, ctx, self:PlayerClass())
+    scroll:SetContent(LIST_W, ctx.finish(), scroll.shown == tab)
+    scroll.shown = tab
 end
 
 function TO:ShowOptionsTab(key)
     self.optionsTab = key
-    local frame = self.config
-    if not frame then return end
-    for k, b in pairs(frame.tabs) do b:SetSelected(k == key) end
-    self:BuildChecksList()
+    local win = self.config
+    if not win then return end
+    win:ShowTab(key)
 end
 
 function TO:RefreshConfig()
@@ -837,136 +815,56 @@ function TO:RefreshConfig()
     end
 end
 
----------------------------------------------------------------------------
--- Window
----------------------------------------------------------------------------
+local TAB_ICONS = {
+    buffs = "Interface\\Icons\\Spell_Holy_WordFortitude",
+    supplies = "Interface\\Icons\\INV_Misc_Bag_08",
+    more = "Interface\\Icons\\Ability_Hunter_BeastCall",
+    profiles = "Interface\\Icons\\INV_Misc_Note_01",
+}
+
+-- Beside a page's title: who its settings are for
+local function Scope(page, who)
+    local fs = Text(page, who, "GameFontDisableSmall")
+    fs:SetPoint("BOTTOMLEFT", page.title, "BOTTOMRIGHT", 8, 2)
+end
+
 function TO:BuildConfig()
-    local f = CreateFrame("Frame", "ToppedOffForeverOptions", UIParent)
-    f:SetSize(620, 580)
-    TO:SkinFrame(f, TO.COLORS.purple, TO.COLORS.goldDark, 0.96, 2)
-    f:SetPoint("CENTER")
-    f:SetFrameStrata("DIALOG")
-    f:SetMovable(true)
-    f:EnableMouse(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", f.StopMovingOrSizing)
-    f:SetClampedToScreen(true)
-    f:Hide()
-    table.insert(UISpecialFrames, "ToppedOffForeverOptions")   -- Escape closes it
-
-    -- Crimson title banner with gold edges, like the logo's ribbon
-    local banner = CreateFrame("Frame", nil, f)
-    banner:SetPoint("TOPLEFT", 2, -2)
-    banner:SetPoint("TOPRIGHT", -2, -2)
-    banner:SetHeight(28)
-    TO:SkinFrame(banner, TO.COLORS.crimson, TO.COLORS.goldDark, 1, 1)
-    local title = banner:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("CENTER")
-    title:SetText("ToppedOff Forever")
-    title:SetTextColor(unpack(TO.COLORS.gold))
-    f.banner = banner
-
-    local close = CreateFrame("Button", nil, banner, "UIPanelCloseButton")
-    close:SetPoint("RIGHT", 2, 0)
-    close:SetScript("OnClick", function() f:Hide() end)
-    self.config = f
-
-    -- Logo in the top-left corner
-    -- Its own frame, drawn above the title banner so the banner doesn't cover it
-    local logoFrame = CreateFrame("Frame", nil, f)
-    logoFrame:SetAllPoints(f)
-    logoFrame:SetFrameLevel(banner:GetFrameLevel() + 5)
-    local logo = logoFrame:CreateTexture(nil, "OVERLAY")
-    logo:SetSize(60, 60)
-    logo:SetPoint("TOPLEFT", -18, 18)
-    logo:SetTexture(TO.ICONS.addon)
-    f.logo = logo
-
-    -- Left column: display
-    local x, y = 16, -46
-    Heading(f, "Display", x + 30, y)
-    y = y - 22
-    SettingCheck(f, "Show reminders", x, y, "shown")
-    y = y - 24
-    SettingCheck(f, "Lock position", x, y, "locked", "Unlock to drag the reminders by the ToppedOff header above them.")
-    y = y - 24
-    SettingCheck(f, "Hide in combat", x, y, "hideInCombat",
-        "Reminders can only change out of combat, so hiding them in combat keeps things tidy.")
-    y = y - 24
-    SettingCheck(f, "Keep potions in combat", x + 20, y, "combatBar",
-        "While the reminders are hidden in combat, your healing and mana potions, Healthstone and bandage stay on screen in one row, with live counts and cooldowns.")
-    y = y - 24
-    SettingCheck(f, "Only in dungeons and raids", x, y, "onlyInInstance")
-    y = y - 24
-    SettingCheck(f, "Show header and frame", x, y, "showHeader",
-        "The ToppedOff frame around the icons. It always shows while unlocked, so you can drag it by the header.")
-    y = y - 24
-    SettingCheck(f, "Minimap button", x, y, "minimap")
-    y = y - 34
-    Slider(f, "Icon size", x + 4, y, "iconSize", 20, 64)
-    y = y - 46
-    Slider(f, "Icons per row", x + 4, y, "iconsPerRow", 4, 16)
-    y = y - 46
-    Slider(f, "Warn before buffs run out", x + 4, y, "warnMinutes", 1, 10, " min")
-    y = y - 46
-    Slider(f, "Durability warning below", x + 4, y, "durabilityPct", 5, 75, "%")
-    y = y - 44
-    Heading(f, "Chat reminders", x, y)
-    y = y - 22
-    SettingCheck(f, "On ready check", x, y, "readyCheck", "Lists anything missing in chat when a ready check starts.")
-    y = y - 24
-    SettingCheck(f, "On entering a dungeon or raid", x, y, "instanceReminder")
-    y = y - 24
-    SettingCheck(f, "Play a sound with chat reminders", x, y, "sound")
-    y = y - 32
-    PanelButton(f, "Reset position", 112, x, y, function()
-        SlashCmdList.TOPPEDOFFFOREVER("reset")
-    end)
-    PanelButton(f, "Check spells", 104, x + 118, y, function() TO:Check() end)
-
-    -- Right column: checks, in tabs
-    Heading(f, "What to check (this character)", 262, -46)
-    -- Navy panel behind the checks list
-    local panel = CreateFrame("Frame", nil, f)
-    panel:SetPoint("TOPLEFT", 252, -94)
-    panel:SetPoint("BOTTOMRIGHT", -8, 8)
-    TO:SkinFrame(panel, TO.COLORS.navy, TO.COLORS.goldDark, 0.9, 1)
-
-    -- Tab buttons sitting on top of the panel
-    f.tabs = {}
-    local tabW, tabX = 86, 252
+    local tabs = {}
     for _, t in ipairs(TO.OPTION_TABS) do
-        local b = CreateFrame("Button", nil, f)
-        b:SetSize(tabW, 24)
-        b:SetPoint("TOPLEFT", tabX, -71)
-        TO:SkinFrame(b, TO.COLORS.navy, TO.COLORS.goldDark, 0.9, 1)
-        b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        b.text:SetPoint("CENTER", 0, 0)
-        b.text:SetText(t.label)
-        function b:SetSelected(on)
-            local bg = on and TO.COLORS.crimson or TO.COLORS.navy
-            self.skinBg:SetColorTexture(bg[1], bg[2], bg[3], on and 1 or 0.6)
-            if on then self.text:SetTextColor(unpack(TO.COLORS.gold)) else self.text:SetTextColor(0.7, 0.7, 0.7) end
-        end
-        b:SetScript("OnClick", function() TO:ShowOptionsTab(t.key) end)
-        f.tabs[t.key] = b
-        tabX = tabX + tabW + 4
+        tabs[#tabs + 1] = { key = t.key, label = t.label, icon = TAB_ICONS[t.key], build = function(body, page)
+            Scope(page, "this character")
+            local scroll = T.ScrollArea(body, T.WINDOW.BODY_H)
+            scroll.child.pool = {}
+            lists[t.key] = scroll
+        end }
     end
+    tabs[#tabs + 1] = { key = "display", label = "Display", icon = "Interface\\Icons\\INV_Misc_Spyglass_03",
+        build = function(body, page) Scope(page, "all your characters") BuildDisplayTab(body) end }
+    tabs[#tabs + 1] = { key = "general", label = "General", icon = "Interface\\Icons\\INV_Misc_Gear_01",
+        build = function(body, page) Scope(page, "all your characters") BuildGeneralTab(body) end }
 
-    local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 260, -102)
-    scroll:SetPoint("BOTTOMRIGHT", -30, 14)
-    local child = CreateFrame("Frame", nil, scroll)
-    child:SetSize(330, 10)
-    scroll:SetScrollChild(child)
-    f.scroll = scroll
-    f.scrollChild = child
-
-    f:SetScript("OnShow", function()
-        RunRefreshers()
-        TO:ShowOptionsTab(TO.optionsTab or "buffs")
-    end)
+    self.config = T.Window({
+        name = "ToppedOffForeverOptions",
+        tabs = tabs,
+        hint = "/topoff to open  -  /topoff check to list your checks",
+        version = function()
+            local get = C_AddOns and C_AddOns.GetAddOnMetadata
+            local v = get and get(ADDON, "Version")
+            if type(v) == "string" and not v:find("@", 1, true) then return (v:gsub("^v", "")) end
+        end,
+        onShow = function()
+            RunRefreshers()
+            for _, scroll in pairs(lists) do scroll.shown = nil end   -- a reopened window starts at the top
+            TO:ShowOptionsTab(TO.optionsTab or "buffs")
+        end,
+        -- Every way to a tab (a click, /topoff, opening the window) draws its list afresh
+        onTab = function(key)
+            if not TO.config then return end   -- the window is still being built
+            TO.optionsTab = key
+            TO:BuildChecksList()
+        end,
+    })
+    self.config.lists = lists
 end
 
 function TO:OpenConfig()

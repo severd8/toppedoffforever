@@ -42,15 +42,16 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 
 ### Options window
 
-| Side | What's there |
+| Tab | What's there |
 |---|---|
-| **Display** (left) | Show reminders, lock, hide in combat, keep potions in combat, only in dungeons and raids, show header, minimap button, icon size, icons per row, warning time for buffs, durability warning %, chat reminders and sound, Reset position and Check spells buttons |
-| **Buffs** tab (right) | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, elixirs and flasks |
-| **Supplies** tab | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
-| **Pet & gear** tab | Pet, Soulstone (Warlocks), durability and bag space |
-| **Profiles** tab | Separate checks outside dungeons, copy another character |
+| **Buffs** | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, elixirs and flasks |
+| **Supplies** | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
+| **Pet & gear** | Pet, Soulstone (Warlocks), durability and bag space |
+| **Profiles** | Separate checks outside dungeons, copy another character |
+| **Display** | Show reminders, lock, show header and frame, only in dungeons and raids, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |
+| **General** | Chat reminders and sound, minimap icon, Check spells, the slash commands |
 
-Everything on the right is saved per character. Display settings on the left (including **Icons per row**) are shared by all your characters.
+The first four tabs are saved per character. Display and General are shared by all your characters.
 
 ### Keybindings
 

@@ -51,6 +51,7 @@ def draw_view(view, scale=2):
         if it.get("layer") == "BACKGROUND" and "p" in it:
             return it["p"] + 0.5
         return it["i"]
+    late = []
     for it in sorted(view["items"], key=lambda it: (it.get("fl", 0), z(it))):
         d = ImageDraw.Draw(layer)
         x0, y0, x1, y1 = box(it)
@@ -81,9 +82,9 @@ def draw_view(view, scale=2):
                 d.line([bx + 3 * scale, by + 8 * scale, bx + 7 * scale, by + 13 * scale, bx + 14 * scale, by + 2 * scale],
                        fill=(255, 210, 0, 255), width=3 * scale)
         elif kind == "EditBox":
-            d.rectangle([x0, y0, x1, y1], fill=(10, 10, 10, 255), outline=(120, 120, 120, 255), width=scale)
+            # The box itself is drawn by its own fill and border textures; its text goes on top of them
             if it.get("text"):
-                d.text((x0 + 5 * scale, (y0 + y1) / 2), it["text"], font=font(11 * scale), fill=(255, 255, 255, 255), anchor="lm")
+                late.append((it, clip))
         elif kind == "Button" and tmpl == "UIPanelButtonTemplate":
             d.rounded_rectangle([x0, y0, x1, y1], radius=3 * scale, fill=(125, 18, 12, 255), outline=(200, 160, 60, 255), width=scale)
             if it.get("text"):
@@ -132,7 +133,16 @@ def draw_view(view, scale=2):
         else:
             img = Image.alpha_composite(img, layer)
         layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(img).text((6 * scale, 6 * scale), view["name"], font=font(11 * scale), fill=(200, 200, 200, 255))
+    d = ImageDraw.Draw(img)
+    for it, clip in late:
+        x0, y0, x1, y1 = box(it)
+        if clip and (y1 < (clip[1] - oy) * scale or y0 > (clip[3] - oy) * scale):
+            continue
+        if it.get("justify") == "CENTER":
+            d.text(((x0 + x1) / 2, (y0 + y1) / 2), it["text"], font=font(10 * scale), fill=(255, 255, 255, 255), anchor="mm")
+        else:
+            d.text((x0 + 6 * scale, (y0 + y1) / 2), it["text"], font=font(10 * scale), fill=(255, 255, 255, 255), anchor="lm")
+    d.text((6 * scale, 6 * scale), view["name"], font=font(11 * scale), fill=(200, 200, 200, 255))
     return img
 
 

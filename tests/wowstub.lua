@@ -116,7 +116,7 @@ end
 function Methods:GetWidth() return 140 end
 -- Text layout and colour, so a test can see what a reused widget still carries
 -- (nil = whatever the font gives it)
-function Methods:SetWidth(w) protectedCheck(self, "SetWidth") self.__width = w end
+function Methods:SetWidth(w) protectedCheck(self, "SetWidth") self.__width = w if self.__size then self.__size[1] = w end end
 function Methods:SetJustifyH(j) self.__justify = j end
 function Methods:GetJustifyH() return self.__justify end
 function Methods:SetWordWrap(v) self.__wrap = v end
@@ -130,7 +130,13 @@ function Methods:GetFrameLevel() return 1 end
 function Methods:SetFrameLevel(l) self.__frameLevel = l end
 function Methods:SetSize(w, h) protectedCheck(self, "SetSize") self.__size = { w, h } end
 function Methods:SetValue(v) self.__value = v if self.__scripts.OnValueChanged then self.__scripts.OnValueChanged(self, issecretvalue(v) and 0 or v) end end
-function Methods:SetMinMaxValues(a, b) end
+function Methods:SetMinMaxValues(a, b) self.__min, self.__max = a, b end
+function Methods:GetMinMaxValues() return self.__min, self.__max end
+function Methods:GetValue() return self.__value end
+function Methods:SetVerticalScroll(v) self.__scroll = v end
+function Methods:SetColorTexture(r, g, b, a) self.__color = { r, g, b, a } end
+function Methods:SetHeight(h) protectedCheck(self, "SetHeight") self.__height = h if self.__size then self.__size[2] = h end end
+function Methods:GetHeight() return self.__height or (self.__size and self.__size[2]) end
 function Methods:RegisterEvent(e) self.__events = self.__events or {} self.__events[e] = true end
 function Methods:RegisterUnitEvent(e) self.__events = self.__events or {} self.__events[e] = true end
 function Methods:SetAlpha(a) self.__alpha = a end

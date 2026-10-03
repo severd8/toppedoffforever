@@ -10,6 +10,7 @@
 ## X-Curse-Project-ID: 1718878
 ## X-Category: Buffs & Debuffs
 
+Theme.lua
 Core.lua
 Options.lua
 Vendor.lua

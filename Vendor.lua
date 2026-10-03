@@ -4,6 +4,7 @@
 
 local _, ns = ...
 local TO = ns.TO
+local T = ns.Theme
 
 local WIDTH, ROW_H, MAX_ROWS = 260, 20, 12
 
@@ -18,10 +19,14 @@ local function Money(copper)
     return table.concat(parts, " ")
 end
 
+-- A flat button that greys out while it can't be clicked
 local function Button(parent, text, width)
-    local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    b:SetSize(width, 22)
-    b:SetText(text)
+    local b = T.FlatButton(parent, text, width)
+    local enable = b.SetEnabled
+    function b:SetEnabled(on)
+        enable(self, on)
+        self:SetAlpha(on and 1 or 0.45)
+    end
     return b
 end
 
@@ -34,52 +39,38 @@ function TO:BuildVendorPanel()
     else
         f:SetPoint("CENTER")
     end
-    self:SkinFrame(f, self.COLORS.navy, self.COLORS.goldDark, 0.95, 1)
+    T.Panel(f, 0.95)
     f:EnableMouse(true)
     f:Hide()
 
-    -- Header strip, like the reminder frame
+    -- Header bar, like the reminder frame's
     local header = CreateFrame("Frame", nil, f)
-    header:SetPoint("TOPLEFT", 1, -1)
-    header:SetPoint("TOPRIGHT", -1, -1)
-    header:SetHeight(20)
-    local cr, gd = self.COLORS.crimson, self.COLORS.goldDark
-    local hbg = header:CreateTexture(nil, "BACKGROUND")
-    hbg:SetAllPoints()
-    hbg:SetColorTexture(cr[1], cr[2], cr[3], 0.95)
-    local hline = header:CreateTexture(nil, "BORDER")
-    hline:SetPoint("BOTTOMLEFT")
-    hline:SetPoint("BOTTOMRIGHT")
-    hline:SetHeight(1)
-    hline:SetColorTexture(gd[1], gd[2], gd[3], 1)
-    local logo = header:CreateTexture(nil, "OVERLAY")
-    logo:SetSize(16, 16)
-    logo:SetPoint("LEFT", 3, 0)
-    logo:SetTexture(self.ICONS.addon)
-    local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    title:SetPoint("LEFT", logo, "RIGHT", 4, 0)
-    title:SetText("ToppedOff: restock")
-    title:SetTextColor(unpack(self.COLORS.gold))
+    header:SetPoint("TOPLEFT")
+    header:SetPoint("TOPRIGHT")
+    header:SetHeight(22)
+    T.HeaderStrip(header, "ToppedOff: restock")
+    header:FitLogo(22)
 
-    -- Item rows: tick box, icon, "20 Sacred Candle", cost
+    -- Item rows: switch (buy it or not), icon, "20 Sacred Candle", cost
     f.rows = {}
     f.skipped = {}
     for i = 1, MAX_ROWS do
-        local r = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
-        r:SetSize(20, 20)
-        r:SetPoint("TOPLEFT", 6, -24 - (i - 1) * ROW_H)
+        local r = T.SwitchWidget(f)
+        r.SetChecked, r.GetChecked = r.SetOn, r.IsOn
+        r:SetPoint("TOPLEFT", 8, -28 - (i - 1) * ROW_H)
         r.icon = f:CreateTexture(nil, "ARTWORK")
         r.icon:SetSize(16, 16)
-        r.icon:SetPoint("LEFT", r, "RIGHT", 2, 0)
+        r.icon:SetPoint("LEFT", r, "RIGHT", 6, 0)
         r.text = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         r.text:SetPoint("LEFT", r.icon, "RIGHT", 4, 0)
-        r.text:SetWidth(WIDTH - 146)
+        r.text:SetWidth(WIDTH - 160)
         r.text:SetJustifyH("LEFT")
         r.text:SetWordWrap(false)
         r.cost = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.cost:SetPoint("RIGHT", f, "TOPRIGHT", -8, -34 - (i - 1) * ROW_H)
+        r.cost:SetPoint("RIGHT", f, "TOPRIGHT", -8, -36 - (i - 1) * ROW_H)
         r.cost:SetJustifyH("RIGHT")
         r:SetScript("OnClick", function(self)
+            self:SetOn(not self:IsOn())
             if self.row then
                 self.row.skip = not self:GetChecked()
                 f.skipped[self.row.name] = self.row.skip or nil   -- remembered while the vendor is open
@@ -91,7 +82,7 @@ function TO:BuildVendorPanel()
     end
 
     f.none = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    f.none:SetPoint("TOPLEFT", 10, -28)
+    f.none:SetPoint("TOPLEFT", 10, -30)
     f.none:SetText("You're topped off.")
 
     f.total = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -174,7 +165,7 @@ function TO:UpdateVendorPanel()
         end
     end
 
-    local y = -24 - shown * ROW_H
+    local y = -26 - shown * ROW_H
     f.none:SetShown(#plan == 0 and self.char.restockAtVendor)
     if #plan == 0 then y = y - (self.char.restockAtVendor and 18 or 0) end
     if #plan > 0 then

@@ -1,3 +1,13 @@
+## 1.6.0
+
+A new look, shared with TauntMaster Forever and Outfitter Forever.
+
+- **New options window**, laid out like TauntMaster Forever's: tabs down the left, settings in cards. Buffs, Supplies, Pet & gear and Profiles are this character's checks; Display and General are shared by all your characters. Every setting is still there.
+- Tick boxes are now on/off switches, and a choice of spells opens a list instead of stepping to the next one.
+- The header above the icons, the frame around them and the vendor restock panel use the same dark and red colours. The header keeps the logo and name.
+- Chat lines start with the logo and "ToppedOff Forever".
+- A list you've scrolled down stays where it is when you add or remove an item.
+
 ## 1.5.14
 
 Under the hood: a code review, with fixes and lighter work in groups. Nothing changes in how the addon looks or is used.

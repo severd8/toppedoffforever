@@ -21,6 +21,7 @@ setmetatable(_G, {
         rawset(t, k, v)
     end,
 })
+load_file(ADDON_DIR .. "/Theme.lua")
 load_file(ADDON_DIR .. "/Core.lua")
 load_file(ADDON_DIR .. "/Options.lua")
 load_file(ADDON_DIR .. "/Vendor.lua")
@@ -313,6 +314,14 @@ SECRET_MODE = false
 refresh()
 
 step("slash commands")
+-- A tab asked for before the options window has ever been opened is the one it opens on
+assertEq(TO.config, nil, "(the window isn't built until it's first opened)")
+TO:ShowOptionsTab("supplies")
+SlashCmdList.TOPPEDOFFFOREVER("")
+assertEq(TO.optionsTab, "supplies", "the window opens on the tab that was asked for")
+assertEq(TO.config.pages.supplies:IsVisible(), true, "(and shows it)")
+SlashCmdList.TOPPEDOFFFOREVER("")
+assertEq(TO.config:IsShown(), false, "/topoff again closes it")
 for _, cmd in ipairs({ "", "", "lock", "unlock", "check", "toggle", "toggle", "help", "reset" }) do
     SlashCmdList.TOPPEDOFFFOREVER(cmd)
 end
@@ -338,21 +347,31 @@ for _, class in ipairs({ "MAGE", "PRIEST", "DRUID", "WARLOCK", "PALADIN", "HUNTE
     for _, t in ipairs(TO.OPTION_TABS) do TO:ShowOptionsTab(t.key) end
 end
 assertEq(TO.optionsTab, "profiles", "last tab shown")
-TO:ShowOptionsTab("supplies")
--- Click every checkbox and button in the checks list, and commit every edit box
-for _, f in ipairs(ALL_FRAMES) do
-    if f.__kind == "CheckButton" and f.__scripts.OnClick then
-        f.__checked = not f.__checked
-        f.__scripts.OnClick(f)
-    elseif f.__kind == "EditBox" and f.__scripts.OnEnterPressed then
-        f.__text = f.__text ~= "" and f.__text or "7"
-        f.__scripts.OnEnterPressed(f)
+-- On every tab: flip every switch, pick from every choice box, press every button,
+-- and commit every text box (the window's own X, Close and tab buttons aside)
+for _, tab in ipairs({ "buffs", "supplies", "more", "profiles", "display", "general" }) do
+    TO:ShowOptionsTab(tab)
+    assertEq(TO.config.pages[tab]:IsVisible(), true, tab .. " tab shown")
+    local function inWindow(f)
+        while f do if f == TO.config then return true end f = f.__parent end
+        return false
     end
-end
-for _, f in ipairs(ALL_FRAMES) do
-    if f.__kind == "Button" and f.__template == "UIPanelButtonTemplate" and f.__scripts.OnClick then
-        f.__scripts.OnClick(f)
+    local visible = {}
+    for _, f in ipairs(ALL_FRAMES) do
+        if f:IsVisible() and inWindow(f) and f.__parent ~= TO.config.header and f.__parent ~= TO.config.footer
+            and not f.selBg then
+            visible[#visible + 1] = f
+        end
     end
+    for _, f in ipairs(visible) do
+        if f.__kind == "EditBox" and f.__scripts.OnEnterPressed then
+            f.__text = f.__text ~= "" and f.__text or "7"
+            f.__scripts.OnEnterPressed(f)
+        elseif f.__kind == "Button" and f.__scripts.OnClick and TO.config:IsVisible() then
+            f.__scripts.OnClick(f)
+        end
+    end
+    assertEq(TO.config:IsVisible(), true, "the window stays open")
 end
 tick()
 TO:OpenConfig()
@@ -371,10 +390,13 @@ mm.__scripts.OnEnter(mm)
 TO.db.minimap = false TO:ApplySettings()
 assertEq(mm.__shown, false, "minimap button hidden")
 
-assert(TO.config.logo.__parent ~= TO.config, "logo sits in its own frame above the banner")
 assert(TO.config.logo.__texture:find("Media\\Icon"), "options window shows the logo")
+assertEq(TO.config.title:GetText(), "ToppedOff Forever", "and the addon's name")
+assertEq(TO.header.text:GetText(), "ToppedOff", "the header bar shows the short name")
 assert(TO.header.logo.__texture:find("Media\\Icon"), "header shows the logo")
-assert(lastLog("Media\\Icon"), "chat lines carry the logo")
+SlashCmdList.TOPPEDOFFFOREVER("lock")
+assertEq(LOG[#LOG], "|TInterface\\AddOns\\ToppedOffForever\\Media\\Icon:0|t |cffe8a040ToppedOff Forever|r: locked.",
+    "chat lines start with the logo and the addon's name")
 
 step("frame width")
 TO.db.locked, TO.db.onlyInInstance = false, false
@@ -863,7 +885,7 @@ assertEq(byName["Morning Glory Dew"].count, 10, "dew: 10 bought")
 assertEq(byName["Fancy Thing"], nil, "special-currency items skipped")
 -- Untick feathers, then Restock
 for _, r in ipairs(vp.rows) do
-    if r.row and r.row.name == "Light Feather" then r:SetChecked(false) r.__scripts.OnClick(r) end
+    if r.row and r.row.name == "Light Feather" then r.__scripts.OnClick(r) end
 end
 vp.buy.__scripts.OnClick(vp.buy)
 local got = table.concat(BOUGHT, " ")
@@ -896,12 +918,12 @@ STATE.merchant = { { name = "Sacred Candle", price = 500 }, { name = "Holy Candl
 fire("MERCHANT_SHOW")
 local vp = TO.vendor
 for _, r in ipairs(vp.rows) do
-    if r.row and r.row.name == "Light Feather" then r:SetChecked(false) r.__scripts.OnClick(r) end
+    if r.row and r.row.name == "Light Feather" then r.__scripts.OnClick(r) end
 end
 fire("BAG_UPDATE_DELAYED")
 local fe
 for _, r in ipairs(vp.rows) do if r.row and r.row.name == "Light Feather" then fe = r end end
-assertEq(fe.__checked, false, "untick survives a refresh")
+assertEq(fe:IsOn(), false, "switching a row off survives a refresh")
 BOUGHT = {}; vp.buy.__scripts.OnClick(vp.buy)
 assert(not table.concat(BOUGHT, " "):find("Light Feather"), "unticked row not bought after a refresh")
 -- Reagent rank by level
@@ -1086,7 +1108,7 @@ SlashCmdList.TOPPEDOFFFOREVER("check")
 assert(lastLog("Omen of Clarity: passive, always on"), "/topoff check says it's passive, not \"not learned\"")
 local function optionsRow(text)
     for _, f in ipairs(ALL_FRAMES) do
-        if f.__kind == "CheckButton" and f:IsVisible() and f.label and f.label:GetText() and f.label:GetText():find(text, 1, true) then
+        if f.isSwitch and f:IsVisible() and f.label and f.label:GetText() and f.label:GetText():find(text, 1, true) then
             return f
         end
     end
@@ -1406,27 +1428,30 @@ TO.char.checks = {}; TO.char.splitProfiles = false; MenuUtil = nil
 STATE.bags = {}; TO.char.auto = {}; refresh()
 TO:AddCustom("Healing Potion", 3)
 if not (TO.config and TO.config:IsShown()) then TO:OpenConfig() end
+-- The widgets of the list that's showing
+local function listWidgets() return TO.config.lists[TO.optionsTab].child.__children end
+local function kindOf(w)
+    if w.isSwitch then return "switch" end
+    if w.__kind == "EditBox" then return "box" end
+    if w.__kind == "Button" then return rawget(w, "keys") and "choice" or "button" end
+    return w.__kind
+end
+local function shownText(w) return w.label and w.label:GetText() or w.__text or "" end
 local tipLines
 rawset(GameTooltip, "AddLine", function(_, text, r, g, b, wrap)
     tipLines[#tipLines + 1] = text .. (r and (" [" .. r .. g .. b .. (wrap and " wrap" or "") .. "]") or "")
 end)
-local function hover(kind, text)   -- every tooltip of the visible widgets with this text ("" = any), top to bottom
+local function hover(kind, text)   -- every tooltip of the visible widgets with this text, top to bottom
     local found, shown = {}, nil
-    for _, w in ipairs(TO.config.checks.__children) do
-        local label = w.label and w.label:GetText() or w.__text or ""
-        if w.__kind == kind and w:IsVisible() and (w.__template ~= "UIPanelButtonTemplate" or text ~= "")
-            and label:find(text, 1, true) then
-            if w.__scripts.OnEnter == TEMPLATE_HOVER then
-                found[#found + 1] = { y = w.__pos[2], tip = "the button's own" }
-            else
-                tipLines = {}
-                GameTooltip.__shown = false
-                if w.__scripts.OnEnter then w.__scripts.OnEnter(w) end
-                shown = GameTooltip.__shown
-                if w.__scripts.OnLeave then w.__scripts.OnLeave(w) end
-                assertEq(GameTooltip.__shown, false, text .. ": tooltip hidden when the mouse leaves")
-                found[#found + 1] = { y = w.__pos[2], tip = table.concat(tipLines, " / ") }
-            end
+    for _, w in ipairs(listWidgets()) do
+        if kindOf(w) == kind and w:IsVisible() and shownText(w):find(text, 1, true) then
+            tipLines = {}
+            GameTooltip.__shown = false
+            if w.__scripts.OnEnter then w.__scripts.OnEnter(w) end
+            shown = GameTooltip.__shown
+            if w.__scripts.OnLeave then w.__scripts.OnLeave(w) end
+            assertEq(GameTooltip.__shown, false, text .. ": tooltip hidden when the mouse leaves")
+            found[#found + 1] = { y = w.__pos[2], tip = table.concat(tipLines, " / ") }
         end
     end
     table.sort(found, function(x, y) return x.y > y.y end)
@@ -1434,25 +1459,69 @@ local function hover(kind, text)   -- every tooltip of the visible widgets with 
     return table.concat(found, " || "), shown
 end
 TO:ShowOptionsTab("supplies")
-local tipText, tipShown = hover("CheckButton", "Always show these")
-assertEq(tipText:find("Always show these, as a quick-use bar / Show your food, water, potions and items ", 1, true), 1, "checkbox: title, then the tip")
+local tipText, tipShown = hover("switch", "Always show these")
+assertEq(tipText:find("Always show these, as a quick-use bar / Show your food, water, potions and items ", 1, true), 1, "switch: title, then the tip")
 assert(tipText:find("%[111 wrap%]$"), "the tip is white and wraps")
 assertEq(tipShown, true, "and the tooltip is shown")
-assertEq(hover("CheckButton", "Healing Potion"), "", "a checkbox without a tip has no tooltip")
-assertEq(hover("Button", ""), "Remove", "the X says what it does")
-assertEq(hover("Button", ": "):find("Stat food / Automatic picks food for your role, and falls back to any stat food. Pick a stat", 1, true), 1,
-    "stat food button: title and explanation")
-assertEq(hover("Button", "Add"), "the button's own", "plain buttons keep the game's hover")
+assertEq(hover("switch", "Healing Potion"), "", "a switch without a tip has no tooltip")
+assertEq(hover("button", "X"), "Remove", "the X says what it does")
+assertEq(hover("choice", ": "):find("Stat food / Automatic picks food for your role, and falls back to any stat food. Pick a stat", 1, true), 1,
+    "stat food choice: title and explanation")
+assertEq(hover("button", "Add"), "", "plain buttons have none")
+for _, w in ipairs(listWidgets()) do
+    if kindOf(w) == "button" and w:IsVisible() then
+        assertEq(table.concat(w.__size, "x"), shownText(w) == "X" and "20x20" or "90x22", shownText(w) .. " button size")
+    end
+end
+-- Hovering a button lights it up, with or without a tooltip, and leaving puts it back
+for _, name in ipairs({ "Add", "X" }) do
+    for _, w in ipairs(listWidgets()) do
+        if kindOf(w) == "button" and w:IsVisible() and shownText(w) == name then
+            w.__scripts.OnEnter(w)
+            local lit = table.concat(w.bg.__color or {}, ",")
+            w.__scripts.OnLeave(w)
+            assert(lit ~= table.concat(w.bg.__color or {}, ","), name .. " button lights up under the mouse")
+        end
+    end
+end
+-- Switches do what they show
+local function switch(text)
+    for _, f in ipairs(ALL_FRAMES) do
+        if f.isSwitch and f:IsVisible() and f.label and (f.label:GetText() or ""):find(text, 1, true) then return f end
+    end
+end
+local function click(w) w.__scripts.OnClick(w) end
+local healing = switch("Healing Potion")
+assertEq(healing:IsOn(), true, "a check starts on")
+click(healing)
+assertEq(healing:IsOn(), false, "a click turns the switch off")
+assertEq(TO:IsEnabled("custom:healing potion", true), false, "and the check with it")
+click(healing)
+assertEq(healing:IsOn() and TO:IsEnabled("custom:healing potion", true), true, "and on again")
+TO:ShowOptionsTab("general")
+local minimap = switch("Show minimap icon")
+TO.db.minimap = true; TO:OpenConfig(); TO:OpenConfig()
+assertEq(minimap:IsOn(), true, "a display switch shows the saved setting")
+click(minimap)
+assertEq(TO.db.minimap, false, "and saves a click")
+TO:OpenConfig(); TO.db.minimap = true; TO:OpenConfig()   -- changed while the window was closed
+assertEq(minimap:IsOn(), true, "reopening the window shows the setting as it is now")
 TO:ShowOptionsTab("buffs")
-assertEq(hover("Button", "Blessing of Might"):find("Click to choose which spell to cast || Blessing to give Warriors in your party [111 wrap] || Blessing to give ", 1, true), 1,
-    "a spell choice button, then the list buttons, which show only their tip")
+-- A card is as tall as its rows: title, three rows (Blessing, Aura, Righteous Fury), padding
+local firstCard
+for _, w in ipairs(listWidgets()) do
+    if w.__kind == "Texture" and w:IsVisible() and w.__pos and w.__pos[2] == 0 and w.__width then firstCard = w end
+end
+assertEq(firstCard and firstCard.__height, 28 + 3 * 26 + 6, "a card wraps its rows")
+assertEq(hover("choice", "Blessing of Might"):find("Click to choose which spell to cast || Blessing to give Warriors in your party [111 wrap] || Blessing to give ", 1, true), 1,
+    "a spell choice, then the blessing choices, which show only their tip")
 rawset(GameTooltip, "AddLine", nil)
 TO:RemoveCustom("Healing Potion"); TO:OpenConfig()
 
-step("the options list reuses its rows")
+step("the options lists reuse their rows")
 if TO.config and TO.config:IsShown() then TO:OpenConfig() end
 MenuUtil = nil
--- Everything a row shows or does, for every visible widget in the list
+-- Everything a row shows or does, for every visible widget in the list that's showing
 local function listState()
     local function text(fs)
         local width = fs.__width ~= 0 and fs.__width or nil   -- 0 = as wide as its text, like one never set
@@ -1460,50 +1529,50 @@ local function listState()
             fs.__tcolor and table.concat(fs.__tcolor, "/") or "-" }, " ")
     end
     local out = {}
-    for _, w in ipairs(TO.config.checks.__children) do
+    for _, w in ipairs(listWidgets()) do
         if w.label then w.label.__owner = w end
     end
-    for _, w in ipairs(TO.config.checks.__children) do
-        if w.__owner then   -- a checkbox's label is listed with its checkbox
+    for _, w in ipairs(listWidgets()) do
+        if w.__owner then   -- a switch's label is listed with its switch
             if w:IsVisible() and not w.__owner:IsVisible() then out[#out + 1] = "LABEL LEFT BEHIND " .. tostring(w.__text) end
         elseif w:IsVisible() then
             local scripts = {}
-            for k, fn in pairs(w.__scripts) do scripts[#scripts + 1] = k .. (fn == TEMPLATE_HOVER and "=template" or "") end
+            for k, fn in pairs(w.__scripts) do scripts[#scripts + 1] = k .. ((fn == w.madeEnter or fn == w.madeLeave) and "=own" or "") end
             table.sort(scripts)
-            out[#out + 1] = table.concat({ w.__kind, tostring(w.__template), tostring(w.__point),
-                w.__pos and table.concat(w.__pos, ",") or "-", w.__size and table.concat(w.__size, "x") or "-",
-                tostring(w.__checked), tostring(w.__numeric), w.__kind == "FontString" and text(w) or tostring(w.__text),
+            out[#out + 1] = table.concat({ kindOf(w), tostring(w.__point),
+                w.__pos and table.concat(w.__pos, ",") or "-",
+                w.__size and table.concat(w.__size, "x") or (w.__kind ~= "FontString" and (tostring(w.__width) .. "x" .. tostring(w.__height)) or "-"),
+                tostring(w.on), tostring(w.__numeric), tostring(rawget(w, "menuTitle")),
+                w.__color and table.concat(w.__color, "/") or "-",
+                w.__kind == "FontString" and text(w) or tostring(w.__text),
                 w.label and (w.label:IsVisible() and text(w.label) or "LABEL HIDDEN") or "", table.concat(scripts, ",") }, " | ")
         end
     end
     table.sort(out)
     return table.concat(out, "\n")
 end
-local function freshList(tab)   -- a list with nothing to reuse, as every build used to be
-    if TO.config.checks then
-        TO.config.checks:Hide()
-        TO.config.checks = nil
-    end
+local function freshList(tab)   -- a list with nothing to reuse
+    TO.optionsTab = tab
+    local list = TO.config.lists[tab].child
+    for _, w in ipairs(list.__children) do w:Hide() end
+    list.pool = {}
     TO:ShowOptionsTab(tab)
     return listState()
 end
 TO:OpenConfig()
 TO:AddCustom("Healing Potion", 3)
-for _, class in ipairs({ "PALADIN", "HUNTER", "MAGE", "WARLOCK", "ROGUE", "DRUID" }) do
-    STATE.class = class
+local CLASSES = { "PALADIN", "HUNTER", "MAGE", "WARLOCK", "ROGUE", "DRUID" }
+for i, class in ipairs(CLASSES) do
     for _, split in ipairs({ false, true }) do
-        TO.char.splitProfiles = split
         for _, t in ipairs(TO.OPTION_TABS) do
+            STATE.class = class; TO.char.splitProfiles = split
             local fresh = freshList(t.key)
-            -- Then a list whose rows were all made for other tabs
-            local first = true
-            for _, other in ipairs(TO.OPTION_TABS) do
-                if other.key ~= t.key then
-                    if first then freshList(other.key) else TO:ShowOptionsTab(other.key) end
-                    first = false
-                end
-            end
-            TO.char.splitProfiles = not split; TO:ShowOptionsTab("buffs"); TO.char.splitProfiles = split
+            -- Then a list whose rows were made for another class and the other profile setting
+            STATE.class = CLASSES[i % #CLASSES + 1]; TO.char.splitProfiles = not split
+            freshList(t.key)
+            STATE.class = CLASSES[(i + 1) % #CLASSES + 1]
+            TO:ShowOptionsTab(t.key)
+            STATE.class = class; TO.char.splitProfiles = split
             TO:ShowOptionsTab(t.key)
             local reused = listState()
             if reused ~= fresh then   -- say which rows differ
@@ -1520,12 +1589,40 @@ for _, class in ipairs({ "PALADIN", "HUNTER", "MAGE", "WARLOCK", "ROGUE", "DRUID
     end
 end
 TO.char.splitProfiles = false
+-- An item added and removed: the rows that shuffled up look like new ones
+STATE.class = "MAGE"
+local before = freshList("supplies")
+TO:AddCustom("Wild Berries", 5); TO:ShowOptionsTab("supplies")
+assert(listState() ~= before, "(the added item shows)")
+TO:RemoveCustom("Healing Potion"); TO:ShowOptionsTab("supplies")
+TO:RemoveCustom("Wild Berries"); TO:AddCustom("Healing Potion", 3); TO:ShowOptionsTab("supplies")
+assertEq(listState(), before, "after adding and removing items the list is as it was")
+for _, t in ipairs(TO.OPTION_TABS) do TO:ShowOptionsTab(t.key) end
 local frames = #ALL_FRAMES
 for _ = 1, 3 do
-    for _, t in ipairs(TO.OPTION_TABS) do TO:ShowOptionsTab(t.key) end
+    for _, t in ipairs({ "buffs", "supplies", "more", "profiles", "display", "general" }) do TO:ShowOptionsTab(t) end
     TO:OpenConfig(); TO:OpenConfig()
 end
 assertEq(#ALL_FRAMES, frames, "opening the window and switching tabs makes no new frames")
+-- A list drawn again while you're on it stays where you'd scrolled to; reopening starts at the top
+STATE.class = "PALADIN"
+TO:ShowOptionsTab("buffs")
+local buffsList = TO.config.lists.buffs
+assert(buffsList.bar:IsShown(), "a long list gets a scroll bar")
+buffsList.__scripts.OnMouseWheel(buffsList, -1); buffsList.__scripts.OnMouseWheel(buffsList, -1)
+assertEq(buffsList.__scroll, 80, "the mouse wheel scrolls the list")
+TO:RefreshConfig()
+assertEq(buffsList.__scroll, 80, "drawn again: still where you were")
+TO:ShowOptionsTab("supplies"); TO:ShowOptionsTab("buffs")
+assertEq(buffsList.__scroll, 0, "another tab and back: at the top")
+buffsList.__scripts.OnMouseWheel(buffsList, -1)
+TO:OpenConfig(); TO:OpenConfig()
+assertEq(buffsList.__scroll, 0, "closed and reopened: at the top")
+for _ = 1, 40 do buffsList.__scripts.OnMouseWheel(buffsList, -1) end
+local _, deepest = buffsList.bar:GetMinMaxValues()
+assertEq(buffsList.__scroll, deepest, "it stops at the bottom")
+TO:ShowOptionsTab("profiles")
+assertEq(TO.config.lists.profiles.bar:IsShown(), false, "a short list has no scroll bar")
 TO:RemoveCustom("Healing Potion"); TO:OpenConfig()
 
 step("a damaged settings file falls back to defaults")

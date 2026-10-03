@@ -8,20 +8,16 @@ local TO = {}
 ns.TO = TO
 _G.ToppedOffForever = TO
 
--- Colors from the logo: gold ring, deep navy, dark purple, crimson banner, cyan drop
+-- The look is the shared one (Theme.lua, loaded first). These are the colours
+-- the icons use; the last two are ToppedOff's own.
+local T = ns.Theme
 TO.COLORS = {
-    gold      = { 1.00, 0.85, 0.40 },   -- #ffd966 text
-    goldDark  = { 0.85, 0.65, 0.19 },   -- #d9a531 borders
-    navy      = { 0.06, 0.14, 0.23 },   -- #10243a panels
-    purple    = { 0.07, 0.05, 0.11 },   -- #120d1c window background
-    crimson   = { 0.55, 0.12, 0.12 },   -- #8b1e1e title banner
-    cyan      = { 0.16, 0.71, 0.91 },   -- #28b6e8 highlights
+    gold      = { T.C.gold[1], T.C.gold[2], T.C.gold[3] },            -- names and titles
+    border    = { T.C.btnEdge[1], T.C.btnEdge[2], T.C.btnEdge[3] },   -- around an icon
     expiring  = { 1.00, 0.55, 0.00 },   -- #ff8c00 buff running out
     urgent    = { 1.00, 0.13, 0.13 },   -- #ff2121 buff almost gone
 }
-TO.GOLD_HEX = "ffd966"
-local PREFIX = "|cffffd966ToppedOff|r: "
-local function Print(msg) print((TO.LOGO_TEXT or "") .. " " .. PREFIX .. msg) end
+local function Print(msg) print(T.CHAT_PREFIX .. ": " .. msg) end
 TO.Print = Print
 
 -- Forever hands some values to addons as "secret". Comparing, doing math on or
@@ -1838,15 +1834,6 @@ function TO:AddBorder(f, color, size)
     end
 end
 
--- Fills a frame with a color and gives it a border
-function TO:SkinFrame(f, bg, border, alpha, size)
-    local t = f:CreateTexture(nil, "BACKGROUND")
-    t:SetAllPoints()
-    t:SetColorTexture(bg[1], bg[2], bg[3], alpha or 0.95)
-    f.skinBg = t
-    self:AddBorder(f, border or self.COLORS.goldDark, size or 2)
-end
-
 ---------------------------------------------------------------------------
 -- Reminder icons
 ---------------------------------------------------------------------------
@@ -1888,7 +1875,7 @@ function TO:NewIconButton(name, parent)
     b.border = b:CreateTexture(nil, "BACKGROUND")
     b.border:SetPoint("TOPLEFT", -1, 1)
     b.border:SetPoint("BOTTOMRIGHT", 1, -1)
-    local gd = self.COLORS.goldDark
+    local gd = self.COLORS.border
     b.border:SetColorTexture(gd[1], gd[2], gd[3], 1)
     b.text = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     b.text:SetPoint("BOTTOMLEFT", 1, 2)
@@ -1929,7 +1916,7 @@ function TO:ApplyButton(b, r)
     b.text:SetText(r.text or "")
     -- Running out: orange border at the warning time, red in its last 20%
     local warn = self.db.warnMinutes * 60
-    local color, thick = self.COLORS.goldDark, 1
+    local color, thick = self.COLORS.border, 1
     if r.urgentNow then
         color, thick = self.COLORS.urgent, 3
     elseif r.expires and r.expires > 0 then
@@ -1985,7 +1972,7 @@ function TO:Layout(list)
     -- the full width of the frame like the header's bottom line
     if not self.divider then
         local d = self.bar:CreateTexture(nil, "ARTWORK")
-        local g = self.COLORS.goldDark
+        local g = self.COLORS.border
         d:SetColorTexture(g[1], g[2], g[3], 1)
         d:SetHeight(self.DIVIDER_THICKNESS)
         d.edges = {}
@@ -2079,7 +2066,7 @@ function TO:BuildCombatBar()
     box:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", pad, -pad)
     box:SetFrameLevel(f:GetFrameLevel())
     box:EnableMouse(false)
-    self:SkinFrame(box, self.COLORS.navy, self.COLORS.goldDark, 0.85, 1)
+    T.Panel(box, 0.85)
     self:NewHeaderStrip(box)
     f.box = box
     f.buttons = {}
@@ -2328,30 +2315,15 @@ function TO:ApplySettings()
     self:RunOutOfCombat("update", function() self:Update() end)
 end
 
--- The red "ToppedOff" strip along the top of a frame
+-- The header bar along the top of a frame: logo and name, the shared look.
+-- It sits on the frame's top edge, so the two borders are one line.
 function TO:NewHeaderStrip(box)
     local header = CreateFrame("Frame", nil, box)
-    header:SetPoint("TOPLEFT", box, "TOPLEFT", 1, -1)
-    header:SetPoint("TOPRIGHT", box, "TOPRIGHT", -1, -1)
-    header:SetHeight(self.HEADER_HEIGHT - 2)
-    local cr = self.COLORS.crimson
-    header.bg = header:CreateTexture(nil, "BACKGROUND")
-    header.bg:SetAllPoints()
-    header.bg:SetColorTexture(cr[1], cr[2], cr[3], 0.95)
-    local gd = self.COLORS.goldDark
-    header.line = header:CreateTexture(nil, "BORDER")
-    header.line:SetPoint("BOTTOMLEFT")
-    header.line:SetPoint("BOTTOMRIGHT")
-    header.line:SetHeight(1)
-    header.line:SetColorTexture(gd[1], gd[2], gd[3], 1)
-    header.logo = header:CreateTexture(nil, "OVERLAY")
-    header.logo:SetSize(16, 16)
-    header.logo:SetPoint("LEFT", 3, 0)
-    header.logo:SetTexture(self.ICONS.addon)
-    header.text = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    header.text:SetPoint("LEFT", header.logo, "RIGHT", 4, 0)
-    header.text:SetText("ToppedOff")
-    header.text:SetTextColor(unpack(self.COLORS.gold))
+    header:SetPoint("TOPLEFT", box, "TOPLEFT")
+    header:SetPoint("TOPRIGHT", box, "TOPRIGHT")
+    header:SetHeight(self.HEADER_HEIGHT)
+    T.HeaderStrip(header)
+    header:FitLogo(self.HEADER_HEIGHT)
     return header
 end
 
@@ -2380,7 +2352,7 @@ function TO:BuildFrames()
     box:SetPoint("BOTTOMRIGHT", main, "BOTTOMRIGHT", pad, -pad)
     box:SetFrameLevel(main:GetFrameLevel())   -- behind the icons
     box:EnableMouse(false)
-    self:SkinFrame(box, self.COLORS.navy, self.COLORS.goldDark, 0.85, 1)
+    T.Panel(box, 0.85)
     self.box = box
     if main.SetClampRectInsets then main:SetClampRectInsets(-pad, pad, pad + headerH, -pad) end
 
@@ -2728,7 +2700,7 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
         TO:RegisterCharacter()
         TO:ScanSpellbook()
         TO:RunOutOfCombat("build", function() TO:BuildFrames() end)
-        print(TO.LOGO_TEXT .. " |cffffd966ToppedOff Forever|r loaded. Type /topoff for options.")
+        print(T.CHAT_PREFIX .. " loaded. Type /topoff for options.")
     elseif event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
         if arg1 == ADDON then
             local fn = ...   -- (addon name, function name)

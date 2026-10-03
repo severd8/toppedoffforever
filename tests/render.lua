@@ -37,6 +37,9 @@ function M:SetSize(w, h) baseSetSize(self, w, h) self.__w, self.__h = w, h end
 function M:SetWidth(w) self.__w = (w ~= 0 or self.__kind ~= "FontString") and w or nil end   -- 0 = as wide as the text
 function M:SetHeight(h) self.__h = h end
 function M:SetColorTexture(r, g, b, a) self.__color = { r, g, b, a or 1 } end
+-- A gradient is drawn as its left colour
+function CreateColor(r, g, b, a) return { r = r, g = g, b = b, a = a } end
+function M:SetGradient(_, from) self.__color = { from.r, from.g, from.b, from.a or 1 } end
 function M:SetTextColor(r, g, b) self.__tcolor = r and { r, g, b } or nil end
 function M:SetJustifyH(j) self.__justify = j end
 function M:SetFont(_, size) self.__fsize = size end
@@ -53,6 +56,12 @@ function M:CreateFontString(_, _, template)
     return f
 end
 function M:SetFontString(fs) self.__fontString = fs end
+-- A button's text is drawn by its font string
+local baseSetText = M.SetText
+function M:SetText(t)
+    baseSetText(self, t)
+    if self.__fontString then self.__fontString.__text = t end
+end
 function M:CreateTexture(_, layer)
     local t = newObj("Texture", nil, self)
     t.__layer = layer
@@ -86,6 +95,7 @@ local function load_file(path)
     local f = assert(io.open(path)) local src = f:read("*a") f:close()
     assert(loadstring(src, "@" .. path))(ADDON, ns)
 end
+load_file("Theme.lua")
 load_file("Core.lua")
 load_file("Options.lua")
 load_file("Vendor.lua")
@@ -248,10 +258,11 @@ TO:RequestUpdate()
 tick()
 
 TO:OpenConfig()
-for _, t in ipairs(TO.OPTION_TABS) do
-    TO:ShowOptionsTab(t.key)
-    Dump("options-druid-" .. t.key, TO.config)
-    Dump("tab-druid-" .. t.key, TO.config.scrollChild, true)
+local function List(key) return TO.config.lists[key].child end
+for _, key in ipairs({ "buffs", "supplies", "more", "profiles", "display", "general" }) do
+    TO:ShowOptionsTab(key)
+    Dump("options-druid-" .. key, TO.config)
+    if TO.config.lists[key] then Dump("tab-druid-" .. key, List(key), true) end
 end
 
 local function Class(cls, spells, tabs)
@@ -261,7 +272,7 @@ local function Class(cls, spells, tabs)
     fire("SPELLS_CHANGED")
     for _, key in ipairs(tabs) do
         TO:ShowOptionsTab(key)
-        Dump("tab-" .. cls:lower() .. "-" .. key, TO.config.scrollChild, true)
+        Dump("tab-" .. cls:lower() .. "-" .. key, List(key), true)
     end
 end
 Class("HUNTER", { "Call Pet", "Revive Pet", "Feed Pet", "Aspect of the Hawk", "Aspect of the Monkey", "Trueshot Aura" }, { "buffs", "more" })
@@ -286,7 +297,7 @@ TO:ShowOptionsTab("profiles")
 Dump("options-druid-profiles", TO.config)
 TO.char.splitProfiles = true
 TO:ShowOptionsTab("buffs")
-Dump("tab-druid-buffs-split", TO.config.scrollChild, true)
+Dump("tab-druid-buffs-split", List("buffs"), true)
 TO.char.splitProfiles = false
 
 -- Vendor panel

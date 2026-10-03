@@ -18,7 +18,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1 liblua5.1-0-dev
 
       - name: Check Lua syntax
-        run: luac5.1 -p Core.lua Options.lua
+        run: luac5.1 -p *.lua tests/*.lua
 
       - name: Run tests
         run: lua5.1 tests/run.lua
