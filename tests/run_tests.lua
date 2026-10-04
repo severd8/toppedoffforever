@@ -415,6 +415,31 @@ assert(TO.config.logo.__texture:find("Media\\Icon"), "options window shows the l
 assertEq(TO.config.title:GetText(), "ToppedOff Forever", "and the addon's name")
 assertEq(TO.header.text:GetText(), "ToppedOff", "the header bar shows the short name")
 assert(TO.header.logo.__texture:find("Media\\Icon"), "header shows the logo")
+-- The logo file itself: what the game can load (an uncompressed 32-bit TGA, 64x64), and the
+-- right way up. A TGA's rows run bottom to top, so the drop's point (the top of the picture)
+-- is in the last rows of the file and its round end in the first.
+do
+    local f = assert(io.open(ADDON_DIR .. "/Media/Icon.tga", "rb"), "the logo file")
+    local data = f:read("*a") f:close()
+    assertEq(data:byte(3), 2, "uncompressed true-color TGA")
+    assertEq(data:byte(13) + data:byte(14) * 256, 64, "64 wide")
+    assertEq(data:byte(15) + data:byte(16) * 256, 64, "64 tall")
+    assertEq(data:byte(17), 32, "32-bit, with transparency")
+    assertEq(math.floor(data:byte(18) / 32) % 2, 0, "rows stored bottom to top")
+    local function blueInRow(row)   -- how much of a stored row is the drop's blue
+        local n = 0
+        for col = 0, 63 do
+            local at = 18 + (row * 64 + col) * 4
+            local b, _, r, a = data:byte(at + 1, at + 4)
+            if a > 200 and b > 150 and r < 120 then n = n + 1 end
+        end
+        return n
+    end
+    local low, high = 0, 0
+    for row = 16, 28 do low = low + blueInRow(row) end    -- lower half of the picture
+    for row = 36, 48 do high = high + blueInRow(row) end  -- upper half
+    assert(low > high * 1.5, "the drop is the right way up: wide below, pointed above (" .. low .. " vs " .. high .. ")")
+end
 SlashCmdList.TOPPEDOFFFOREVER("lock")
 assertEq(LOG[#LOG], "|TInterface\\AddOns\\ToppedOffForever\\Media\\Icon:0|t |cffe8a040ToppedOff Forever|r: locked.",
     "chat lines start with the logo and the addon's name")

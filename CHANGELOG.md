@@ -1,3 +1,8 @@
+## 1.6.2
+
+- **Tidier logo**: the arrow in the drop is bolder and centred. It's the same everywhere the logo shows: the header above the icons, the settings window, chat lines, the minimap button and the AddOns list.
+- The logo file was saved upside down, so in game the drop could show pointing down. It's the right way up now.
+
 ## 1.6.1
 
 - The options tab called "Pet & gear" is now "Gear & bags" on classes that have no pet checks (everyone but Hunters and Warlocks).
