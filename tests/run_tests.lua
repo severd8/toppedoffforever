@@ -345,6 +345,27 @@ for _, class in ipairs({ "MAGE", "PRIEST", "DRUID", "WARLOCK", "PALADIN", "HUNTE
     STATE.class = class
     TO:AddCustom("Healing Potion", 3)
     for _, t in ipairs(TO.OPTION_TABS) do TO:ShowOptionsTab(t.key) end
+    -- The third tab is "Pet & gear" only for the classes with pet checks
+    local pets = class == "HUNTER" or class == "WARLOCK"
+    local name = pets and "Pet & gear" or "Gear & bags"
+    assertEq(TO.config.tabButtons.more:GetText(), name, class .. ": the third tab's name")
+    assertEq(TO.config.pages.more.title:GetText(), name, class .. ": and its page's title")
+    assertEq(TO.config.tabButtons.more.icon.__texture,
+        "Interface\\Icons\\" .. (pets and "Ability_Hunter_BeastCall" or "Trade_BlackSmithing"), class .. ": and its icon")
+    local petCard, note = false, nil
+    for _, f in ipairs(ALL_FRAMES) do
+        if f.__kind == "FontString" and f:IsVisible() then
+            local text = f:GetText() or ""
+            if text:find("^Turn this on to have a lighter set of checks") then note = text end
+        end
+    end
+    assert(note and note:find("Supplies and " .. name .. " tabs", 1, true), class .. ": the Profiles note names the tab the same way")
+    TO:ShowOptionsTab("more")
+    for _, f in ipairs(ALL_FRAMES) do
+        if f.__kind == "FontString" and f:IsVisible() and f:GetText() == "PET" then petCard = true end
+    end
+    assertEq(petCard, pets, class .. ": a Pet card only when there are pet checks")
+    TO:ShowOptionsTab("profiles")
 end
 assertEq(TO.optionsTab, "profiles", "last tab shown")
 -- On every tab: flip every switch, pick from every choice box, press every button,

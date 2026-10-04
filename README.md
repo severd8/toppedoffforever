@@ -46,7 +46,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 |---|---|
 | **Buffs** | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, elixirs and flasks |
 | **Supplies** | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
-| **Pet & gear** | Pet, Soulstone (Warlocks), durability and bag space |
+| **Pet & gear** (Hunters and Warlocks), **Gear & bags** (everyone else) | Pet, Soulstone (Warlocks), durability and bag space |
 | **Profiles** | Separate checks outside dungeons, copy another character |
 | **Display** | Show reminders, lock, show header and frame, only in dungeons and raids, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |
 | **General** | Chat reminders and sound, minimap icon, Check spells, the slash commands |

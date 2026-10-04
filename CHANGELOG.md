@@ -1,3 +1,7 @@
+## 1.6.1
+
+- The options tab called "Pet & gear" is now "Gear & bags" on classes that have no pet checks (everyone but Hunters and Warlocks).
+
 ## 1.6.0
 
 A new look, shared with TauntMaster Forever and Outfitter Forever.

@@ -196,6 +196,22 @@ TO.OPTION_TABS = {
     { key = "profiles", label = "Profiles" },
 }
 
+-- Only hunters and warlocks have pet checks. For everyone else the third tab is
+-- just gear and bags, and says so.
+local MORE_TAB = {
+    pet = { "Pet & gear", "Interface\\Icons\\Ability_Hunter_BeastCall" },
+    gear = { "Gear & bags", "Interface\\Icons\\Trade_BlackSmithing" },
+}
+local function MoreTab() return TO.PET_CLASSES[TO:PlayerClass()] and MORE_TAB.pet or MORE_TAB.gear end
+function TO:NameMoreTab()
+    local win = self.config
+    if not (win and win.tabButtons and win.tabButtons.more) then return end
+    local name, icon = MoreTab()[1], MoreTab()[2]
+    win.tabButtons.more:SetText(name)
+    win.tabButtons.more.icon:SetTexture(icon)
+    win.pages.more.title:SetText(name)
+end
+
 -- Which set of on/off checks the options are editing (see the Profiles tab)
 function TO:EditingOutside()
     return (self.char.splitProfiles and self.editOutside) and true or false
@@ -672,8 +688,8 @@ local function BuildProfilesTab(self, ctx)
             TO:RequestUpdate()
         end)
     ctx.row()
-    ctx.note("Turn this on to have a lighter set of checks while questing. The Buffs, Supplies and Pet & gear tabs "
-        .. "then have an \"Editing\" choice at the top: turn checks on and off for dungeons and raids, or for "
+    ctx.note("Turn this on to have a lighter set of checks while questing. The Buffs, Supplies and "
+        .. MoreTab()[1] .. " tabs then have an \"Editing\" choice at the top: turn checks on and off for dungeons and raids, or for "
         .. "everywhere else. Anything you don't change outside follows the dungeon setting.")
 
     ctx.card("Copy another character")
@@ -778,6 +794,7 @@ local lists = {}   -- tab key -> its scrolling list
 -- Draws the list on the tab that's showing (nothing to do on Display and General).
 -- A list drawn again while you're on it stays where you'd scrolled to.
 function TO:BuildChecksList()
+    self:NameMoreTab()
     local tab = self.optionsTab or "buffs"
     for key, other in pairs(lists) do if key ~= tab then other.shown = nil end end
     local scroll = lists[tab]
@@ -865,6 +882,7 @@ function TO:BuildConfig()
         end,
     })
     self.config.lists = lists
+    self:NameMoreTab()
 end
 
 function TO:OpenConfig()
