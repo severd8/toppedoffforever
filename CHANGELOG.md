@@ -1,3 +1,7 @@
+## 1.7.0
+
+- **Well-Rested**, the experience bonus from the Cozy Sleeping Bag, is tracked. If the bag is in your bags, an icon shows when the buff is missing, below 3 stacks (the icon reads 1/3 or 2/3) or running out. Click it to unfurl the bag. Nothing shows without the bag or at the level cap. Turn it off with **Well-Rested** on the Buffs tab (the switch is only there while you carry the bag).
+
 ## 1.6.2
 
 - **Tidier logo**: the arrow in the drop is bolder and centred. It's the same everywhere the logo shows: the header above the icons, the settings window, chat lines, the minimap button and the AddOns list.

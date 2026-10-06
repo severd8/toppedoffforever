@@ -6,7 +6,7 @@
 
 ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It watches your own character and shows a small icon only when something needs topping off: a buff that's missing or about to run out, a weapon without its poison or oil, low reagents, low ammo, or worn-out gear. Click the icon and it's fixed.
 
-Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhancements, Well Fed, elixirs, pet, Soulstone), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, your own items, conjures, Healthstone, bag space, repairs). Long rows wrap after 8 icons (change it with "Icons per row").
+Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhancements, Well Fed, Well-Rested, elixirs, pet, Soulstone), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, your own items, conjures, Healthstone, bag space, repairs). Long rows wrap after 8 icons (change it with "Icons per row").
 
 ---
 
@@ -19,6 +19,7 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 - **Food, water, bandages and potions, picked for you.** The best of each in your bags, plus the right **stat food for your class or role**. When you run out of the best one, the next best takes its place. A **Well Fed** reminder (in dungeons and raids by default) eats your stat food with a click.
 - **Combat bar.** In combat, your healing and mana potions, Healthstone and bandage stay clickable, with counts and the potion cooldown.
 - **Reagents, ammo and class items.** Soul Shards, runes, powders, candles, Ankhs, totems and more, checked once you've learned a spell that needs them, and ammo for Hunters. Set your own minimums.
+- **Well-Rested**, if you carry a Cozy Sleeping Bag: an icon when the experience bonus is missing, below 3 stacks (it reads 1/3 or 2/3) or running out. Click it to unfurl the bag.
 - **Class extras.** Hunter and Warlock pets (missing, dead or unhappy, with one-click feeding), Soulstones, Healthstones, Mage conjures, and the elixirs and flasks you choose.
 - **Gear and bags.** Low durability and low bag space warnings.
 - **Vendors.** One click restocks everything you're short on that the vendor sells, with the cost shown first, and a **Repair all** button. Nothing is bought until you click.
@@ -44,7 +45,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 
 | Tab | What's there |
 |---|---|
-| **Buffs** | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, elixirs and flasks |
+| **Buffs** | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, Well-Rested (while you carry the sleeping bag), elixirs and flasks |
 | **Supplies** | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
 | **Pet & gear** (Hunters and Warlocks), **Gear & bags** (everyone else) | Pet, Soulstone (Warlocks), durability and bag space |
 | **Profiles** | Separate checks outside dungeons, copy another character |

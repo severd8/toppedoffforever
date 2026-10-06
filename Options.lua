@@ -440,6 +440,15 @@ local function BuildBuffsTab(self, ctx, class)
     ctx.row()
     ctx.note("Click the icon to eat your stat food (set on the Supplies tab).")
 
+    -- Well-Rested, for those carrying the sleeping bag
+    if self.bag and self.bag[self.RESTED.item] then
+        ctx.card("Experience bonus")
+        ctx.toggle("rested", "Well-Rested", true)
+        ctx.row()
+        ctx.note("From your Cozy Sleeping Bag. Shown when it's missing, running out or below "
+            .. self.RESTED.stacks .. " stacks. Click the icon to unfurl the bag.")
+    end
+
     -- Elixirs and flasks
     ctx.card("Elixirs and flasks")
     local shown = {}

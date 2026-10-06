@@ -171,6 +171,7 @@ function UnitClass(u)
     return "Mage", STATE.class
 end
 function UnitLevel(u) return STATE.level or 60 end
+function GetMaxPlayerLevel() return STATE.maxLevel or 60 end
 -- Group: STATE.party = { "party1", ... } present; STATE.partyBuffs[unit] = { [name] = left }
 -- STATE.hiddenAuras[unit] = true makes that unit's auras secret; STATE.roles[unit] = "HEALER"
 STATE.party, STATE.partyBuffs, STATE.hiddenAuras, STATE.roles, STATE.outOfRange = {}, {}, {}, {}, {}
@@ -288,7 +289,9 @@ C_UnitAuras = {
         local e = list[i]
         if not e then return nil end
         local exp = e[2] == 0 and 0 or (FAKE_TIME + e[2])
-        return { name = maybeSecret(e[1]), expirationTime = maybeSecret(exp) }
+        -- STATE.buffStacks[name]: how many times a buff of yours is stacked (0 when it doesn't stack)
+        local stacks = unit == "player" and STATE.buffStacks and STATE.buffStacks[e[1]] or 0
+        return { name = maybeSecret(e[1]), expirationTime = maybeSecret(exp), applications = maybeSecret(stacks) }
     end,
 }
 

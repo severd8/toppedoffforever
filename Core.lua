@@ -432,18 +432,22 @@ function TO:UnitBuffs(unit)
     return buffs or nil
 end
 
--- Your own buffs (self.buffs). While the game hides them, the last list is kept.
+-- Your own buffs (self.buffs), and how many times each is stacked where the game says
+-- (self.buffStacks). While the game hides them, the last lists are kept.
 function TO:ScanBuffs()
-    local buffs = {}
+    local buffs, stacks = {}, {}
     local now = GetTime()
     for i = 1, 40 do
         local a = AuraAt("player", i)
         if a == false then return end
         if a == nil or IsSecret(a) or type(a) ~= "table" then break end
         local name = Str(a.name)
-        if name then buffs[name:lower()] = TimeLeft(a.expirationTime, now) end
+        if name then
+            buffs[name:lower()] = TimeLeft(a.expirationTime, now)
+            stacks[name:lower()] = Num(a.applications)
+        end
     end
-    self.buffs = buffs
+    self.buffs, self.buffStacks = buffs, stacks
 end
 
 local function ContainerSlots(bag)
@@ -1503,6 +1507,47 @@ function TO:CheckWellFed(list)
     list[#list + 1] = r
 end
 
+-- Well-Rested: the experience bonus from resting in a Cozy Sleeping Bag. It stacks three
+-- times (a minute of rest each) and lasts two hours whatever the stack. Only for those
+-- carrying the bag, and not at the level cap, where there's no experience to gain.
+TO.RESTED = { aura = "well-rested", item = "cozy sleeping bag", stacks = 3 }
+function TO:CheckRested(list)
+    local id = "rested"
+    if not self:IsEnabled(id, true) then return end
+    local e = self.bag and self.bag[self.RESTED.item]
+    if not e then return end
+    local level, cap = Num(UnitLevel("player")), GetMaxPlayerLevel and Num(GetMaxPlayerLevel())
+    if level and cap and level >= cap then return end
+
+    local max = self.RESTED.stacks
+    local left = self.buffs[self.RESTED.aura]
+    local stacks = left and self.buffStacks and self.buffStacks[self.RESTED.aura]
+    if stacks and stacks < 1 then stacks = 1 end   -- having it at all is one stack
+    local short = stacks and stacks < max
+    local running = left and left > 0 and left < self.db.warnMinutes * 60
+    if left and not short and not running then return end
+
+    local r = { id = id, label = "Well-Rested", icon = e.icon or ItemIcon(e.id) or self.ICONS.unknown,
+        action = { use = "item:" .. e.id, useName = e.name } }
+    local lines = {}
+    if not left then
+        lines[#lines + 1] = "Missing"
+    else
+        if short then
+            r.text = stacks .. "/" .. max
+            lines[#lines + 1] = stacks .. " of " .. max .. " stacks"
+        end
+        if running then
+            r.expires = left
+            r.text = r.text or FormatTime(left)
+            lines[#lines + 1] = "Runs out in " .. FormatTime(left)
+        end
+    end
+    lines[#lines + 1] = "Rest in your " .. e.name .. ": a minute for each stack, up to " .. max
+    r.detail = table.concat(lines, "\n")
+    list[#list + 1] = r
+end
+
 -- The item to show and use for an auto-tracked slot: the tracked one while you
 -- have any, otherwise the next best of that kind in your bags. (The tracked one
 -- is still what gets restocked at a vendor.) Returns the bag entry, or nil.
@@ -1797,6 +1842,7 @@ function TO:BuildReminders()
     self:CheckPartyBlessings(list)
     self:CheckWeapons(list)
     self:CheckWellFed(list)
+    self:CheckRested(list)
     self:CheckElixirs(list)
     self:CheckPet(list)
     self:CheckSoulstone(list)
@@ -2281,7 +2327,7 @@ TO.DIVIDER_SPACE = 14      -- room between the buff row and the top-off row
 TO.DIVIDER_THICKNESS = 4   -- the gold divider line
 
 -- Buffs (row 1) vs things to top off (row 2)
-local BUFF_ROW = { "^buff:", "^party:", "^weapon:", "^elixir:", "^wellfed$", "^pet:summon$", "^pet:happy$",
+local BUFF_ROW = { "^buff:", "^party:", "^weapon:", "^elixir:", "^wellfed$", "^rested$", "^pet:summon$", "^pet:happy$",
     "^soulstone$" }
 function TO:IsBuffReminder(r)
     local id = r.id or ""

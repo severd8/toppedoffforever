@@ -635,6 +635,92 @@ assert(ids().wellfed, "shown everywhere when turned on")
 TO:SetEnabled("wellfed", false); refresh()
 assertEq(ids().wellfed, nil, "turned off")
 TO:SetEnabled("wellfed", true); TO.char.wellFedInstanceOnly = true
+
+step("well-rested, from the Cozy Sleeping Bag")
+local BAG = { id = 777, name = "Cozy Sleeping Bag", count = 1 }
+local function restedButton()
+    for _, b in ipairs(TO.buttons) do if b.reminder and b.reminder.id == "rested" then return b end end
+end
+STATE.bags = {}; STATE.buffs = {}; STATE.buffStacks = {}; STATE.level = 30; refresh()
+assertEq(ids().rested, nil, "nothing without the sleeping bag")
+STATE.buffs = { ["Well-Rested"] = 60 }; STATE.buffStacks = { ["Well-Rested"] = 1 }; refresh()
+assertEq(ids().rested, nil, "nor when the buff is low, without the bag")
+-- With the bag: missing
+STATE.bags = { BAG }; STATE.buffs = {}; STATE.buffStacks = {}; refresh()
+local rest = ids().rested
+assert(rest, "missing, with the bag in your bags")
+assertEq(rest.label, "Well-Rested", "named after the buff")
+assertEq(rest.action and rest.action.use, "item:777", "click uses the sleeping bag")
+assertEq(restedButton().__attrs.type, "item", "secure item use")
+assertEq(restedButton().__attrs.item, "item:777", "of the bag")
+assert(rest.detail:find("^Missing\n"), "says it's missing: " .. rest.detail)
+assert(rest.detail:find("Cozy Sleeping Bag", 1, true), "and names the bag")
+assertEq(rest.text, nil, "no number on the icon while it's missing")
+assertEq(TO:IsBuffReminder(rest), true, "Well-Rested sits on the buff row")
+-- One and two stacks: still to top off, with the stacks on the icon
+STATE.buffs = { ["Well-Rested"] = 7200 }; STATE.buffStacks = { ["Well-Rested"] = 1 }; refresh()
+rest = ids().rested
+assertEq(rest and rest.text, "1/3", "one stack of three")
+assert(rest.detail:find("^1 of 3 stacks\n"), "the tooltip says so: " .. rest.detail)
+assertEq(rest.expires, nil, "not running out")
+assertEq(restedButton().urgency, nil, "plain border")
+STATE.buffStacks = { ["Well-Rested"] = 2 }; refresh()
+assertEq(ids().rested.text, "2/3", "two stacks of three")
+-- Three stacks with plenty of time: topped off
+STATE.buffStacks = { ["Well-Rested"] = 3 }; refresh()
+assertEq(ids().rested, nil, "three stacks, two hours: nothing to do")
+STATE.buffs = { ["Well-Rested"] = 28 * 60 }; refresh()
+assertEq(ids().rested, nil, "three stacks with 28 minutes left: still fine")
+-- Three stacks, running out
+STATE.buffs = { ["Well-Rested"] = 150 }; refresh()   -- warn at 3:00
+rest = ids().rested
+assertEq(rest and rest.text, "3m", "running out: the time left")
+assertEq(rest.expires, 150, "with its countdown")
+assert(rest.detail:find("^Runs out in 3m\n"), "the tooltip says when: " .. rest.detail)
+assertEq(restedButton().urgency, "expiring", "orange border")
+STATE.buffs = { ["Well-Rested"] = 20 }; refresh()
+assertEq(restedButton().urgency, "urgent", "red at the very end")
+-- Low on both: the stacks on the icon, both in the tooltip
+STATE.buffs = { ["Well-Rested"] = 150 }; STATE.buffStacks = { ["Well-Rested"] = 2 }; refresh()
+rest = ids().rested
+assertEq(rest.text, "2/3", "stacks first")
+assert(rest.detail:find("2 of 3 stacks\nRuns out in 3m\n"), "both lines: " .. rest.detail)
+-- The game doesn't say how many stacks (0): having the buff is at least one
+STATE.buffs = { ["Well-Rested"] = 7200 }; STATE.buffStacks = {}; refresh()
+assertEq(ids().rested and ids().rested.text, "1/3", "a buff with no count is one stack")
+-- At the level cap there's no experience to gain
+STATE.buffs = {}; STATE.level = 60; refresh()
+assertEq(ids().rested, nil, "nothing at the level cap")
+STATE.level = 59; refresh()
+assert(ids().rested, "one level below it: shown")
+STATE.level = 30
+-- Turned off
+TO:SetEnabled("rested", false); refresh()
+assertEq(ids().rested, nil, "turned off")
+TO:SetEnabled("rested", true); refresh()
+assert(ids().rested, "and on again")
+-- In the options: a switch on the Buffs tab, only while you carry the bag
+local function restedSwitch()
+    for _, w in ipairs(TO.config.lists.buffs.child.__children) do
+        if w.isSwitch and w:IsVisible() and w.label and w.label:GetText() == "Well-Rested" then return w end
+    end
+end
+local wasOpen = TO.config and TO.config:IsShown()
+if not wasOpen then TO:OpenConfig() end
+TO:ShowOptionsTab("buffs")
+local sw = restedSwitch()
+assert(sw, "the Buffs tab has a Well-Rested switch while the bag is in your bags")
+sw.__scripts.OnClick(sw)
+assertEq(TO:IsEnabled("rested", true), false, "the switch turns it off")
+sw.__scripts.OnClick(sw)
+assertEq(TO:IsEnabled("rested", true), true, "and on")
+-- The bag put away (bank): gone
+STATE.bags = {}; refresh()
+assertEq(ids().rested, nil, "no bag, no reminder")
+TO:ShowOptionsTab("buffs")
+assertEq(restedSwitch(), nil, "and no switch in the options")
+if not wasOpen then TO.config:Hide() end
+STATE.buffStacks = nil
 STATE.class = "MAGE"; TO.char.auto = {}; STATE.level = nil; refresh()
 step("party buffs")
 STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
