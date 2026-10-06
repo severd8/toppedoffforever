@@ -1,7 +1,8 @@
 ## 1.8.0
 
 - **Food, water, bandage and potion rows follow your bags.** Each row is now "the best of its kind you're carrying" and says so: **Best food in your bags: Wild Hog Shank**. Sell your old food and buy another and the row changes with it, where before it kept the old item's name unless the new one restored more. With none left it reads **No food in your bags (last: Wild Hog Shank)**. Your Min stays with the row.
-- **Restock buys the best a vendor sells.** For those rows, the Restock button now picks the best food, water, bandage or potion the vendor has that you can use, as long as it's at least as good as what you carry. A better one is bought up to your Min. The cost is still shown first, and nothing is bought until you click.
+- **Items that are just as good count together.** Foods of one tier restore the same under different names. If you carry 10 Wild Hog Shank and 6 of another food that restores as much, the row counts 16, and it stays on the one it was on.
+- **Restock buys the best a vendor sells.** For those rows, the Restock button now picks the best food, water, bandage or potion the vendor has that you can use (it reads the item's required level), as long as it's at least as good as what you carry. If the vendor has yours, yours is bought. If it only has one just as good under another name, that one makes up what you're short. A better one is bought up to your Min. The cost is still shown first, and nothing is bought until you click.
 - Fixed: items that restore 1,000 or more weren't recognised, because the game writes the number with a comma. Sweet Nectar wasn't seen as water, for one.
 - The Supplies tab redraws when your bags change while it's open.
 

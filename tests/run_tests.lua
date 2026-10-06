@@ -760,6 +760,45 @@ STATE.level = 25
 STATE.merchant[#STATE.merchant + 1] = { name = "Sweet Nectar", price = 200 }
 refresh()
 assertEq(planText(), "15 Sweet Nectar", "without IDs the item you carry is matched by name")
+-- Foods of one tier restore the same under different names. They count together, the row
+-- stays on the one it's on, and a vendor's just-as-good one makes up only what you're short.
+local SHANK = "Use: Restores 841 health over 27 sec." .. EAT .. "\nRequires Level 25"
+STATE.merchant = {}; TO.char.auto = {}; TO.char.autoMins = {}; STATE.level = 25
+STATE.bags = { { id = 340, name = "Wild Hog Shank", count = 10, tip = SHANK } }
+refresh()
+assertEq(TO.char.auto.food.name, "Wild Hog Shank", "(you carry Wild Hog Shank)")
+table.insert(STATE.bags, { id = 345, name = "Soft Banana Bread", count = 6, tip = SHANK })
+refresh()
+assertEq(TO.char.auto.food.name, "Wild Hog Shank", "one just as good doesn't take the row over")
+assertEq(ids()["auto:food"].text, "16/20", "but it counts")
+assert(ids()["auto:food"].detail:find("6 of them are others just as good", 1, true), "and the tooltip says so: " .. ids()["auto:food"].detail)
+assertEq(ids()["auto:food"].action.use, "item:340", "a click eats the one the row is on")
+STATE.merchant = { { id = 345, name = "Soft Banana Bread", price = 50, tip = SHANK } }
+refresh()
+assertEq(planText(), "4 Soft Banana Bread", "a vendor with only the other one: just the 4 you're short")
+STATE.bags[2].count = 10; refresh()
+assertEq(ids()["auto:food"], nil, "10 and 10: topped off")
+assertEq(planText(), "", "and nothing to buy")
+-- The vendor has yours too: yours is bought
+STATE.bags[2] = nil
+STATE.merchant[2] = { id = 340, name = "Wild Hog Shank", price = 50, tip = SHANK }
+STATE.merchant[3] = { id = 349, name = "Tel'Abim Banana", price = 50, tip = SHANK }
+refresh()
+assertEq(planText(), "10 Wild Hog Shank", "of several just as good, the one you carry")
+-- You carry none of the kind you last had: the vendor's just-as-good one, to your Min
+STATE.bags = {}; STATE.merchant[2] = nil; STATE.merchant[3] = nil
+STATE.merchant = { STATE.merchant[1] }
+refresh()
+assertEq(TO.char.auto.food.name, "Wild Hog Shank", "(out of food: the last one is kept)")
+assertEq(planText(), "20 Soft Banana Bread", "all 20, in the other name")
+-- With no row yet, of two just as good in your bags the higher item ID is taken (it's steady)
+TO.char.auto = {}; STATE.merchant = {}
+STATE.bags = { { id = 345, name = "Soft Banana Bread", count = 3, tip = SHANK }, { id = 340, name = "Wild Hog Shank", count = 3, tip = SHANK } }
+refresh()
+assertEq(TO.char.auto.food.name, "Soft Banana Bread", "a first pick between equals")
+refresh(); refresh()
+assertEq(TO.char.auto.food.name, "Soft Banana Bread", "and it stays put")
+assertEq(ids()["auto:food"].text, "6/20", "both counted")
 STATE.merchant = {}; STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}
 STATE.class = "MAGE"; STATE.level = nil; refresh()
 

@@ -1015,8 +1015,10 @@ function TO:UpdateAutoItems()
     for _, slot in ipairs(self.AUTO_SLOTS) do
         if not slot.mana or hasMana then slots[#slots + 1] = slot end
     end
-    -- One pass over the bags: the best of each kind that's there right now
-    local inBags, scores = {}, {}
+    -- One pass over the bags: the best of each kind that's there right now, and how many
+    -- you have of it. Foods of one tier restore the same under different names (a shank,
+    -- a loaf, a melon), so everything just as good as the best is counted with it.
+    local inBags, scores, have = {}, {}, {}
     for _, e in pairs(self.bag or {}) do
         -- Conjured items can't be bought, so they're not tracked here (Mages: see conjures)
         local k = not IsConjured(e.name) and self:ItemKind(e.id)
@@ -1024,14 +1026,19 @@ function TO:UpdateAutoItems()
             for _, slot in ipairs(slots) do
                 local key = slot.key
                 local score = self:AutoScore(key, k)
-                if score and (not scores[key] or score > scores[key]
-                    or (score == scores[key] and e.id > inBags[key].id)) then
-                    inBags[key], scores[key] = e, score
+                if score and (not scores[key] or score > scores[key]) then
+                    inBags[key], scores[key], have[key] = e, score, e.count
+                elseif score and score == scores[key] then
+                    have[key] = have[key] + e.count
+                    -- Just as good: the one the slot is already on stays; otherwise the higher item ID
+                    local cur = self.char.auto[key]
+                    local curId = cur and cur.id
+                    if inBags[key].id ~= curId and (e.id == curId or e.id > inBags[key].id) then inBags[key] = e end
                 end
             end
         end
     end
-    self.autoInBags = inBags
+    self.autoInBags, self.autoHave = inBags, have
     for _, slot in ipairs(slots) do
         local best, bestScore = inBags[slot.key], scores[slot.key]
         local cur = self.char.auto[slot.key]
@@ -1586,11 +1593,18 @@ function TO:CheckAutoItems(list)
             local e, nextBest = self:AutoItemInBags(slot.key, own)
             local name = e and e.name or a.name
             local have = e and e.count or 0
+            -- Others in your bags that are just as good count too
+            local others = 0
+            if e and e.id == a.id then
+                others = math.max(0, ((self.autoHave and self.autoHave[slot.key]) or have) - have)
+                have = have + others
+            end
             local min = a.min or slot.min
             local low = have < min
             if low or self.char.customAlways then
                 local detail = low and ("%d in your bags (want %d)"):format(have, min)
                     or ("%d in your bags. Topped off."):format(have)
+                if others > 0 then detail = detail .. "\n" .. others .. " of them are others just as good" end
                 if nextBest then detail = detail .. "\nOut of " .. a.name .. ": this is the next best in your bags" end
                 local r = { id = id, label = name,
                     icon = (e and e.icon) or ItemIcon(e and e.id or a.id) or self:ItemIconByName(name),
@@ -1695,7 +1709,9 @@ function TO:RestockNeeds()
         if a and (not slot.mana or hasMana) and on("auto:" .. slot.key, true) and not IsConjured(a.name)
             and not own[a.name:lower()] then
             local before = #out
-            add({ a.name }, (self:BagCount({ a.name })), a.min or slot.min, a.name)
+            local have = (self:BagCount({ a.name }))
+            if have > 0 then have = math.max(have, (self.autoHave and self.autoHave[slot.key]) or 0) end
+            add({ a.name }, have, a.min or slot.min, a.name)
             -- The vendor may sell a better one of the kind: see RestockPlan
             if out[before + 1] then
                 out[before + 1].slot, out[before + 1].score, out[before + 1].min = slot.key, a.score, a.min or slot.min
@@ -1757,19 +1773,24 @@ function TO:MerchantItems()
 end
 
 -- The best item this vendor sells for a slot (food, water, ...) that you can use: the
--- one that restores the most. Nothing if it's worse than what you last carried.
-function TO:BestSold(merchant, slot, atLeast, own)
+-- one that restores the most, and of several just as good, the one you carry (`mine`).
+-- Nothing if it's worse than what you last carried. Returns the item and its score.
+function TO:BestSold(merchant, slot, atLeast, own, mine)
     local level = Num(UnitLevel("player")) or 60
+    mine = mine and mine:lower()
     local best, bestScore
     for _, m in ipairs(merchant) do
         local k = m.id and not IsConjured(m.name) and not (own and own[m.name:lower()]) and self:ItemKind(m.id)
         local score = k and k.level <= level and self:AutoScore(slot, k) or nil
-        if score and (not atLeast or score >= atLeast)
-            and (not bestScore or score > bestScore or (score == bestScore and m.id > best.id)) then
-            best, bestScore = m, score
+        if score and (not atLeast or score >= atLeast) then
+            local wins = not bestScore or score > bestScore
+            if not wins and score == bestScore and best.name:lower() ~= mine then
+                wins = m.name:lower() == mine or m.id > best.id
+            end
+            if wins then best, bestScore = m, score end
         end
     end
-    return best
+    return best, bestScore
 end
 
 -- Rows to buy: { index, name, lots, count, cost, stack, icon }
@@ -1782,12 +1803,19 @@ function TO:RestockPlan()
     for _, c in ipairs(self.char.custom) do own[c.name:lower()] = true end
     for _, need in ipairs(self:RestockNeeds()) do
         local m
-        -- Food, water, bandages and potions: the best of the kind this vendor sells. A
-        -- better one than you carry is bought up to your Min, since it takes the slot over.
+        -- Food, water, bandages and potions: the best of the kind this vendor sells. One
+        -- under another name that's just as good as yours makes up what you're short (the
+        -- two are counted together). A better one is bought up to your Min, since it takes
+        -- the slot over.
         if need.slot then
-            m = self:BestSold(merchant, need.slot, need.score, own)
+            local score
+            m, score = self:BestSold(merchant, need.slot, need.score, own, need.names[1])
             if m and m.name:lower() ~= need.names[1]:lower() then
-                need = { names = { m.name }, need = need.min - (self:BagCount({ m.name })), label = m.name }
+                if need.score and score == need.score then
+                    need = { names = { m.name }, need = need.need, label = m.name }
+                else
+                    need = { names = { m.name }, need = need.min - (self:BagCount({ m.name })), label = m.name }
+                end
                 if need.need <= 0 then m = nil end
             end
         end
