@@ -1,3 +1,10 @@
+## 1.8.0
+
+- **Food, water, bandage and potion rows follow your bags.** Each row is now "the best of its kind you're carrying" and says so: **Best food in your bags: Wild Hog Shank**. Sell your old food and buy another and the row changes with it, where before it kept the old item's name unless the new one restored more. With none left it reads **No food in your bags (last: Wild Hog Shank)**. Your Min stays with the row.
+- **Restock buys the best a vendor sells.** For those rows, the Restock button now picks the best food, water, bandage or potion the vendor has that you can use, as long as it's at least as good as what you carry. A better one is bought up to your Min. The cost is still shown first, and nothing is bought until you click.
+- Fixed: items that restore 1,000 or more weren't recognised, because the game writes the number with a comma. Sweet Nectar wasn't seen as water, for one.
+- The Supplies tab redraws when your bags change while it's open.
+
 ## 1.7.0
 
 - **Well-Rested**, the experience bonus from the Cozy Sleeping Bag, is tracked. If the bag is in your bags, an icon shows when the buff is missing, below 3 stacks (the icon reads 1/3 or 2/3) or running out. Click it to unfurl the bag. Nothing shows without the bag or at the level cap. Turn it off with **Well-Rested** on the Buffs tab (the switch is only there while you carry the bag).

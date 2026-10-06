@@ -483,16 +483,26 @@ local function BuildSuppliesTab(self, ctx, class)
     self:UpdateAutoItems()
     local hasMana = self.MANA_CLASSES[class]
     local autoRows = {}
+    -- A row is a kind of item, not one item: it names the best of the kind in your bags
+    -- right now, or the last one you carried when you have none
     local function slotText(slot)
         local a = self.char.auto[slot.key]
-        return slot.label .. ": " .. (a and a.name or "|cff808080none in bags yet|r")
+        local kind = slot.label:lower()
+        if not a then return "|cff808080No " .. kind .. " in your bags yet|r" end
+        local e = self.bag and self.bag[a.name:lower()]
+        if e and e.count > 0 then return "Best " .. kind .. " in your bags: " .. a.name end
+        return "|cff808080No " .. kind .. " in your bags (last: " .. a.name .. ")|r"
     end
     for _, slot in ipairs(self.AUTO_SLOTS) do
         if not slot.mana or hasMana then
             local a = self.char.auto[slot.key]
             local sw = ctx.fit(ctx.toggle("auto:" .. slot.key, slotText(slot), true))
             autoRows[slot.key] = { sw = sw, slot = slot }
-            if a then ctx.minBox(a.min or slot.min, function(n) a.min = n TO.char.autoMins[slot.key] = n end) end
+            ctx.minBox(a and a.min or self.char.autoMins[slot.key] or slot.min, function(n)
+                TO.char.autoMins[slot.key] = n
+                local now = TO.char.auto[slot.key]   -- (the item may have changed since the row was drawn)
+                if now then now.min = n end
+            end)
             ctx.row()
         end
     end
@@ -532,8 +542,9 @@ local function BuildSuppliesTab(self, ctx, class)
     T.Tooltip(focus, "Stat food", "Automatic picks food for your role, and falls back to any stat food. "
         .. "Pick a stat yourself (like Strength for a Protection Paladin) to track only food with that stat.")
     ctx.row()
-    ctx.note("The best of each in your bags is picked for you, and better ones take over as you level. "
-        .. "Stat food follows your talents (or group role). Turn one off to stop tracking it.")
+    ctx.note("Each row follows your bags: it's the best of its kind you're carrying (the one that restores "
+        .. "the most), so it changes when you swap one for another. Stat food follows your talents (or group "
+        .. "role). Turn one off to stop tracking it.")
 
     -- Mage conjures
     if class == "MAGE" then
@@ -832,6 +843,17 @@ function TO:ShowOptionsTab(key)
     local win = self.config
     if not win then return end
     win:ShowTab(key)
+end
+
+-- The Supplies tab names the items the slots follow. When they change while it's
+-- showing, draw it again; not while you're typing in one of its boxes (returns false,
+-- and it's tried again at the next update).
+function TO:RefreshSupplies()
+    if not (self.config and self.config:IsShown() and self.optionsTab == "supplies") then return true end
+    local focus = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+    if focus then return false end
+    self:BuildChecksList()
+    return true
 end
 
 function TO:RefreshConfig()

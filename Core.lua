@@ -912,6 +912,14 @@ local function IsGear(id)
     return classID == 2 or classID == 4   -- Weapon, Armor
 end
 
+-- A number as a tooltip writes it: "835", "1,344" (the game puts a comma in from a
+-- thousand up) or "1344.6"
+local AMOUNT = "([%d,%.]+)"
+local function Amount(s)
+    if not s then return nil end
+    return tonumber((s:gsub(",", ""):gsub("%.+$", "")))
+end
+
 function TO:ItemKind(id)
     if itemKinds[id] then return itemKinds[id] end
     if IsGear(id) then
@@ -951,17 +959,18 @@ function TO:ItemKind(id)
         if heal then stats.heal = tonumber(heal); any = true end
         if any then k.stats = stats end
     end
-    local hp = text:match("restores (%d+) health over")
-    local mp = text:match("restores (%d+) mana over")
-    if hp and text:find("eating", 1, true) and not k.stats then k.food = tonumber(hp) end
-    if mp and text:find("drinking", 1, true) then k.water = tonumber(mp) end
-    local bandage = text:match("heals (%d+) damage over")
-    if bandage then k.bandage = tonumber(bandage) end
+    local hp = Amount(text:match("restores " .. AMOUNT .. " health over"))
+    local mp = Amount(text:match("restores " .. AMOUNT .. " mana over"))
+    if hp and text:find("eating", 1, true) and not k.stats then k.food = hp end
+    if mp and text:find("drinking", 1, true) then k.water = mp end
+    local bandage = Amount(text:match("heals " .. AMOUNT .. " damage over"))
+    if bandage then k.bandage = bandage end
     -- Potions: "Restores 140 to 180 health." Rejuvenation-style potions (both) are skipped.
-    local hLo, hHi = text:match("restores (%d+) to (%d+) health")
-    local mLo, mHi = text:match("restores (%d+) to (%d+) mana")
-    if hLo and not mLo then k.healing = (tonumber(hLo) + tonumber(hHi)) / 2 end
-    if mLo and not hLo then k.mana = (tonumber(mLo) + tonumber(mHi)) / 2 end
+    local hLo, hHi = text:match("restores " .. AMOUNT .. " to " .. AMOUNT .. " health")
+    local mLo, mHi = text:match("restores " .. AMOUNT .. " to " .. AMOUNT .. " mana")
+    hLo, hHi, mLo, mHi = Amount(hLo), Amount(hHi), Amount(mLo), Amount(mHi)
+    if hLo and hHi and not mLo then k.healing = (hLo + hHi) / 2 end
+    if mLo and mHi and not hLo then k.mana = (mLo + mHi) / 2 end
     if not (k.food or k.water or k.bandage or k.healing or k.mana or k.stats) then
         -- Nothing to track, as far as this tooltip says. Look again for a while.
         u = u or { first = now }
@@ -991,7 +1000,9 @@ function TO:AutoScore(slot, k)
     return k[slot]
 end
 
--- Picks the best item in your bags for each slot; better items replace worse ones
+-- Each slot follows your bags: it's the best item of its kind you can use that you're
+-- carrying right now. With none of that kind in your bags, the last one is kept (it's
+-- what the reminder names and what a vendor is asked for).
 function TO:UpdateAutoItems()
     local level = Num(UnitLevel("player")) or 60
     -- Spec or stat choice changed: pick the stat food again
@@ -1037,20 +1048,22 @@ function TO:UpdateAutoItems()
             local k = itemKinds[cur.id]
             cur.score = k and self:AutoScore("statfood", k) or 0
         end
-        if best and (not cur or cur.id ~= best.id) and (not cur or bestScore > (cur.score or 0)
-            or not self:StillGood(cur, level)) then
+        if best and (not cur or cur.id ~= best.id) then
             self.char.auto[slot.key] = { name = best.name, id = best.id, score = bestScore,
                 min = cur and cur.min or self.char.autoMins[slot.key] or slot.min }
-        elseif cur and best and cur.id == best.id then
+        elseif cur and best then
             cur.score = bestScore
         end
     end
-end
-
--- A tracked item you've outgrown (or can no longer use) gives way to anything in your bags
-function TO:StillGood(cur, level)
-    local k = itemKinds[cur.id]
-    return not k or k.level <= level
+    -- The options window names each slot's item and says whether you have any: when
+    -- either changes, it's drawn again (TO:Update)
+    local parts = {}
+    for _, slot in ipairs(slots) do
+        local a = self.char.auto[slot.key]
+        parts[#parts + 1] = slot.key .. ":" .. (a and a.id or 0) .. ":" .. (inBags[slot.key] and 1 or 0)
+    end
+    local sig = table.concat(parts, " ")
+    if sig ~= self.autoSig then self.autoSig, self.autoChanged = sig, true end
 end
 
 -- You picked a stat: choose the stat food again (your Min is kept)
@@ -1681,7 +1694,12 @@ function TO:RestockNeeds()
         local a = self.char.auto[slot.key]
         if a and (not slot.mana or hasMana) and on("auto:" .. slot.key, true) and not IsConjured(a.name)
             and not own[a.name:lower()] then
+            local before = #out
             add({ a.name }, (self:BagCount({ a.name })), a.min or slot.min, a.name)
+            -- The vendor may sell a better one of the kind: see RestockPlan
+            if out[before + 1] then
+                out[before + 1].slot, out[before + 1].score, out[before + 1].min = slot.key, a.score, a.min or slot.min
+            end
         end
     end
     for _, c in ipairs(self.char.custom) do
@@ -1705,7 +1723,22 @@ function TO:RestockNeeds()
     return out
 end
 
--- What this vendor sells: list of { index, name, price, stack, available, icon }
+-- The item ID of what a vendor sells in a slot (nil if the game won't say)
+local function MerchantItemID(index)
+    if GetMerchantItemID then
+        local ok, id = pcall(GetMerchantItemID, index)
+        id = ok and Num(id) or nil
+        if id then return id end
+    end
+    if GetMerchantItemLink then
+        local ok, link = pcall(GetMerchantItemLink, index)
+        link = ok and Str(link) or nil
+        return link and tonumber(link:match("item:(%d+)")) or nil
+    end
+    return nil
+end
+
+-- What this vendor sells: list of { index, name, price, stack, available, icon, id }
 function TO:MerchantItems()
     local items = {}
     local n = Num(GetMerchantNumItems and GetMerchantNumItems()) or 0
@@ -1716,11 +1749,27 @@ function TO:MerchantItems()
             if name and price and not Plain(info.hasExtendedCost) and Plain(info.isPurchasable) ~= false then
                 items[#items + 1] = { index = i, name = name, price = price,
                     stack = math.max(1, Num(info.stackCount) or 1),
-                    available = Num(info.numAvailable) or -1, icon = info.texture }
+                    available = Num(info.numAvailable) or -1, icon = info.texture, id = MerchantItemID(i) }
             end
         end
     end
     return items
+end
+
+-- The best item this vendor sells for a slot (food, water, ...) that you can use: the
+-- one that restores the most. Nothing if it's worse than what you last carried.
+function TO:BestSold(merchant, slot, atLeast, own)
+    local level = Num(UnitLevel("player")) or 60
+    local best, bestScore
+    for _, m in ipairs(merchant) do
+        local k = m.id and not IsConjured(m.name) and not (own and own[m.name:lower()]) and self:ItemKind(m.id)
+        local score = k and k.level <= level and self:AutoScore(slot, k) or nil
+        if score and (not atLeast or score >= atLeast)
+            and (not bestScore or score > bestScore or (score == bestScore and m.id > best.id)) then
+            best, bestScore = m, score
+        end
+    end
+    return best
 end
 
 -- Rows to buy: { index, name, lots, count, cost, stack, icon }
@@ -1729,11 +1778,22 @@ function TO:RestockPlan()
     local byName = {}
     for _, m in ipairs(merchant) do byName[m.name:lower()] = byName[m.name:lower()] or m end
     local plan, used = {}, {}
+    local own = {}
+    for _, c in ipairs(self.char.custom) do own[c.name:lower()] = true end
     for _, need in ipairs(self:RestockNeeds()) do
         local m
+        -- Food, water, bandages and potions: the best of the kind this vendor sells. A
+        -- better one than you carry is bought up to your Min, since it takes the slot over.
+        if need.slot then
+            m = self:BestSold(merchant, need.slot, need.score, own)
+            if m and m.name:lower() ~= need.names[1]:lower() then
+                need = { names = { m.name }, need = need.min - (self:BagCount({ m.name })), label = m.name }
+                if need.need <= 0 then m = nil end
+            end
+        end
         for _, n in ipairs(need.names) do
-            m = byName[n:lower()]
             if m then break end
+            m = byName[n:lower()]
         end
         if not m and need.partial then   -- pet food typed as part of a name
             local text = need.names[1]:lower()
@@ -2239,6 +2299,7 @@ function TO:Update()
     self.reminders = list
     self:Layout(self.reminders)
     if self.merchantOpen and self.UpdateVendorPanel then self:UpdateVendorPanel() end
+    if self.autoChanged and self.RefreshSupplies and self:RefreshSupplies() then self.autoChanged = nil end
 end
 
 function TO:RequestUpdate()

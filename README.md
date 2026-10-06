@@ -16,13 +16,13 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 - **Class buffs for every class** (Rogues get poisons instead). The icon gets an **orange border** when a buff is about to run out and turns **red** near the end. **Click to cast it on yourself.** Group versions and buffs from other players count, and you pick which Blessing, Aura, Aspect, Armor or weapon buff is cast.
 - **Party buffs and blessings** (off by default). See how many party members are missing your buff and **click to buff the next one in range**. Paladins choose a blessing for each class. The whole raid can be included.
 - **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and any oil or sharpening stone you choose. **Click to apply it**; your best rank is used, and low poison charges are flagged.
-- **Food, water, bandages and potions, picked for you.** The best of each in your bags, plus the right **stat food for your class or role**. When you run out of the best one, the next best takes its place. A **Well Fed** reminder (in dungeons and raids by default) eats your stat food with a click.
+- **Food, water, bandages and potions, picked for you.** Each row follows your bags: it's the best of its kind you're carrying, plus the right **stat food for your class or role**. Swap one food for another, or run out of your best potion, and the row changes with it. A **Well Fed** reminder (in dungeons and raids by default) eats your stat food with a click.
 - **Combat bar.** In combat, your healing and mana potions, Healthstone and bandage stay clickable, with counts and the potion cooldown.
 - **Reagents, ammo and class items.** Soul Shards, runes, powders, candles, Ankhs, totems and more, checked once you've learned a spell that needs them, and ammo for Hunters. Set your own minimums.
 - **Well-Rested**, if you carry a Cozy Sleeping Bag: an icon when the experience bonus is missing, below 3 stacks (it reads 1/3 or 2/3) or running out. Click it to unfurl the bag.
 - **Class extras.** Hunter and Warlock pets (missing, dead or unhappy, with one-click feeding), Soulstones, Healthstones, Mage conjures, and the elixirs and flasks you choose.
 - **Gear and bags.** Low durability and low bag space warnings.
-- **Vendors.** One click restocks everything you're short on that the vendor sells, with the cost shown first, and a **Repair all** button. Nothing is bought until you click.
+- **Vendors.** One click restocks everything you're short on that the vendor sells, with the cost shown first, and a **Repair all** button. For food, water, bandages and potions it buys the best the vendor has that you can use. Nothing is bought until you click.
 - **Your own items.** Add anything with a minimum count, and **click the icon to use it**.
 - **Profiles and reminders.** A lighter set of checks outside dungeons, copy a character's setup to an alt, chat reminders on ready checks and when you enter a dungeon, and keybindings for the first three reminders.
 
@@ -46,7 +46,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 | Tab | What's there |
 |---|---|
 | **Buffs** | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, Well-Rested (while you carry the sleeping bag), elixirs and flasks |
-| **Supplies** | Auto-tracked food, water, bandages and potions, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
+| **Supplies** | The best food, water, bandage and potions in your bags, Healthstone, stat food choice, conjured food and water (Mages), your own items, reagents and ammo, vendor restock and repair |
 | **Pet & gear** (Hunters and Warlocks), **Gear & bags** (everyone else) | Pet, Soulstone (Warlocks), durability and bag space |
 | **Profiles** | Separate checks outside dungeons, copy another character |
 | **Display** | Show reminders, lock, show header and frame, only in dungeons and raids, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |

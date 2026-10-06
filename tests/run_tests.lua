@@ -505,32 +505,38 @@ TO:SetStatFocus("sta"); refresh()
 assertEq(TO.char.auto.statfood.name, "Spiced Wolf Meat", "Stamina focus picks the Stamina food")
 TO:SetStatFocus(nil); refresh()
 assertEq(TO.char.auto.statfood.name, "Smoked Desert Dumplings", "back to class default")
--- Run out of the best: the next best in your bags is shown and used, and the best is still what's tracked
+-- Each slot follows your bags. Out of the best one: the best you still carry takes the slot
 A = TO.char.auto
 local function takeOut(id)
     for i, e in ipairs(STATE.bags) do
         if e.id == id then return table.remove(STATE.bags, i) end
     end
 end
+A.bandage.min = 25
 local wool = takeOut(108); refresh()
-assertEq(A.bandage.name, "Wool Bandage", "still tracked when you run out (it's what a vendor restocks)")
+assertEq(A.bandage.name, "Heavy Linen Bandage", "out of the best: the slot is the best you still carry")
+assertEq(A.bandage.min, 25, "with the Min you set")
+A.bandage.min = 20; refresh()
 R = ids()
-assertEq(R["auto:bandage"].label, "Heavy Linen Bandage", "the next best in your bags takes its place")
+assertEq(R["auto:bandage"].label, "Heavy Linen Bandage", "the reminder is for that one")
 assertEq(R["auto:bandage"].text, "12/20", "with its own count")
 assertEq(R["auto:bandage"].action.use, "item:107", "and a click uses it")
-assert(R["auto:bandage"].detail:find("Out of Wool Bandage", 1, true), "the tooltip says why")
+assert(not R["auto:bandage"].detail:find("Out of", 1, true), "it isn't a stand-in for anything")
 local needs = {}
-for _, n in ipairs(TO:RestockNeeds()) do needs[n.label] = n.need end
-assertEq(needs["Wool Bandage"], 20, "a vendor would still restock the better one")
-assertEq(needs["Heavy Linen Bandage"], nil, "not the stand-in")
+for _, n in ipairs(TO:RestockNeeds()) do needs[n.label] = n end
+assertEq(needs["Heavy Linen Bandage"] and needs["Heavy Linen Bandage"].need, 8, "you're 8 short of it")
+assertEq(needs["Heavy Linen Bandage"].slot, "bandage", "(a vendor is asked for its best bandage)")
+assertEq(needs["Wool Bandage"], nil, "the one you no longer carry isn't asked for by name")
 local linen = takeOut(107); refresh()
-assertEq(ids()["auto:bandage"].label, "Wool Bandage", "none of any kind: the tracked one")
+assertEq(A.bandage.name, "Heavy Linen Bandage", "none of any kind: the last one you carried is kept")
+assertEq(ids()["auto:bandage"].label, "Heavy Linen Bandage", "and named in the reminder")
 assertEq(ids()["auto:bandage"].text, "0/20", "shows 0 so you restock")
 assertEq(ids()["auto:bandage"].action, nil, "nothing to click")
 table.insert(STATE.bags, linen); refresh()
-assertEq(ids()["auto:bandage"].label, "Heavy Linen Bandage", "back to the next best when you pick some up")
+assertEq(ids()["auto:bandage"].label, "Heavy Linen Bandage", "back when you pick some up")
 table.insert(STATE.bags, wool); refresh()
-assertEq(ids()["auto:bandage"].label, "Wool Bandage", "and to the best when you have it again")
+assertEq(A.bandage.name, "Wool Bandage", "and the better one takes over as soon as you carry it")
+assertEq(ids()["auto:bandage"].label, "Wool Bandage", "in the reminder too")
 assertEq(ids()["auto:bandage"].text, "2/20", "with its count")
 takeOut(108); refresh()
 -- Level up: better food takes over, custom Min kept
@@ -590,6 +596,173 @@ assertEq(TO.char.auto.statfood.name, "Golden Fish Sticks", "no talents or role: 
 TO:OpenConfig()
 TO:BuildChecksList()
 STATE.class = "MAGE"; TO.char.auto = {}; STATE.bags = {}; STATE.level = nil; refresh()
+step("amounts of a thousand and more, written with a comma")
+-- You drank Melon Juice until level 25, sold it and bought Sweet Nectar. The game writes
+-- its amount as "1,344", and the water slot has to follow.
+STATE.class = "DRUID"; STATE.level = 25; STATE.buffs = {}; TO.char.checks = {}; TO.char.custom = {}
+TO.char.auto = { water = { name = "Melon Juice", id = 106, score = 835, min = 30 } }
+STATE.bags = {
+    { id = 301, name = "Sweet Nectar", count = 40,
+        tip = "Requires Level 25\nUse: Restores 1,344 mana over 27 sec. Must remain seated while drinking." },
+}
+refresh()
+assertEq(TO.char.auto.water.name, "Sweet Nectar", "the better water takes over from the one you sold")
+assertEq(TO.char.auto.water.score, 1344, "read as 1344, not 344 or nothing")
+assertEq(TO.char.auto.water.min, 30, "your Min is kept")
+-- The same for food, bandages and potions
+STATE.level = 60; TO.char.auto = {}
+STATE.bags = {
+    { id = 302, name = "Roasted Quail", count = 20, tip = "Requires Level 35\nUse: Restores 874 health over 24 sec." .. EAT },
+    { id = 303, name = "Alterac Swiss", count = 20, tip = "Requires Level 45\nUse: Restores 2,148 health over 30 sec." .. EAT },
+    { id = 304, name = "Melon Juice", count = 20, tip = "Requires Level 15\nUse: Restores 835 mana over 24 sec. Must remain seated while drinking." },
+    { id = 305, name = "Morning Glory Dew", count = 20, tip = "Requires Level 45\nUse: Restores 2,934 mana over 30 sec. Must remain seated while drinking." },
+    { id = 306, name = "Heavy Silk Bandage", count = 20, tip = "Requires First Aid (180)\nUse: Heals 640 damage over 8 sec." },
+    { id = 307, name = "Heavy Runecloth Bandage", count = 20, tip = "Requires First Aid (260)\nUse: Heals 2,000 damage over 8 sec." },
+    { id = 308, name = "Superior Healing Potion", count = 5, tip = "Requires Level 35\nUse: Restores 700 to 900 health." },
+    { id = 309, name = "Major Healing Potion", count = 5, tip = "Requires Level 45\nUse: Restores 1,050 to 1,750 health." },
+    { id = 310, name = "Superior Mana Potion", count = 5, tip = "Requires Level 41\nUse: Restores 900 to 1,500 mana." },
+    { id = 311, name = "Greater Mana Potion", count = 5, tip = "Requires Level 31\nUse: Restores 700 to 900 mana." },
+}
+refresh()
+assertEq(TO.char.auto.food.name, "Alterac Swiss", "food: 2,148 beats 874")
+assertEq(TO.char.auto.water.name, "Morning Glory Dew", "water: 2,934 beats 835")
+assertEq(TO.char.auto.bandage.name, "Heavy Runecloth Bandage", "bandage: 2,000 beats 640")
+assertEq(TO.char.auto.healing.name, "Major Healing Potion", "healing potion: 1,050 to 1,750 beats 700 to 900")
+assertEq(TO.char.auto.healing.score, 1400, "the middle of its range")
+assertEq(TO.char.auto.mana.name, "Superior Mana Potion", "mana potion: 900 to 1,500 beats 700 to 900")
+assertEq(TO.char.auto.mana.score, 1200, "a range with a comma on one side only")
+-- And an amount written with a decimal
+TO.char.auto = {}
+STATE.bags = {
+    { id = 312, name = "Ice Cold Milk", count = 20, tip = "Requires Level 5\nUse: Restores 436.8 mana over 21 sec. Must remain seated while drinking." },
+    { id = 313, name = "Refreshing Spring Water", count = 20, tip = "Use: Restores 151.2 mana over 18 sec. Must remain seated while drinking." },
+}
+refresh()
+assertEq(TO.char.auto.water.name, "Ice Cold Milk", "decimals are read too")
+assertEq(TO.char.auto.water.score, 436.8, "as they're written")
+
+step("the food and water rows follow your bags")
+-- You sold your Snapvine Watermelon and Melon Juice and bought Wild Hog Shank and Sweet
+-- Nectar. Whatever each restores, the rows are about what you carry now.
+local DRINK = " Must remain seated while drinking."
+STATE.class = "DRUID"; STATE.level = 25; STATE.buffs = {}; TO.char.checks = {}; TO.char.custom = {}
+TO.char.auto = { food = { name = "Snapvine Watermelon", id = 320, score = 900, min = 30 },
+    water = { name = "Melon Juice", id = 321, score = 835, min = 20 } }
+TO.char.autoMins = {}
+STATE.bags = {
+    { id = 322, name = "Wild Hog Shank", count = 10, tip = "Use: Restores 841 health over 27 sec." .. EAT .. "\nRequires Level 25" },
+    { id = 323, name = "Sweet Nectar", count = 40, tip = "Use: Restores 800 mana over 27 sec." .. DRINK .. "\nRequires Level 25" },
+}
+refresh()
+assertEq(TO.char.auto.food.name, "Wild Hog Shank", "food: the one you carry now, though the old one restored more")
+assertEq(TO.char.auto.food.min, 30, "with your Min")
+assertEq(TO.char.auto.water.name, "Sweet Nectar", "water too")
+assertEq(ids()["auto:food"].label, "Wild Hog Shank", "the reminder names it")
+assertEq(ids()["auto:food"].text, "10/30", "and counts it")
+-- The Supplies tab says what each row is, and which item that is right now
+local function supplyRow(kind)   -- the row for a kind, "food" or "healing potion": its text (colour codes off) and switch
+    for _, w in ipairs(TO.config.lists.supplies.child.__children) do
+        local text = w.isSwitch and w:IsVisible() and w.label and w.label:GetText()
+        text = text and text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+        if text and (text:find("Best " .. kind .. " in your bags", 1, true) == 1
+            or text:find("No " .. kind .. " in your bags", 1, true) == 1) then return text, w end
+    end
+end
+local function minBoxOf(sw)   -- the Min box on the switch's row
+    for _, w in ipairs(TO.config.lists.supplies.child.__children) do
+        if w.__kind == "EditBox" and w:IsVisible() and math.abs(w.__pos[2] - sw.__pos[2]) < 6 and w.__pos[1] > 300 then return w end
+    end
+end
+local supOpen = TO.config and TO.config:IsShown()
+if not supOpen then TO:OpenConfig() end
+TO:ShowOptionsTab("supplies")
+assertEq((supplyRow("food")), "Best food in your bags: Wild Hog Shank", "the food row")
+assertEq((supplyRow("water")), "Best water in your bags: Sweet Nectar", "the water row")
+assertEq((supplyRow("stat food")), "No stat food in your bags yet", "a row with nothing yet")
+assertEq((supplyRow("healing potion")), "No healing potion in your bags yet", "says so for each kind")
+assert(supplyRow("bandage") and supplyRow("mana potion"), "bandage and mana potion rows")
+local _, potionRow = supplyRow("healing potion")
+assert(minBoxOf(potionRow), "a row with nothing yet still has its Min box")
+-- It redraws when your bags change while it's open
+STATE.bags[1] = { id = 324, name = "Mutton Chop", count = 5, tip = "Use: Restores 552 health over 21 sec." .. EAT }
+refresh()
+assertEq((supplyRow("food")), "Best food in your bags: Mutton Chop", "a new food shows in the open window")
+-- A Min typed now is for the item the row shows now
+local _, foodRow = supplyRow("food")
+local box = minBoxOf(foodRow)
+assert(box, "the food row's Min box")
+box:SetText("12"); box.__scripts.OnEnterPressed(box)
+assertEq(TO.char.auto.food.min, 12, "the Min goes to the item tracked now")
+assertEq(TO.char.autoMins.food, 12, "and is remembered for the next one")
+-- Not while you're typing in a box: it waits
+STATE.keyboardFocus = box
+STATE.bags[1] = { id = 322, name = "Wild Hog Shank", count = 10, tip = "Use: Restores 841 health over 27 sec." .. EAT .. "\nRequires Level 25" }
+refresh()
+assertEq(TO.char.auto.food.name, "Wild Hog Shank", "(the slot itself has changed)")
+assertEq((supplyRow("food")), "Best food in your bags: Mutton Chop", "the list isn't redrawn under your cursor")
+STATE.keyboardFocus = nil
+refresh()
+assertEq((supplyRow("food")), "Best food in your bags: Wild Hog Shank", "and catches up when you're done")
+-- None of a kind left: the row says so and names the last one
+table.remove(STATE.bags, 2)
+refresh()
+assertEq(TO.char.auto.water.name, "Sweet Nectar", "out of water: the last one is kept")
+assertEq((supplyRow("water")), "No water in your bags (last: Sweet Nectar)", "and the row says you have none")
+assertEq(ids()["auto:water"].text, "0/20", "the reminder shows 0")
+if not supOpen then TO.config:Hide() end
+STATE.class = "MAGE"; TO.char.auto = {}; TO.char.autoMins = {}; STATE.bags = {}; STATE.level = nil; refresh()
+
+step("a vendor is asked for the best of each kind")
+STATE.class = "DRUID"; STATE.level = 25; STATE.buffs = {}; TO.char.checks = {}; TO.char.custom = {}
+TO.char.auto = {}; TO.char.autoMins = {}; STATE.money = 1000000; STATE.repairCost = 0
+local function planText()
+    local rows = {}
+    for _, row in ipairs(TO:RestockPlan()) do rows[#rows + 1] = row.count .. " " .. row.name end
+    table.sort(rows)
+    return table.concat(rows, ", ")
+end
+local MELON = "Requires Level 15\nUse: Restores 835 mana over 24 sec." .. DRINK
+local NECTAR = "Requires Level 25\nUse: Restores 1,344 mana over 27 sec." .. DRINK
+STATE.merchant = {
+    { id = 330, name = "Ice Cold Milk", price = 25, tip = "Requires Level 5\nUse: Restores 436 mana over 21 sec." .. DRINK },
+    { id = 331, name = "Melon Juice", price = 100, tip = MELON },
+    { id = 332, name = "Sweet Nectar", price = 200, tip = NECTAR },
+    { id = 333, name = "Moonberry Juice", price = 400, tip = "Requires Level 35\nUse: Restores 1,992 mana over 30 sec." .. DRINK },
+    { id = 334, name = "Tough Hunk of Bread", price = 5, tip = "Use: Restores 61 health over 18 sec." .. EAT },
+}
+-- A few Melon Juice left over: the vendor's best water you can drink is bought, to your Min
+STATE.bags = { { id = 331, name = "Melon Juice", count = 3, tip = MELON } }
+refresh()
+assertEq(TO.char.auto.water.name, "Melon Juice", "(the slot is the Melon Juice you carry)")
+assertEq(planText(), "20 Sweet Nectar", "the best water you can drink, not more of the old one or one you can't use yet")
+-- Already on the best: topped up
+STATE.bags = { { id = 332, name = "Sweet Nectar", count = 5, tip = NECTAR } }
+refresh()
+assertEq(planText(), "15 Sweet Nectar", "15 more of the one you carry")
+-- Enough of it: nothing
+STATE.bags[1].count = 20; refresh()
+assertEq(planText(), "", "topped off: nothing to buy")
+-- The vendor only has worse: nothing is bought in its place
+STATE.bags[1].count = 5
+table.remove(STATE.merchant, 3)   -- no Sweet Nectar here
+STATE.level = 25; refresh()
+assertEq(planText(), "", "a worse water isn't bought instead")
+-- You levelled: the better one is offered
+STATE.level = 35; refresh()
+assertEq(planText(), "20 Moonberry Juice", "at 35 the vendor's Moonberry Juice is the best you can drink")
+-- A drink you track yourself is left to your own list
+TO:AddCustom("Moonberry Juice", 5); refresh()
+assertEq(planText(), "5 Moonberry Juice", "your own item is bought to your own Min, once")
+TO:RemoveCustom("Moonberry Juice")
+-- The game won't say what an item is (no ID): by name, as before
+for _, m in ipairs(STATE.merchant) do m.id = nil end
+STATE.level = 25
+STATE.merchant[#STATE.merchant + 1] = { name = "Sweet Nectar", price = 200 }
+refresh()
+assertEq(planText(), "15 Sweet Nectar", "without IDs the item you carry is matched by name")
+STATE.merchant = {}; STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}
+STATE.class = "MAGE"; STATE.level = nil; refresh()
+
 step("expiring buff borders")
 STATE.class = "MAGE"; TO.char.checks = {}; TO.db.warnMinutes = 5
 LEARN("Arcane Intellect"); fire("SPELLS_CHANGED"); TO.db.onlyInInstance = false
@@ -1202,10 +1375,10 @@ refresh()
 assertEq(TO.char.auto.water, nil, "equipped gear dropped from water")
 assertEq(ids()["auto:water"], nil, "no icon for dropped gear")
 assertEq(TO.char.autoMins.water, 20, "your Min kept")
--- Real water you ran out of stays tracked
+-- Real water you ran out of is kept while you carry no other
 TO.char.auto.water = { name = "Melon Juice", id = 971, score = 835, min = 20 }
 refresh()
-assertEq(TO.char.auto.water.name, "Melon Juice", "water you ran out of stays tracked")
+assertEq(TO.char.auto.water.name, "Melon Juice", "water you ran out of is kept, with nothing else to drink")
 STATE.bags = {}; STATE.gear = nil; STATE.level = nil; TO.char.auto = {}; TO.char.autoMins = {}
 step("picked stat food is strict")
 STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
@@ -1384,8 +1557,8 @@ step("out of your best potion: the next best in your bags")
 STATE.bags[1].count = 0
 table.remove(STATE.bags, 1)   -- you drank the Lesser Healing Potion
 refresh()
-assertEq(TO.char.auto.healing.name, "Lesser Healing Potion", "the better potion is still the one tracked")
-assertEq(ids()["auto:healing"].label, "Minor Healing Potion", "but the one you have is shown")
+assertEq(TO.char.auto.healing.name, "Minor Healing Potion", "the slot is now the best potion you still carry")
+assertEq(ids()["auto:healing"].label, "Minor Healing Potion", "and that's the one shown")
 assertEq(ids()["auto:healing"].text, "4/5", "with its count")
 assertEq(ids()["auto:healing"].action.use, "item:161", "and used when you click")
 TO.db.shown = true; TO.db.hideInCombat = true; TO.db.combatBar = true; TO.db.onlyInInstance = false
@@ -1396,7 +1569,7 @@ TO:AddCustom("Minor Healing Potion", 5); refresh()
 local shownTimes = 0
 for _, r in ipairs(TO.reminders) do if r.label == "Minor Healing Potion" then shownTimes = shownTimes + 1 end end
 assertEq(shownTimes, 1, "no duplicate icon")
-assertEq(ids()["auto:healing"].label, "Lesser Healing Potion", "the tracked one shows as out")
+assertEq(ids()["auto:healing"], nil, "(the slot's own icon steps aside for yours)")
 TO:RemoveCustom("Minor Healing Potion")
 TO.char.customAlways = false
 

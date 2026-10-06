@@ -205,8 +205,13 @@ function GetPetHappiness() return STATE.happiness end
 function GetNumTalentTabs() return STATE.talents and #STATE.talents or 0 end
 function GetTalentTabInfo(i) local t = STATE.talents[i] return t[1], "icon", t[2], "bg" end
 -- Tooltips: a bag entry's `tip` field is its tooltip text (lines split on "\n")
+-- An item by ID: one in your bags, or one the vendor sells (STATE.merchant[i] = { id =, tip = })
+local function stubItem(id)
+    for _, e in ipairs(STATE.bags) do if e.id == id then return e end end
+    for _, e in ipairs(STATE.merchant or {}) do if e.id == id then return e end end
+end
 C_TooltipInfo = { GetItemByID = function(id)
-    for _, e in ipairs(STATE.bags) do
+    for _, e in ipairs({ stubItem(id) }) do
         if e.id == id then
             local lines = { { leftText = e.name } }
             if STATE.uncached and STATE.uncached[id] then return { lines = lines } end
@@ -310,7 +315,7 @@ C_Container = {
         return { itemID = e.id, stackCount = e.count, iconFileID = "item:" .. e.name }
     end,
 }
-local function itemById(id) for _, e in ipairs(STATE.bags) do if e.id == id then return e end end end
+local function itemById(id) return stubItem(id) end
 C_Item = {
     GetItemCount = function(id)
         local n = 0
@@ -374,6 +379,9 @@ C_MerchantFrame = { GetItemInfo = function(i)
         hasExtendedCost = m.extended or false }
 end }
 function GetMerchantItemMaxStack(i) return 20 end
+-- STATE.merchant[i].id: the item it sells (its tooltip comes from STATE.itemTips or the bags)
+function GetMerchantItemID(i) return STATE.merchant[i] and STATE.merchant[i].id end
+function GetCurrentKeyBoardFocus() return STATE.keyboardFocus end
 function BuyMerchantItem(i, q) BOUGHT[#BOUGHT + 1] = STATE.merchant[i].name .. ":" .. tostring(q) end
 function GetMoney() return STATE.money end
 function CanMerchantRepair() return STATE.repairCost > 0 end
