@@ -2032,4 +2032,46 @@ fire("MERCHANT_SHOW")
 assertEq(TO.vendor.repair:GetText(), "Repair all (coins:12345)", "repair cost as coins")
 fire("MERCHANT_CLOSED")
 STATE.merchant, STATE.repairCost = {}, 0
+
+step("a buff you cast shows within a moment")
+local function runAfter() local list = AFTER AFTER = {} for _, fn in ipairs(list) do fn() end end
+STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Mark of the Wild", "Thorns"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.bags = {}; STATE.buffs = {}
+STATE.party = { "party1" }; STATE.partyClass = { party1 = "WARRIOR" }; STATE.partyBuffs = { party1 = {} }
+refresh()
+assert(ids()["buff:motw"] and ids()["party:motw"], "Mark of the Wild missing on you and the warrior")
+AFTER, TO.soonPending = {}, false
+-- You cast it on yourself: the icon goes without waiting for the next tick
+STATE.buffs = { ["Mark of the Wild"] = 1800 }
+fire("UNIT_AURA", "player")
+assertEq(#AFTER, 1, "one quick update scheduled")
+fire("UNIT_AURA", "player")
+assertEq(#AFTER, 1, "changes close together are one update")
+runAfter()
+assertEq(ids()["buff:motw"], nil, "your own buff seen right away")
+-- On the warrior: a party member's buffs are watched too
+STATE.partyBuffs.party1 = { ["Mark of the Wild"] = 1800, ["Thorns"] = 600 }
+fire("UNIT_AURA", "party1"); runAfter()
+assertEq(ids()["party:motw"], nil, "the warrior's buff seen right away")
+assertEq(ids()["party:thorns"], nil, "and Thorns")
+-- Units the checks don't read don't cause updates
+fire("UNIT_AURA", "nameplate3"); fire("UNIT_AURA", "target")
+assertEq(#AFTER, 0, "other units ignored")
+STATE.raid = { "raid1", "raid2", "raid3" }; STATE.raidMe = "raid1"
+fire("UNIT_AURA", "raid3")
+assertEq(#AFTER, 0, "a raid member outside your group is ignored")
+TO.char.wholeRaid = true
+fire("UNIT_AURA", "raid3")
+assertEq(#AFTER, 1, "unless the whole raid is checked")
+TO.char.wholeRaid = false; STATE.raid, STATE.raidMe = nil, nil; runAfter()
+-- In combat it waits: secure icons can't change until the fight ends
+STATE.partyBuffs.party1 = {}
+COMBAT = true; BLOCKED = {}
+fire("UNIT_AURA", "party1"); runAfter()
+assertEq(#BLOCKED, 0, "nothing protected touched in combat")
+assertEq(ids()["party:motw"], nil, "not updated in combat")
+COMBAT = false; fire("PLAYER_REGEN_ENABLED"); tick()
+assert(ids()["party:motw"], "updated when combat ends")
+STATE.party, STATE.partyClass, STATE.partyBuffs = {}, {}, {}
 print("ALL TESTS PASSED")

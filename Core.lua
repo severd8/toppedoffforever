@@ -2331,6 +2331,33 @@ function TO:RequestUpdate()
     self.dirty = true
 end
 
+-- A buff that came or went (yours, or a group member's) shows within a moment
+-- instead of at the next tick. Several changes close together are one update.
+TO.SOON = 0.2
+function TO:RequestSoonUpdate()
+    self.dirty = true
+    if self.soonPending or not self.built then return end
+    self.soonPending = true
+    C_Timer.After(self.SOON, function()
+        TO.soonPending = false
+        if TO.dirty and not InCombatLockdown() then TO:Update() end
+    end)
+end
+
+-- The units whose buffs the checks read: you, your pet, your party (in a raid: your
+-- own group, or everyone with "Check the whole raid" on)
+function TO:WatchesUnit(unit)
+    if type(unit) ~= "string" then return false end
+    if unit == "player" or unit == "pet" or unit:find("^party%d$") then return true end
+    if not unit:find("^raid%d+$") then return false end
+    if self.char.wholeRaid then return true end
+    for i = 1, 4 do
+        local same = UnitIsUnit(unit, "party" .. i)
+        if not IsSecret(same) and same then return true end
+    end
+    return false
+end
+
 ---------------------------------------------------------------------------
 -- Frames
 ---------------------------------------------------------------------------
@@ -2794,7 +2821,7 @@ events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 events:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
 events:RegisterEvent("READY_CHECK")
-events:RegisterUnitEvent("UNIT_AURA", "player")
+events:RegisterEvent("UNIT_AURA")   -- every unit; WatchesUnit picks the ones that matter
 events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
 events:RegisterEvent("GROUP_ROSTER_UPDATE")
 -- If WoW ever blocks something and blames ToppedOff, say exactly what in chat
@@ -2862,6 +2889,8 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
     elseif event == "SPELLS_CHANGED" then
         TO:ScanSpellbook()
         TO:RequestUpdate()
+    elseif event == "UNIT_AURA" then
+        if TO:WatchesUnit(arg1) then TO:RequestSoonUpdate() end
     elseif event == "READY_CHECK" then
         if TO.db.readyCheck then TO:Remind("Ready check") end
     elseif event == "PLAYER_ENTERING_WORLD" then

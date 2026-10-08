@@ -1,3 +1,7 @@
+## 1.8.2
+
+- **Buffs update right away.** Cast Mark of the Wild or Thorns on yourself or a party member and the icon goes within a moment. Before, a buff on a party member took up to 5 seconds to show, and your own up to a second. In combat the icons still wait until the fight ends.
+
 ## 1.8.1
 
 Fixes for things that never worked on WoW: Forever, because the game doesn't have the older functions they used.
