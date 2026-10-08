@@ -195,15 +195,29 @@ function UnitIsConnected(u) return not STATE.offline[u] end
 function UnitIsDeadOrGhost(u) return u == "player" and STATE.playerDead or STATE.dead[u] or false end
 function UnitIsDead(u) if u == "pet" then return STATE.pet == "dead" end return false end
 function UnitIsVisible(u) return not STATE.unseen[u] end
-function UnitInRange(u) return not STATE.outOfRange[u], true end
+-- On Forever UnitInRange always returns hidden values; a spell's range can be read
+function UnitInRange(u) return secret(not STATE.outOfRange[u]), secret(true) end
 function UnitGroupRolesAssigned(u) return STATE.roles[u] or "NONE" end
 function IsMounted() return STATE.mounted or false end
 function UnitOnTaxi() return false end
 function IsResting() return STATE.resting or false end
-function GetPetHappiness() return STATE.happiness end
--- Talents (Classic style): STATE.talents = { { "Discipline", 5 }, { "Holy", 0 }, { "Shadow", 31 } }
-function GetNumTalentTabs() return STATE.talents and #STATE.talents or 0 end
-function GetTalentTabInfo(i) local t = STATE.talents[i] return t[1], "icon", t[2], "bg" end
+-- Forever has no GetPetHappiness, GetSpecialization or GetTalentTabInfo globals
+C_PetInfo = { GetPetHappiness = function() return STATE.happiness, 0, 0 end }
+-- Talents: STATE.talents = { { "Discipline", 5 }, { "Holy", 0 }, { "Shadow", 31 } }. Your
+-- specialization is the tree with the most points (0 with no points spent).
+C_SpecializationInfo = {
+    GetSpecialization = function()
+        local best, pts = 0, 0
+        for i, t in ipairs(STATE.talents or {}) do if t[2] > pts then best, pts = i, t[2] end end
+        return best
+    end,
+    GetSpecializationInfo = function(i)
+        local t = STATE.talents[i]
+        return 100 + i, t[1], "description", "icon", nil, 0, t[2]
+    end,
+}
+-- Money as coin text: C_CurrencyInfo.GetCoinTextureString (the global is gone on Forever)
+C_CurrencyInfo = { GetCoinTextureString = function(copper) return "coins:" .. copper end }
 -- Tooltips: a bag entry's `tip` field is its tooltip text (lines split on "\n")
 -- An item by ID: one in your bags, or one the vendor sells (STATE.merchant[i] = { id =, tip = })
 local function stubItem(id)
@@ -270,19 +284,28 @@ C_Spell = {
     -- STATE.spellsLoading[item ID] = true: that item's use spell hasn't loaded yet
     IsSpellDataCached = function(spellID) return not (STATE.spellsLoading and STATE.spellsLoading[spellID - 50000]) end,
     RequestLoadSpellData = function(spellID) STATE.requestedSpells = STATE.requestedSpells or {}; STATE.requestedSpells[spellID] = true end,
+    -- STATE.outOfRange[unit]: too far for any spell
+    IsSpellInRange = function(spell, unit) if not unit then return nil end return not STATE.outOfRange[unit] end,
     GetSpellInfo = function(n)
         local s = SPELLS[n]
         if not s then return nil end
         return { name = n, spellID = s.id, iconID = s.icon }
     end,
 }
-function IsPlayerSpell(id) for _, n in ipairs(SPELLBOOK) do if SPELLS[n].id == id then return true end end return false end
+-- STATE.knownOnly = { name = true }: known, but missing from the spellbook scan
+C_SpellBook.IsSpellKnown = function(id, bank)
+    for _, n in ipairs(SPELLBOOK) do if SPELLS[n].id == id then return true end end
+    for n in pairs(STATE.knownOnly or {}) do if SPELLS[n] and SPELLS[n].id == id then return true end end
+    return false
+end
 
 -- Buffs on you: STATE.buffs[name] = seconds left (0 = permanent)
 C_UnitAuras = {
     GetAuraDataByIndex = function(unit, i, filter)
         -- STATE.aurasLocked: the game refuses (errors) while auras are hidden
         if STATE.aurasLocked then error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted") end
+        -- STATE.playerAurasHidden: your own aura comes back as a hidden value
+        if unit == "player" and STATE.playerAurasHidden then return secret({ name = "x" }) end
         local list = {}
         local src = STATE.buffs
         if unit ~= "player" then

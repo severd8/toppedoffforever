@@ -1994,4 +1994,42 @@ assertEq(ids()["custom:sacred candle"] and ids()["custom:sacred candle"].text, "
 ToppedOffForeverDB, ToppedOffForeverCharDB = savedDB, savedChar
 fire("ADDON_LOADED", ADDON)
 refresh()
+
+step("only API that Forever has")
+-- Forever (build 1.60.1) has none of these globals; the stub doesn't define them either
+assertEq(GetPetHappiness or GetSpecialization or GetTalentTabInfo or IsPlayerSpell or GetCoinTextureString, nil,
+    "old globals stay out of the stub")
+-- Party blessings: UnitInRange is always hidden, so the blessing's own range decides who's clicked
+STATE.class = "PALADIN"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Blessing of Might", "Blessing of Wisdom"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.char.blessings = {}; STATE.bags = {}; STATE.buffs = { ["Blessing of Might"] = 300 }
+STATE.party = { "party1", "party2" }
+STATE.partyClass = { party1 = "WARRIOR", party2 = "HUNTER" }
+STATE.partyBuffs = { party1 = {}, party2 = {} }
+STATE.outOfRange = { party1 = true }; refresh()
+local bl = ids()["party:blessing"]
+assertEq(bl and bl.text, "2", "both are missing a blessing")
+assertEq(bl.action.unit, "party2", "the click goes to the one in range")
+assertEq(bl.action.spell, "Blessing of Wisdom", "with that one's blessing")
+STATE.outOfRange = { party1 = true, party2 = true }; refresh()
+assertEq(ids()["party:blessing"].action, nil, "nobody in range: no click")
+STATE.party, STATE.partyClass, STATE.partyBuffs, STATE.outOfRange = {}, {}, {}, {}
+-- A spell the spellbook scan missed still counts when the game says you know it
+SPELLS["Hidden Rank Spell"] = { id = 99001, icon = "icon" }
+assertEq(TO:Knows("Hidden Rank Spell"), false, "unknown spell")
+STATE.knownOnly = { ["Hidden Rank Spell"] = true }
+assertEq(TO:Knows("Hidden Rank Spell"), true, "known through C_SpellBook.IsSpellKnown")
+STATE.knownOnly = nil
+-- Your own aura as a hidden value: no error
+STATE.playerAurasHidden = true
+TO:ScanBuffs()
+STATE.playerAurasHidden = nil
+assertEq(type(TO.buffs), "table", "hidden aura read without an error")
+-- Vendor money is shown as coins
+STATE.merchant = { { name = "Something", price = 10 } }; STATE.repairCost = 12345
+TO.char.repairAtVendor = true
+fire("MERCHANT_SHOW")
+assertEq(TO.vendor.repair:GetText(), "Repair all (coins:12345)", "repair cost as coins")
+fire("MERCHANT_CLOSED")
+STATE.merchant, STATE.repairCost = {}, 0
 print("ALL TESTS PASSED")

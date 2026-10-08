@@ -1,3 +1,12 @@
+## 1.8.1
+
+Fixes for things that never worked on WoW: Forever, because the game doesn't have the older functions they used.
+
+- **Pet is happy** works: Hunters get the reminder when their pet is content or unhappy.
+- **Stat food follows your talents**: a Shadow Priest gets spell power food, a Holy Priest healing food, an Enhancement Shaman Strength food and so on. Before, only a group role you'd picked counted, and otherwise your class's default.
+- **Party buffs and blessings click someone in range.** The click goes to the first one missing it who's close enough. Before, it could pick someone too far away, and the spell failed with "Out of range". With nobody in range, its tooltip says so.
+- The vendor panel shows prices and the repair cost with coin icons instead of "1g 2s 3c".
+
 ## 1.8.0
 
 - **Food, water, bandage and potion rows follow your bags.** Each row is now "the best of its kind you're carrying" and says so: **Best food in your bags: Wild Hog Shank**. Sell your old food and buy another and the row changes with it, where before it kept the old item's name unless the new one restored more. With none left it reads **No food in your bags (last: Wild Hog Shank)**. Your Min stays with the row.

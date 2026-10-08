@@ -10,7 +10,11 @@ local WIDTH, ROW_H, MAX_ROWS = 260, 20, 12
 
 local function Money(copper)
     copper = math.floor(copper or 0)
-    if GetCoinTextureString then return GetCoinTextureString(copper) end
+    local coins = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
+    if coins then
+        local ok, text = pcall(coins, copper)
+        if ok and type(text) == "string" then return text end
+    end
     local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
     local parts = {}
     if g > 0 then parts[#parts + 1] = g .. "g" end

@@ -368,12 +368,13 @@ function TO:Knows(name)
     if not name or name == "" then return false end
     if self.known and self.known[name:lower()] then return true end
     -- Fallback for spells the spellbook scan missed
-    if C_Spell and C_Spell.GetSpellInfo and IsPlayerSpell then
+    if C_Spell and C_Spell.GetSpellInfo and C_SpellBook and C_SpellBook.IsSpellKnown then
         local info = C_Spell.GetSpellInfo(name)
         local id = type(info) == "table" and Num(info.spellID)
         if id then
-            local ok = IsPlayerSpell(id)
-            if not IsSecret(ok) and ok then return true end
+            local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
+            local ok, known = pcall(C_SpellBook.IsSpellKnown, id, bank)
+            if ok and not IsSecret(known) and known then return true end
         end
     end
     return false
@@ -439,8 +440,9 @@ function TO:ScanBuffs()
     local now = GetTime()
     for i = 1, 40 do
         local a = AuraAt("player", i)
+        if IsSecret(a) then break end   -- checked first: a hidden value can't be compared
         if a == false then return end
-        if a == nil or IsSecret(a) or type(a) ~= "table" then break end
+        if type(a) ~= "table" then break end
         local name = Str(a.name)
         if name then
             buffs[name:lower()] = TimeLeft(a.expirationTime, now)
@@ -755,40 +757,24 @@ TO.ROLE_STATS = {
 }
 TO.ROLE_LABELS = { healer = "Healer", caster = "Caster", tank = "Tank", melee = "Melee" }
 
--- Your role, from (1) your specialization, (2) the talent tree with the most points,
--- or (3) the role you picked for the group. Returns role, and the spec/tree name.
+-- Your role, from (1) your specialization (on Forever: the talent tree with the most
+-- points) or (2) the role you picked for the group. Returns role, and the spec name.
+-- The old GetSpecialization and GetTalentTabInfo globals don't exist on Forever.
 function TO:PlayerSpecRole()
     local class = self:PlayerClass()
-    local function fromName(name)
-        name = Str(name)
-        return name and self.SPEC_ROLES[name:lower()], name
-    end
-    if GetSpecialization and GetSpecializationInfo then
-        local ok, spec = pcall(GetSpecialization)
+    local si = C_SpecializationInfo
+    if si and si.GetSpecialization and si.GetSpecializationInfo then
+        local ok, spec = pcall(si.GetSpecialization)
         spec = ok and Num(spec)
         if spec and spec > 0 then
-            local _, _, name, _, _, specRole = pcall(GetSpecializationInfo, spec)
-            local role, n = fromName(name)
-            if role then return role, n end
+            local _, _, name, _, _, specRole = pcall(si.GetSpecializationInfo, spec)
+            name = Str(name)
+            local role = name and self.SPEC_ROLES[name:lower()]
+            if role then return role, name end
             specRole = Str(specRole)
-            if specRole == "HEALER" then return "healer", n end
-            if specRole == "TANK" then return "tank", n end
+            if specRole == "HEALER" then return "healer", name end
+            if specRole == "TANK" then return "tank", name end
         end
-    end
-    if GetNumTalentTabs and GetTalentTabInfo then
-        local best, bestPts
-        for i = 1, (Num(GetNumTalentTabs()) or 0) do
-            local r = { pcall(GetTalentTabInfo, i) }
-            if r[1] then
-                -- Classic: name, icon, points. Later clients: id, name, description, icon, points.
-                local name, pts
-                if type(r[2]) == "number" then name, pts = r[3], r[6] else name, pts = r[2], r[4] end
-                name, pts = Str(name), Num(pts)
-                if name and pts and pts > 0 and (not bestPts or pts > bestPts) then best, bestPts = name, pts end
-            end
-        end
-        local role, n = fromName(best)
-        if role then return role, n end
     end
     local groupRole = Str(UnitGroupRolesAssigned and UnitGroupRolesAssigned("player"))
     if groupRole == "HEALER" then return "healer" end
@@ -1125,6 +1111,15 @@ local function CanBeBuffed(u)
         and Plain(UnitIsVisible(u)) ~= false
 end
 
+-- Near enough for the spell to reach them (true when the game can't say). UnitInRange
+-- is always hidden from addons on Forever, so the spell's own range is asked.
+local function InSpellRange(spell, u)
+    if not (C_Spell and C_Spell.IsSpellInRange) then return true end
+    local ok, inRange = pcall(C_Spell.IsSpellInRange, spell, u)
+    if not ok then return true end
+    return Plain(inRange) ~= false
+end
+
 local function HasAnyAura(buffs, names)
     for _, n in ipairs(names) do
         if buffs[n:lower()] then return true end
@@ -1151,7 +1146,7 @@ function TO:CheckPartyBuffs(list)
                 local b = usable and self:UnitBuffs(u)
                 if b and not HasAnyAura(b, buff.auras or buff.cast) then
                     names[#names + 1] = Str(UnitName(u)) or u
-                    if not target and Plain(UnitInRange(u)) ~= false then target = u end
+                    if not target and InSpellRange(spell, u) then target = u end
                 end
             end
             if #names > 0 then
@@ -1201,7 +1196,7 @@ function TO:CheckPartyBlessings(list)
         if b and not (b[spell:lower()] or b[("Greater " .. spell):lower()]) then
             anySpell = anySpell or spell
             names[#names + 1] = (Str(UnitName(u)) or u) .. " (" .. spell:gsub("^Blessing of ", "") .. ")"
-            if not target and Plain(UnitInRange(u)) ~= false then target, targetSpell = u, spell end
+            if not target and InSpellRange(spell, u) then target, targetSpell = u, spell end
         end
     end
     if #names == 0 then return end
@@ -1324,8 +1319,10 @@ function TO:CheckPet(list)
     if class ~= "HUNTER" then return end
     local foodName = self.char.petFood or ""
     local food = foodName ~= "" and self:FindBagItem(foodName) or nil
-    if exists and not dead and GetPetHappiness and self:IsEnabled("pet:happy", true) then
-        local h = Num(GetPetHappiness())
+    local happiness = C_PetInfo and C_PetInfo.GetPetHappiness
+    if exists and not dead and happiness and self:IsEnabled("pet:happy", true) then
+        local ok, h = pcall(happiness)
+        h = ok and Num(h) or nil
         if h and h < 3 then
             local r = { id = "pet:happy", label = "Pet is " .. (self.HAPPINESS[h] or "hungry"), icon = self.ICONS.happy,
                 text = h == 1 and "!" or nil, urgentNow = h == 1,
