@@ -1,6 +1,6 @@
 ## 1.8.2
 
-- **Buffs update right away.** Cast Mark of the Wild or Thorns on yourself or a party member and the icon goes within a moment. Before, a buff on a party member took up to 5 seconds to show, and your own up to a second. In combat the icons still wait until the fight ends.
+- **Buffs update right away.** When a buff on you, your pet or your party comes or goes (class buffs, party buffs and blessings, elixirs, Well Fed, Well-Rested, Soulstone), the icons update within a moment. Before, a buff on a party member took up to 5 seconds to show, and your own up to a second. In combat the icons still wait until the fight ends.
 
 ## 1.8.1
 
