@@ -23,8 +23,10 @@ setmetatable(_G, {
 })
 load_file(ADDON_DIR .. "/Theme.lua")
 load_file(ADDON_DIR .. "/Core.lua")
+load_file(ADDON_DIR .. "/Locale.lua")
 load_file(ADDON_DIR .. "/Options.lua")
 load_file(ADDON_DIR .. "/Vendor.lua")
+load_file(ADDON_DIR .. "/Bank.lua")
 setmetatable(_G, nil)
 for n, v in pairs(guarded) do rawset(_G, n, v) end
 local TO = ns.TO
@@ -2074,4 +2076,191 @@ assertEq(ids()["party:motw"], nil, "not updated in combat")
 COMBAT = false; fire("PLAYER_REGEN_ENABLED"); tick()
 assert(ids()["party:motw"], "updated when combat ends")
 STATE.party, STATE.partyClass, STATE.partyBuffs = {}, {}, {}
+
+step("weapon, pet and bag changes show within a moment too")
+AFTER, TO.soonPending = {}, false
+fire("UNIT_INVENTORY_CHANGED", "player")
+assertEq(#AFTER, 1, "a weapon enhancement change is one quick update")
+runAfter()
+fire("UNIT_PET", "player"); fire("BAG_UPDATE_DELAYED")
+assertEq(#AFTER, 1, "pet and bags too, together")
+runAfter()
+
+step("Paladin aura for your role, until you pick one")
+STATE.class = "PALADIN"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Devotion Aura", "Retribution Aura", "Concentration Aura"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.prefs = {}, {}; STATE.buffs = {}
+local aura = TO.CLASS_BUFFS.PALADIN[2]
+STATE.talents = { { "Holy", 0 }, { "Protection", 31 }, { "Retribution", 5 } }
+assertEq(TO:BuffPreference(aura), "Devotion Aura", "tank: Devotion")
+STATE.talents = { { "Holy", 31 }, { "Protection", 0 }, { "Retribution", 5 } }
+assertEq(TO:BuffPreference(aura), "Concentration Aura", "healer: Concentration")
+STATE.talents = { { "Holy", 0 }, { "Protection", 5 }, { "Retribution", 31 } }
+assertEq(TO:BuffPreference(aura), "Retribution Aura", "Retribution: Retribution Aura")
+refresh()
+assertEq(ids()["buff:aura"].action.spell, "Retribution Aura", "the click casts it")
+TO.char.prefs.aura = "Devotion Aura"
+assertEq(TO:BuffPreference(aura), "Devotion Aura", "your own pick wins")
+TO.char.prefs = {}; STATE.talents = nil
+
+step("right-click a reminder to hide it")
+STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Arcane Intellect"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.buffs = {}; STATE.bags = {}
+refresh()
+local hb
+for _, b in ipairs(TO.buttons) do if b.reminder and b.reminder.id == "buff:intellect" then hb = b end end
+assert(hb, "Arcane Intellect icon shown")
+assertEq(hb.__attrs["*type2"], "", "right-click doesn't cast")
+AFTER, TO.soonPending = {}, false
+hb.__scripts.PostClick(hb, "RightButton", true)
+assertEq(TO.snoozed["buff:intellect"], nil, "nothing on the press, only on the release")
+hb.__scripts.PostClick(hb, "LeftButton", false)
+assertEq(TO.snoozed["buff:intellect"], nil, "a left-click casts, it doesn't hide")
+hb.__scripts.PostClick(hb, "RightButton", false)
+assert(lastLog("Arcane Intellect hidden for 10 minutes"), "says so in chat")
+runAfter()
+assertEq(ids()["buff:intellect"], nil, "hidden")
+FAKE_TIME = FAKE_TIME + 601; refresh()
+assert(ids()["buff:intellect"], "back after 10 minutes")
+TO:Snooze(ids()["buff:intellect"]); runAfter()
+fire("ZONE_CHANGED_NEW_AREA"); runAfter()
+assert(ids()["buff:intellect"], "back in a new zone")
+TO:Snooze(ids()["buff:intellect"]); runAfter()
+SlashCmdList.TOPPEDOFFFOREVER("unhide"); runAfter()
+assert(ids()["buff:intellect"], "back with /topoff unhide")
+assert(lastLog("hidden reminders are back"), "and says so")
+
+step("party buffs running out")
+TO.db.warnMinutes = 3
+TO.char.partyExpiring, TO.char.groupBuffs = true, true   -- (the options tests above click every switch)
+STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Mark of the Wild"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.buffs = { ["Mark of the Wild"] = 1800 }
+STATE.party = { "party1", "party2" }; STATE.partyClass = { party1 = "WARRIOR", party2 = "MAGE" }
+STATE.partyBuffs = { party1 = { ["Mark of the Wild"] = 100 }, party2 = { ["Mark of the Wild"] = 1700 } }
+refresh()
+local pm = ids()["party:motw"]
+assertEq(pm and pm.text, "1", "one running out")
+assert(pm.detail:find("Running out on: Name_party1 %(2m%)"), "named with the time left")
+assertEq(pm.expires, 100, "orange or red border, like your own buffs")
+assertEq(pm.action.unit, "party1", "click renews it")
+STATE.partyBuffs.party2 = {}; refresh()
+pm = ids()["party:motw"]
+assertEq(pm.text, "2", "missing and running out together")
+assertEq(pm.action.unit, "party2", "the one missing it comes first")
+assertEq(pm.expires, nil, "no countdown border while someone is missing it")
+TO.char.partyExpiring = false; refresh()
+assertEq(ids()["party:motw"].text, "1", "turned off: only missing")
+TO.char.partyExpiring = true
+-- Paladin blessings too
+STATE.class = "PALADIN"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Blessing of Might", "Blessing of Wisdom"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.blessings = {}, {}; STATE.buffs = { ["Blessing of Might"] = 300 }
+STATE.partyBuffs = { party1 = { ["Greater Blessing of Might"] = 60 }, party2 = { ["Blessing of Wisdom"] = 280 } }
+refresh()
+local bp = ids()["party:blessing"]
+assertEq(bp and bp.text, "1", "the warrior's blessing is running out")
+assert(bp.detail:find("Running out: Name_party1 %(Might, 1m%)"), "which blessing and when")
+assertEq(bp.action.unit, "party1", "click renews it")
+STATE.party, STATE.partyClass, STATE.partyBuffs = {}, {}, {}
+
+step("group version when your party needs it")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Power Word: Fortitude", "Prayer of Fortitude"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.buffs = { ["Power Word: Fortitude"] = 1800 }
+STATE.bags = { { id = 911, name = "Sacred Candle", count = 5 } }
+STATE.party = { "party1", "party2", "party3" }
+STATE.partyClass = { party1 = "WARRIOR", party2 = "MAGE", party3 = "ROGUE" }
+STATE.partyBuffs = { party1 = {}, party2 = {}, party3 = {} }
+refresh()
+local gp = ids()["party:fortitude"]
+assertEq(gp.action.spell, "Prayer of Fortitude", "three need it: Prayer of Fortitude")
+assertEq(gp.action.unit, "player", "cast on yourself, covers the party")
+assert(gp.clickText:find("3 need it"), "says how many")
+STATE.bags = {}; refresh()
+assertEq(ids()["party:fortitude"].action.spell, "Power Word: Fortitude", "no candles: one at a time")
+STATE.bags = { { id = 911, name = "Sacred Candle", count = 5 } }
+STATE.partyBuffs.party3 = { ["Power Word: Fortitude"] = 1800 }; refresh()
+assertEq(ids()["party:fortitude"].action.spell, "Power Word: Fortitude", "two need it: one at a time")
+STATE.buffs = {}; refresh()
+assertEq(ids()["party:fortitude"].action.spell, "Prayer of Fortitude", "you count too")
+TO.char.groupBuffs = false; refresh()
+assertEq(ids()["party:fortitude"].action.spell, "Power Word: Fortitude", "turned off")
+TO.char.groupBuffs = true
+-- Only those who'd get something from it count: Divine Spirit skips Warriors and Rogues
+LEARN("Divine Spirit", "Prayer of Spirit"); fire("SPELLS_CHANGED")
+STATE.buffs = { ["Power Word: Fortitude"] = 1800, ["Divine Spirit"] = 1800 }; refresh()
+assertEq(ids()["party:spirit"].action.spell, "Divine Spirit", "the warrior and rogue don't count: one at a time")
+TO.char.checks["party:spirit"] = false
+STATE.party, STATE.partyClass, STATE.partyBuffs, STATE.bags = {}, {}, {}, {}
+
+step("mana gem and your own items on the combat bar")
+STATE.class = "MAGE"; TO.char.auto = {}; TO.char.custom = {}
+STATE.bags = { { id = 8008, name = "Mana Ruby", count = 1 }, { id = 921, name = "Thistle Tea", count = 3 } }
+TO:AddCustom("Thistle Tea", 1)
+TO:ScanBags()
+local function combatNames()
+    local t = {}
+    for _, it in ipairs(TO:CombatItems()) do t[#t + 1] = it.name end
+    return table.concat(t, ",")
+end
+assertEq(combatNames(), "Mana Ruby", "the mana gem is on the bar")
+TO.char.custom[1].combat = true
+assertEq(combatNames(), "Mana Ruby,Thistle Tea", "and an item you marked")
+TO:OpenConfig(); TO:ShowOptionsTab("supplies"); TO:OpenConfig()
+TO:RemoveCustom("Thistle Tea"); STATE.bags = {}
+
+step("take what you're short on from the bank")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Prayer of Fortitude"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.auto, TO.char.custom = {}, {}, {}
+STATE.bags = { { id = 931, name = "Sacred Candle", count = 4 } }
+STATE.bank = { [6] = { { id = 931, name = "Sacred Candle", count = 20 }, { id = 932, name = "Light Feather", count = 10 } } }
+MOVED = {}
+TO.char.bankRestock = true   -- (the options tests above click every switch)
+fire("BANKFRAME_OPENED")
+local bk = TO.bankPanel
+assertEq(bk and bk.__shown, true, "the panel shows beside the bank")
+assertEq(#bk.plan, 1, "only what you're short on (no Levitate: no feathers)")
+assertEq(bk.plan[1].take .. " " .. bk.plan[1].need, "20 6", "a whole stack for the 6 you need")
+bk.take.__scripts.OnClick()
+assertEq(MOVED[1], "Sacred Candle:20", "moved to your bags")
+assert(lastLog("took 20 Sacred Candle from the bank"), "says so")
+fire("BAG_UPDATE_DELAYED")
+assertEq(bk.__shown, false, "topped off: the panel goes")
+fire("BANKFRAME_CLOSED")
+STATE.bank[6][1].moved = nil; STATE.bags = { { id = 931, name = "Sacred Candle", count = 4 } }
+TO.char.bankRestock = false
+fire("BANKFRAME_OPENED")
+assertEq(bk.__shown, false, "turned off: no panel")
+fire("BANKFRAME_CLOSED")
+TO.char.bankRestock = true; STATE.bank = nil; STATE.bags = {}
+
+step("other game languages")
+local spellRefs, itemRefs = TO:NameRefs()
+for _, ref in ipairs(spellRefs) do assert(TO.SPELL_IDS[ref[3]], "no spell ID for " .. ref[3]) end
+for _, ref in ipairs(itemRefs) do assert(TO.ITEM_IDS[ref[3]], "no item ID for " .. ref[3]) end
+TO:Localize()
+assertEq(TO.CLASS_BUFFS.MAGE[1].cast[1], "Arcane Intellect", "an English game is left alone")
+STATE.locale = "deDE"
+STATE.spellNames, STATE.itemNames = {}, {}
+for name, id in pairs(TO.SPELL_IDS) do STATE.spellNames[id] = "DE " .. name end
+for name, id in pairs(TO.ITEM_IDS) do if name ~= "Arcane Powder" then STATE.itemNames[id] = "DE " .. name end end
+TO:Localize()
+assertEq(TO.CLASS_BUFFS.MAGE[1].cast[1], "DE Arcane Intellect", "spell names from the game")
+assertEq(TO.CLASS_BUFFS.MAGE[1].group.spell, "DE Arcane Brilliance", "group versions too")
+assertEq(TO.BLESSING_SPELLS.Kings, "DE Blessing of Kings", "blessings")
+assertEq(TO.PET_SPELLS.call, "DE Call Pet", "pet spells")
+assertEq(TO.CLASS_REAGENTS.WARLOCK[1].items[1], "DE Soul Shard", "item names from the game")
+assertEq(TO.CLASS_REAGENTS.MAGE[3].items[1], "Arcane Powder", "one not loaded yet stays English for now")
+STATE.itemNames[17020] = "DE Arcane Powder"
+fire("GET_ITEM_INFO_RECEIVED", 17020)
+assertEq(TO.CLASS_REAGENTS.MAGE[3].items[1], "DE Arcane Powder", "and is filled in when it loads")
+STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}
+LEARN("DE Arcane Intellect"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; STATE.buffs = {}; refresh()
+assertEq(ids()["buff:intellect"].action.spell, "DE Arcane Intellect", "the check works in that language")
+STATE.buffs = { ["DE Arcane Intellect"] = 1800 }; refresh()
+assertEq(ids()["buff:intellect"], nil, "and sees the buff")
 print("ALL TESTS PASSED")

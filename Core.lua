@@ -43,7 +43,7 @@ local function Plain(v)
     if IsSecret(v) then return nil end
     return v
 end
-TO.IsSecretValue, TO.Num = IsSecret, Num   -- for Vendor.lua
+TO.IsSecretValue, TO.Num, TO.Str = IsSecret, Num, Str   -- for Vendor.lua and Bank.lua
 
 ---------------------------------------------------------------------------
 -- What gets checked
@@ -56,17 +56,21 @@ TO.IsSecretValue, TO.Num = IsSecret, Num   -- for Vendor.lua
 TO.CLASS_BUFFS = {
     MAGE = {
         { id = "intellect", label = "Arcane Intellect", cast = { "Arcane Intellect" },
-          auras = { "Arcane Intellect", "Arcane Brilliance" }, party = true, skip = { WARRIOR = true, ROGUE = true } },
+          auras = { "Arcane Intellect", "Arcane Brilliance" }, party = true, skip = { WARRIOR = true, ROGUE = true },
+          group = { spell = "Arcane Brilliance", items = { "Arcane Powder" } } },
         { id = "armor", label = "Armor", cast = { "Ice Armor", "Frost Armor", "Mage Armor" } },
     },
     PRIEST = {
         { id = "fortitude", label = "Power Word: Fortitude", cast = { "Power Word: Fortitude" },
-          auras = { "Power Word: Fortitude", "Prayer of Fortitude" }, party = true },
+          auras = { "Power Word: Fortitude", "Prayer of Fortitude" }, party = true,
+          group = { spell = "Prayer of Fortitude", items = { "Sacred Candle", "Holy Candle" } } },
         { id = "innerfire", label = "Inner Fire", cast = { "Inner Fire" } },
         { id = "spirit", label = "Divine Spirit", cast = { "Divine Spirit" },
-          auras = { "Divine Spirit", "Prayer of Spirit" }, party = true, skip = { WARRIOR = true, ROGUE = true } },
+          auras = { "Divine Spirit", "Prayer of Spirit" }, party = true, skip = { WARRIOR = true, ROGUE = true },
+          group = { spell = "Prayer of Spirit", items = { "Sacred Candle", "Holy Candle" } } },
         { id = "shadowprot", label = "Shadow Protection", cast = { "Shadow Protection" },
-          auras = { "Shadow Protection", "Prayer of Shadow Protection" }, off = true, party = true },
+          auras = { "Shadow Protection", "Prayer of Shadow Protection" }, off = true, party = true,
+          group = { spell = "Prayer of Shadow Protection", items = { "Sacred Candle", "Holy Candle" } } },
         -- Racial Priest buffs: only listed for Priests who have them
         { id = "shadowguard", label = "Shadowguard", cast = { "Shadowguard" }, racial = true },
         { id = "touchweak", label = "Touch of Weakness", cast = { "Touch of Weakness" }, racial = true },
@@ -74,7 +78,8 @@ TO.CLASS_BUFFS = {
     },
     DRUID = {
         { id = "motw", label = "Mark of the Wild", cast = { "Mark of the Wild" },
-          auras = { "Mark of the Wild", "Gift of the Wild" }, party = true },
+          auras = { "Mark of the Wild", "Gift of the Wild" }, party = true,
+          group = { spell = "Gift of the Wild", items = { "Wild Thornroot", "Wild Berries" } } },
         { id = "thorns", label = "Thorns", cast = { "Thorns" }, party = true },
         { id = "omen", label = "Omen of Clarity", cast = { "Omen of Clarity" } },
     },
@@ -89,7 +94,9 @@ TO.CLASS_BUFFS = {
           "Greater Blessing of Kings", "Greater Blessing of Sanctuary", "Greater Blessing of Light",
           "Greater Blessing of Salvation" } },
         { id = "aura", label = "Aura", cast = { "Devotion Aura", "Retribution Aura", "Concentration Aura",
-          "Sanctity Aura", "Shadow Resistance Aura", "Frost Resistance Aura", "Fire Resistance Aura" } },
+          "Sanctity Aura", "Shadow Resistance Aura", "Frost Resistance Aura", "Fire Resistance Aura" },
+          -- Until you pick one, the aura for your role (see PlayerSpecRole)
+          byRole = { tank = "Devotion Aura", healer = "Concentration Aura", melee = "Retribution Aura" } },
         { id = "rfury", label = "Righteous Fury", cast = { "Righteous Fury" }, off = true },
     },
     HUNTER = {
@@ -228,7 +235,10 @@ local CHAR_DEFAULTS = {       -- per character: what to check
     splitProfiles = false,    -- separate on/off checks outside dungeons and raids
     checksOutside = {},       -- check id -> on/off outside instances (missing = same as inside)
     wholeRaid = false,        -- party buffs, blessings and Soulstone look at the whole raid
+    partyExpiring = true,     -- party buffs and blessings also show when running out on someone
+    groupBuffs = true,        -- cast the group version (Prayer of Fortitude...) when enough need it
     restockAtVendor = true,   -- restock list at vendors
+    bankRestock = true,       -- list of what to take from the bank, beside the bank window
     repairAtVendor = true,    -- repair button at vendors
 }
 
@@ -468,10 +478,15 @@ end
 
 -- Mage- and Warlock-made items (can't be bought): conjured food and water,
 -- mana gems and Healthstones. They have their own checks.
-local MADE_ITEMS = { ["mana agate"] = true, ["mana jade"] = true, ["mana citrine"] = true, ["mana ruby"] = true }
+local function IsManaGem(n)   -- n: lowercase item name
+    for _, g in ipairs(TO.MANA_GEMS) do
+        if g.item:lower() == n then return true end
+    end
+    return false
+end
 local function IsConjured(name)
     local n = name:lower()
-    return n:find("^conjured ") ~= nil or MADE_ITEMS[n] == true or n:find("healthstone", 1, true) ~= nil
+    return n:find("^conjured ") ~= nil or IsManaGem(n) or n:find("healthstone", 1, true) ~= nil
 end
 
 local function ItemIcon(id)
@@ -574,6 +589,14 @@ function TO:BuffPreference(buff)
     local pref = self.char.prefs[buff.id]
     for _, n in ipairs(known) do
         if n == pref then return n end
+    end
+    -- Nothing picked: the spell for your role, where the buff has one (Paladin auras)
+    if buff.byRole then
+        local role = self:PlayerSpecRole()
+        local want = role and buff.byRole[role]
+        for _, n in ipairs(known) do
+            if n == want then return n end
+        end
     end
     return known[1]
 end
@@ -1076,6 +1099,8 @@ TO.BAGS_DEFAULT_MIN = 3       -- free bag slots
 TO.PET_FOOD_DEFAULT_MIN = 20
 TO.PET_CLASSES = { HUNTER = true, WARLOCK = true }
 TO.WARLOCK_PETS = { "Summon Imp", "Summon Voidwalker", "Summon Succubus", "Summon Felhunter" }
+TO.PET_SPELLS = { call = "Call Pet", revive = "Revive Pet", feed = "Feed Pet" }
+TO.AURAS = { soulstone = "Soulstone Resurrection" }
 TO.HAPPINESS = { "unhappy", "content", "happy" }
 TO.SOULSTONE_SPELLS = { "Create Soulstone (Major)", "Create Soulstone (Greater)", "Create Soulstone",
     "Create Soulstone (Lesser)", "Create Soulstone (Minor)" }
@@ -1120,22 +1145,50 @@ local function InSpellRange(spell, u)
     return Plain(inRange) ~= false
 end
 
-local function HasAnyAura(buffs, names)
-    for _, n in ipairs(names) do
-        if buffs[n:lower()] then return true end
+-- Party members missing one of your group buffs, or whose buff is running out. Click
+-- buffs the next one in range (missing first). With enough of your own party needing
+-- it, and the reagent in your bags, the click casts the group version instead.
+TO.GROUP_MIN = 3   -- party members (you included) who need it before the group version is used
+
+-- Your own party: how many need the buff (you included), for the group version
+function TO:PartyNeeding(buff, warn)
+    local count = 0
+    local function needs(buffs)
+        local left = LongestLeft(buffs, buff.auras or buff.cast)
+        return not left or (left > 0 and left < warn)
     end
-    return false
+    if needs(self.buffs) then count = count + 1 end
+    for _, u in ipairs(PartyUnits()) do
+        local usable = CanBeBuffed(u)
+        if usable and buff.skip then
+            local _, cls = UnitClass(u)
+            cls = Str(cls)
+            if cls and buff.skip[cls] then usable = false end   -- no use to them
+        end
+        local b = usable and self:UnitBuffs(u)
+        if b and needs(b) then count = count + 1 end
+    end
+    return count
 end
 
--- Party members missing one of your group buffs. Click buffs the next one in range.
+-- The group version of a buff, when it's learned and you carry its reagent
+function TO:GroupSpell(buff)
+    local g = buff.group
+    if not (g and self.char.groupBuffs and self:Knows(g.spell)) then return nil end
+    if self:BagCount(g.items) == 0 then return nil end
+    return g.spell
+end
+
 function TO:CheckPartyBuffs(list)
     local units, raid = self:GroupUnits()
     if #units == 0 then return end
+    local warn = self.db.warnMinutes * 60
+    local watchExpiring = self.char.partyExpiring
     for _, buff in ipairs(self.CLASS_BUFFS[self:PlayerClass()] or {}) do
         local id = "party:" .. buff.id
         local spell = buff.party and self:BuffPreference(buff)
         if spell and self:IsEnabled(id, not buff.off) then
-            local names, target = {}, nil
+            local missing, expiring, target, soonest, soonTarget = {}, {}, nil, nil, nil
             for _, u in ipairs(units) do
                 local usable = CanBeBuffed(u)
                 if usable and buff.skip then
@@ -1144,19 +1197,39 @@ function TO:CheckPartyBuffs(list)
                     if cls and buff.skip[cls] then usable = false end   -- no use to them
                 end
                 local b = usable and self:UnitBuffs(u)
-                if b and not HasAnyAura(b, buff.auras or buff.cast) then
-                    names[#names + 1] = Str(UnitName(u)) or u
-                    if not target and InSpellRange(spell, u) then target = u end
+                if b then
+                    local left = LongestLeft(b, buff.auras or buff.cast)
+                    local name = Str(UnitName(u)) or u
+                    if not left then
+                        missing[#missing + 1] = name
+                        if not target and InSpellRange(spell, u) then target = u end
+                    elseif watchExpiring and left > 0 and left < warn then
+                        expiring[#expiring + 1] = name .. " (" .. FormatTime(left) .. ")"
+                        if not soonest or left < soonest then soonest = left end
+                        if not soonTarget and InSpellRange(spell, u) then soonTarget = u end
+                    end
                 end
             end
-            if #names > 0 then
+            if #missing + #expiring > 0 then
+                local lines = {}
+                if #missing > 0 then lines[#lines + 1] = "Missing on: " .. table.concat(missing, ", ") end
+                if #expiring > 0 then lines[#lines + 1] = "Running out on: " .. table.concat(expiring, ", ") end
                 local r = { id = id, label = buff.label .. (raid and " (raid)" or " (party)"), icon = SpellIcon(spell),
-                    text = tostring(#names), detail = "Missing on: " .. table.concat(names, ", ") }
-                if target then
+                    text = tostring(#missing + #expiring), detail = table.concat(lines, "\n") }
+                if #missing == 0 then r.expires = soonest end   -- orange, then red, like your own buffs
+                target = target or soonTarget
+                local group = self:GroupSpell(buff)
+                local partyCount = group and self:PartyNeeding(buff, watchExpiring and warn or 0) or 0
+                if group and partyCount >= self.GROUP_MIN then
+                    -- One cast on yourself covers your whole party
+                    r.icon = SpellIcon(group)
+                    r.action = { spell = group, unit = "player" }
+                    r.clickText = "Click to cast " .. group .. " on your party (" .. partyCount .. " need it)"
+                elseif target then
                     r.action = { spell = spell, unit = target }
                     r.clickText = "Click to cast " .. spell .. " on " .. (Str(UnitName(target)) or "them")
                 else
-                    r.detail = r.detail .. "\nNobody missing it is in range"
+                    r.detail = r.detail .. "\nNobody who needs it is in range"
                 end
                 list[#list + 1] = r
             end
@@ -1169,6 +1242,24 @@ TO.BLESSING_CLASSES = { "WARRIOR", "ROGUE", "HUNTER", "DRUID", "SHAMAN", "PALADI
 TO.CLASS_PLURALS = { WARRIOR = "Warriors", ROGUE = "Rogues", HUNTER = "Hunters", DRUID = "Druids",
     SHAMAN = "Shamans", PALADIN = "Paladins", PRIEST = "Priests", MAGE = "Mages", WARLOCK = "Warlocks" }
 TO.BLESSING_NAMES = { "Kings", "Might", "Wisdom", "Salvation", "Light", "Sanctuary" }
+-- Spell names (the language step changes these on other game languages)
+TO.BLESSING_SPELLS, TO.GREATER_BLESSINGS = {}, {}
+for _, b in ipairs(TO.BLESSING_NAMES) do
+    TO.BLESSING_SPELLS[b] = "Blessing of " .. b
+    TO.GREATER_BLESSINGS[b] = "Greater Blessing of " .. b
+end
+
+-- "Kings" for Blessing of Kings
+function TO:BlessingShort(spell)
+    for key, name in pairs(self.BLESSING_SPELLS) do
+        if name == spell then return key end
+    end
+    return spell
+end
+
+function TO:GreaterBlessing(spell)
+    return self.GREATER_BLESSINGS[self:BlessingShort(spell)] or ("Greater " .. spell)
+end
 -- Might for melee, Wisdom for mana users (Might doesn't help a Hunter's ranged attacks)
 TO.BLESSING_DEFAULTS = { WARRIOR = "Might", ROGUE = "Might" }
 
@@ -1178,7 +1269,8 @@ function TO:BlessingFor(class)
     if pick == "none" then return nil end
     local want = pick or self.BLESSING_DEFAULTS[class] or "Wisdom"
     for _, b in ipairs({ want, self.BLESSING_DEFAULTS[class] or "Wisdom", "Might", "Wisdom" }) do
-        if self:Knows("Blessing of " .. b) then return "Blessing of " .. b end
+        local spell = self.BLESSING_SPELLS[b]
+        if spell and self:Knows(spell) then return spell end
     end
     return nil
 end
@@ -1187,27 +1279,43 @@ function TO:CheckPartyBlessings(list)
     if self:PlayerClass() ~= "PALADIN" or not self:IsEnabled("party:blessing", true) then return end
     local units, raid = self:GroupUnits()
     if #units == 0 then return end
-    local names, target, targetSpell, anySpell = {}, nil, nil, nil
+    local warn = self.db.warnMinutes * 60
+    local names, soon, target, targetSpell, anySpell = {}, {}, nil, nil, nil
+    local soonest, soonTarget, soonSpell
     for _, u in ipairs(units) do
         local _, cls = UnitClass(u)
         cls = CanBeBuffed(u) and Str(cls)   -- hidden class: can't tell which blessing, skip
         local spell = cls and self:BlessingFor(cls)
         local b = spell and self:UnitBuffs(u)
-        if b and not (b[spell:lower()] or b[("Greater " .. spell):lower()]) then
-            anySpell = anySpell or spell
-            names[#names + 1] = (Str(UnitName(u)) or u) .. " (" .. spell:gsub("^Blessing of ", "") .. ")"
-            if not target and InSpellRange(spell, u) then target, targetSpell = u, spell end
+        if b then
+            local left = LongestLeft(b, { spell, self:GreaterBlessing(spell) })
+            local who = (Str(UnitName(u)) or u) .. " (" .. self:BlessingShort(spell)
+            if not left then
+                anySpell = anySpell or spell
+                names[#names + 1] = who .. ")"
+                if not target and InSpellRange(spell, u) then target, targetSpell = u, spell end
+            elseif self.char.partyExpiring and left > 0 and left < warn then
+                anySpell = anySpell or spell
+                soon[#soon + 1] = who .. ", " .. FormatTime(left) .. ")"
+                if not soonest or left < soonest then soonest = left end
+                if not soonTarget and InSpellRange(spell, u) then soonTarget, soonSpell = u, spell end
+            end
         end
     end
-    if #names == 0 then return end
+    if #names + #soon == 0 then return end
+    if not target then target, targetSpell = soonTarget, soonSpell end
+    local lines = {}
+    if #names > 0 then lines[#lines + 1] = "Missing: " .. table.concat(names, ", ") end
+    if #soon > 0 then lines[#lines + 1] = "Running out: " .. table.concat(soon, ", ") end
     local r = { id = "party:blessing", label = raid and "Blessings (raid)" or "Blessings (party)",
         icon = SpellIcon(targetSpell or anySpell),
-        text = tostring(#names), detail = "Missing: " .. table.concat(names, ", ") }
+        text = tostring(#names + #soon), detail = table.concat(lines, "\n") }
+    if #names == 0 then r.expires = soonest end
     if target then
         r.action = { spell = targetSpell, unit = target }
         r.clickText = "Click to cast " .. targetSpell .. " on " .. (Str(UnitName(target)) or "them")
     else
-        r.detail = r.detail .. "\nNobody missing one is in range"
+        r.detail = r.detail .. "\nNobody who needs one is in range"
     end
     list[#list + 1] = r
 end
@@ -1280,7 +1388,8 @@ end
 
 -- Pets: Hunter and Warlock pet out (and alive); Hunter pet happiness and food
 function TO:PetSummonSpell()
-    if self:PlayerClass() == "HUNTER" then return self:Knows("Call Pet") and "Call Pet" or nil end
+    local call = self.PET_SPELLS.call
+    if self:PlayerClass() == "HUNTER" then return self:Knows(call) and call or nil end
     local known = self:KnownOptions(self.WARLOCK_PETS)
     for _, n in ipairs(known) do
         if n == self.char.prefs.pet then return n end
@@ -1302,9 +1411,10 @@ function TO:CheckPet(list)
         if spell then
             local r = { id = "pet:summon", label = dead and "Pet is dead" or "No pet", detail = "Missing" }
             if class == "HUNTER" then
-                r.icon = SpellIcon(dead and "Revive Pet" or "Call Pet")
-                r.action = { macro = "/cast [@pet,dead] Revive Pet; [nopet] Call Pet" }
-                r.clickText = dead and "Click to cast Revive Pet" or "Click to cast Call Pet"
+                local ps = self.PET_SPELLS
+                r.icon = SpellIcon(dead and ps.revive or ps.call)
+                r.action = { macro = "/cast [@pet,dead] " .. ps.revive .. "; [nopet] " .. ps.call }
+                r.clickText = "Click to cast " .. (dead and ps.revive or ps.call)
                 r.detail = dead and "Your pet is dead" or "Your pet isn't out"
             else
                 r.label = dead and "Demon is dead" or "No demon"
@@ -1329,11 +1439,11 @@ function TO:CheckPet(list)
                 detail = "Feed your pet to make it happy again" }
             if food then
                 r.icon = food.icon or r.icon
-                r.action = { macro = "/cast Feed Pet\n/use " .. food.name }
+                r.action = { macro = "/cast " .. self.PET_SPELLS.feed .. "\n/use " .. food.name }
                 r.clickText = "Click to feed it " .. food.name
             else
-                r.action = { macro = "/cast Feed Pet" }
-                r.clickText = "Click to cast Feed Pet, then click the food. Set a pet food in the options to feed in one click."
+                r.action = { macro = "/cast " .. self.PET_SPELLS.feed }
+                r.clickText = "Click to cast " .. self.PET_SPELLS.feed .. ", then click the food. Set a pet food in the options to feed in one click."
             end
             list[#list + 1] = r
         end
@@ -1356,12 +1466,13 @@ function TO:CheckSoulstone(list)
     if self.char.soulstoneInstanceOnly and not self:InInstance() then return end
     local create = self:FirstKnown(self.SOULSTONE_SPELLS)
     if not create then return end
-    if self.buffs["soulstone resurrection"] then return end
+    local aura = self.AURAS.soulstone:lower()
+    if self.buffs[aura] then return end
     local healer
     for _, u in ipairs((self:GroupUnits())) do
         local b = self:UnitBuffs(u)
         if not b then return end   -- hidden: can't tell, so don't nag
-        if b["soulstone resurrection"] then return end
+        if b[aura] then return end
         if not healer and Plain(UnitGroupRolesAssigned and UnitGroupRolesAssigned(u)) == "HEALER" then healer = u end
     end
     local r = { id = "soulstone", label = "Soulstone", icon = self.ICONS.soulstone,
@@ -1421,7 +1532,7 @@ function TO:ConjuredCount(key)
     for key2, e in pairs(self.bag or {}) do
         if IsConjured(key2) then
             local water = key2:find("water", 1, true) ~= nil
-            local gem = key2:find("mana ", 1, true) ~= nil
+            local gem = IsManaGem(key2)
             if (key == "water" and water) or (key == "food" and not water and not gem) then
                 total = total + e.count
                 icon = icon or e.icon
@@ -1620,7 +1731,8 @@ end
 ---------------------------------------------------------------------------
 TO.COPY_FIELDS = { "checks", "checksOutside", "splitProfiles", "prefs", "mins", "weapon", "custom",
     "customAlways", "statFocus", "wellFedInstanceOnly", "elixirs", "elixirInstanceOnly",
-    "soulstoneInstanceOnly", "petFood", "blessings", "wholeRaid", "restockAtVendor", "repairAtVendor" }
+    "soulstoneInstanceOnly", "petFood", "blessings", "wholeRaid", "restockAtVendor", "repairAtVendor",
+    "partyExpiring", "groupBuffs", "bankRestock" }
 
 local function DeepCopy(v)
     if type(v) ~= "table" then return v end
@@ -1696,6 +1808,7 @@ function TO:RestockNeeds()
                 names = { pick or rg.buy[1][1] }
             end
             add(names, (self:BagCount(rg.items)), self:ReagentMin(id, rg.min), rg.label)
+            if out[#out] and out[#out].label == rg.label then out[#out].any = rg.items end   -- any rank, from the bank
         end
     end
     local own = {}
@@ -1940,7 +2053,40 @@ function TO:BuildReminders()
     self:CheckBags(list)
     self:CheckDurability(list)
     self.unitBuffs = nil
-    return list
+    return self:WithoutSnoozed(list)
+end
+
+---------------------------------------------------------------------------
+-- Snooze: right-click a reminder to hide it for a while (10 minutes, or until a
+-- loading screen or a new zone, whichever comes first). Not saved.
+---------------------------------------------------------------------------
+TO.SNOOZE_SECS = 600
+TO.snoozed = {}
+
+function TO:Snooze(r)
+    if not (r and r.id) then return end
+    self.snoozed[r.id] = GetTime() + self.SNOOZE_SECS
+    Print(r.label .. " hidden for 10 minutes, or until you change zone. /topoff unhide brings it back.")
+    self:RequestSoonUpdate()
+end
+
+function TO:ClearSnoozes()
+    if next(self.snoozed) == nil then return false end
+    self.snoozed = {}
+    self:RequestSoonUpdate()
+    return true
+end
+
+function TO:WithoutSnoozed(list)
+    if next(self.snoozed) == nil then return list end
+    local now, out = GetTime(), {}
+    for id, untilTime in pairs(self.snoozed) do
+        if now >= untilTime then self.snoozed[id] = nil end
+    end
+    for _, r in ipairs(list) do
+        if not self.snoozed[r.id] then out[#out + 1] = r end
+    end
+    return out
 end
 
 ---------------------------------------------------------------------------
@@ -1984,11 +2130,19 @@ local function Button_OnEnter(self)
         GameTooltip:AddLine("Click to use " .. r.action.item .. " on your " ..
             (r.action.slot == 17 and "off hand" or "main hand"), 0.4, 1, 0.4)
     end
+    if r.id and self.snoozable then GameTooltip:AddLine("Right-click to hide it for 10 minutes", 0.6, 0.6, 0.6) end
     GameTooltip:Show()
 end
 
 function TO:CreateButton(i)
     local b = self:NewIconButton("ToppedOffForeverButton" .. i, self.bar)
+    -- Right-click hides the reminder for a while instead of casting (an empty
+    -- attribute is Blizzard's "do nothing", so the secure click skips it)
+    b:SetAttribute("*type2", "")
+    b.snoozable = true
+    b:SetScript("PostClick", function(btn, button, down)
+        if button == "RightButton" and not down then TO:Snooze(btn.reminder) end
+    end)
     self.buttons[i] = b
     return b
 end
@@ -2183,6 +2337,7 @@ end
 TO.COMBAT_SLOTS = {
     { key = "healing", label = "Healing potion" },
     { key = "mana", label = "Mana potion", mana = true },
+    { key = "managem", label = "Mana gem", mana = true },
     { key = "healthstone", label = "Healthstone" },
     { key = "bandage", label = "Bandage" },
 }
@@ -2213,11 +2368,26 @@ function TO:CombatItems()
         local e
         if slot.key == "healthstone" then
             e = self:FindBagItem("Healthstone")
+        elseif slot.key == "managem" then
+            for _, g in ipairs(self.MANA_GEMS) do   -- best first
+                e = self.bag and self.bag[g.item:lower()]
+                if e then break end
+            end
         elseif not slot.mana or hasMana then
             e = self:AutoItemInBags(slot.key)
         end
         if e and e.count > 0 then
             items[#items + 1] = { slot = slot, id = e.id, name = e.name, icon = e.icon, count = e.count }
+        end
+    end
+    -- Your own items marked "In combat" (Supplies tab), in your list's order
+    local seen = {}
+    for _, it in ipairs(items) do seen[it.id] = true end
+    for _, c in ipairs(self.char.custom) do
+        local e = c.combat and self.bag and self.bag[c.name:lower()]
+        if e and e.count > 0 and not seen[e.id] then
+            seen[e.id] = true
+            items[#items + 1] = { slot = { label = "Your item" }, id = e.id, name = e.name, icon = e.icon, count = e.count }
         end
     end
     return items
@@ -2331,8 +2501,8 @@ function TO:RequestUpdate()
     self.dirty = true
 end
 
--- A buff that came or went (yours, or a group member's) shows within a moment
--- instead of at the next tick. Several changes close together are one update.
+-- A change (a buff that came or went, a weapon enhancement, your pet, your bags) shows
+-- within a moment instead of at the next tick. Several changes close together are one update.
 TO.SOON = 0.2
 function TO:RequestSoonUpdate()
     self.dirty = true
@@ -2753,6 +2923,7 @@ local function Help()
     print("  /topoff check — list what's checked for your class")
     print("  /topoff add <count> <item> — remind you when you have fewer than <count> of an item")
     print("  /topoff remove <item> — stop checking an item you added")
+    print("  /topoff unhide — bring back reminders you right-clicked to hide")
     print("  /topoff reset — move the reminders back to the default position")
 end
 
@@ -2791,6 +2962,8 @@ SlashCmdList.TOPPEDOFFFOREVER = function(msg)
         else
             Print("no added item called \"" .. rest .. "\".")
         end
+    elseif cmd == "unhide" then
+        Print(TO:ClearSnoozes() and "hidden reminders are back." or "nothing is hidden.")
     elseif cmd == "reset" then
         TO.db.point = { unpack(DEFAULTS.point) }
         TO:RunOutOfCombat("position", function() TO:RestorePosition() end)
@@ -2824,6 +2997,7 @@ events:RegisterEvent("READY_CHECK")
 events:RegisterEvent("UNIT_AURA")   -- every unit; WatchesUnit picks the ones that matter
 events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
 events:RegisterEvent("GROUP_ROSTER_UPDATE")
+events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 -- If WoW ever blocks something and blames ToppedOff, say exactly what in chat
 events:RegisterEvent("ADDON_ACTION_BLOCKED")
 events:RegisterEvent("ADDON_ACTION_FORBIDDEN")
@@ -2857,6 +3031,7 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
         end
     elseif event == "PLAYER_LOGIN" then
         TO:RegisterCharacter()
+        if TO.Localize then TO:Localize() end   -- other game languages (Locale.lua)
         TO:ScanSpellbook()
         TO:RunOutOfCombat("build", function() TO:BuildFrames() end)
         print(T.CHAT_PREFIX .. " loaded. Type /topoff for options.")
@@ -2868,6 +3043,8 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
         end
         return
     elseif event == "GET_ITEM_INFO_RECEIVED" or event == "ITEM_DATA_LOAD_RESULT" then
+        -- A reagent's name in this game's language has loaded (Locale.lua)
+        if TO.itemsLocalizing and TO.pendingItems[arg1] then TO:LocalizeItems() end
         -- An item ToppedOff was waiting for has loaded: look at the bags again
         if TO.pendingItems[arg1] then
             TO.pendingItems[arg1] = nil
@@ -2888,12 +3065,15 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
         TO:RequestUpdate()
     elseif event == "SPELLS_CHANGED" then
         TO:ScanSpellbook()
-        TO:RequestUpdate()
+        TO:RequestSoonUpdate()
     elseif event == "UNIT_AURA" then
         if TO:WatchesUnit(arg1) then TO:RequestSoonUpdate() end
     elseif event == "READY_CHECK" then
         if TO.db.readyCheck then TO:Remind("Ready check") end
+    elseif event == "ZONE_CHANGED_NEW_AREA" then
+        TO:ClearSnoozes()
     elseif event == "PLAYER_ENTERING_WORLD" then
+        TO.snoozed = {}
         TO:RequestUpdate()
         local inside = TO:InInstance()
         if inside and not TO.wasInInstance and TO.db.instanceReminder then
@@ -2901,6 +3081,7 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
         end
         TO.wasInInstance = inside
     else
-        TO:RequestUpdate()
+        -- Weapon enhancements, pet, bags, gear, group, talents: shown within a moment too
+        TO:RequestSoonUpdate()
     end
 end)

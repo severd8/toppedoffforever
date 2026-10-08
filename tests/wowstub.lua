@@ -222,6 +222,9 @@ C_CurrencyInfo = { GetCoinTextureString = function(copper) return "coins:" .. co
 -- An item by ID: one in your bags, or one the vendor sells (STATE.merchant[i] = { id =, tip = })
 local function stubItem(id)
     for _, e in ipairs(STATE.bags) do if e.id == id then return e end end
+    for _, tab in pairs(STATE.bank or {}) do for _, e in ipairs(tab) do if e.id == id then return e end end end
+    -- STATE.itemNames[id]: an item the game knows by name but you don't carry
+    if STATE.itemNames and STATE.itemNames[id] then return { id = id, name = STATE.itemNames[id] } end
     for _, e in ipairs(STATE.merchant or {}) do if e.id == id then return e end end
 end
 C_TooltipInfo = { GetItemByID = function(id)
@@ -260,7 +263,12 @@ function GetCursorPosition() return 10, 10 end
 UISpecialFrames = {}
 function strtrim(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 SlashCmdList = {}
-Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1, FutureSpell = 2 } }
+Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1, FutureSpell = 2 },
+    BagIndex = { Backpack = 0, CharacterBankTab_1 = 6 } }
+-- Bank: STATE.bank[bag] = { { id =, name =, count = }, ... } (bag 6 is the first bank tab)
+MOVED = {}
+-- The game's language: STATE.locale; spell names by ID in it: STATE.spellNames[id]
+function GetLocale() return STATE.locale or "enUS" end
 
 -- Spells: name -> { id, icon }. SPELLBOOK lists what's learned; FUTURE lists unlearned spells
 -- the modern spellbook still shows.
@@ -286,6 +294,7 @@ C_Spell = {
     RequestLoadSpellData = function(spellID) STATE.requestedSpells = STATE.requestedSpells or {}; STATE.requestedSpells[spellID] = true end,
     -- STATE.outOfRange[unit]: too far for any spell
     IsSpellInRange = function(spell, unit) if not unit then return nil end return not STATE.outOfRange[unit] end,
+    GetSpellName = function(id) return STATE.spellNames and STATE.spellNames[id] end,
     GetSpellInfo = function(n)
         local s = SPELLS[n]
         if not s then return nil end
@@ -326,16 +335,29 @@ C_UnitAuras = {
 -- Bags: STATE.bags = { { id = 1, name = "Soul Shard", count = 3 }, ... } (one stack per slot)
 C_Container = {
     GetItemCooldown = function(id) return (STATE.itemCD or {})[id] or 0, 0, 1 end,
-    GetContainerNumSlots = function(bag) if bag == 0 then return 16 end return 0 end,
+    GetContainerNumSlots = function(bag)
+        if bag == 0 then return 16 end
+        if STATE.bank and STATE.bank[bag] then return #STATE.bank[bag] end
+        return 0
+    end,
     GetContainerNumFreeSlots = function(bag)
         if bag ~= 0 then return 0, 0 end
         if STATE.freeSlots then return STATE.freeSlots, 0 end
         return 16 - #STATE.bags, 0
     end,
     GetContainerItemInfo = function(bag, slot)
-        local e = STATE.bags[slot]
-        if bag ~= 0 or not e then return nil end
+        local e
+        if bag == 0 then e = STATE.bags[slot] elseif STATE.bank and STATE.bank[bag] then e = STATE.bank[bag][slot] end
+        if not e or e.moved then return nil end
         return { itemID = e.id, stackCount = e.count, iconFileID = "item:" .. e.name }
+    end,
+    -- With the bank open, a bank item goes to your bags (MOVED logs it)
+    UseContainerItem = function(bag, slot)
+        local e = STATE.bank and STATE.bank[bag] and STATE.bank[bag][slot]
+        if not e or e.moved then return end
+        e.moved = true
+        table.insert(STATE.bags, { id = e.id, name = e.name, count = e.count })
+        MOVED[#MOVED + 1] = e.name .. ":" .. e.count
     end,
 }
 local function itemById(id) return stubItem(id) end

@@ -97,8 +97,10 @@ local function load_file(path)
 end
 load_file("Theme.lua")
 load_file("Core.lua")
+load_file("Locale.lua")
 load_file("Options.lua")
 load_file("Vendor.lua")
+load_file("Bank.lua")
 local TO = ns.TO
 local function fire(event, ...)
     for _, f in ipairs(ALL_FRAMES) do

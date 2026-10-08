@@ -1,3 +1,14 @@
+## 1.9.0
+
+- **Right-click a reminder to hide it** for 10 minutes, or until you change zone. Handy for a buff you don't want right now. `/topoff unhide` brings it back.
+- **Party buffs and blessings also show when they're running out** on someone, not only when they're gone. The icon names who and how long is left, and gets the orange, then red, border. Turn it off with "Also when it's running out on someone" on the Buffs tab.
+- **Group versions**: when 3 or more in your party (you included) need your buff and you carry the reagent, the click casts Prayer of Fortitude, Prayer of Spirit, Prayer of Shadow Protection, Arcane Brilliance or Gift of the Wild on your party. Turn it off on the Buffs tab.
+- **Take what you're short on from the bank**: beside the bank window, a list of reagents, food, potions and your own items below their Min that are in your bank. One click moves enough stacks to your bags. Turn it off on the Supplies tab.
+- **Combat bar**: your mana gem is on it now, and any of your own items you mark "Combat" on the Supplies tab.
+- **Paladin aura for your role**: until you pick one, the reminder casts Devotion Aura for tanks, Concentration Aura for healers and Retribution Aura for Retribution.
+- **Other game languages**: on a game in another language, spell, buff and reagent names come from the game, so those checks work. Food, water and potions are still only recognised in English.
+- Weapon enhancements, your pet and your bags update within a moment, like buffs.
+
 ## 1.8.2
 
 - **Buffs update right away.** When a buff on you, your pet or your party comes or goes (class buffs, party buffs and blessings, elixirs, Well Fed, Well-Rested, Soulstone), the icons update within a moment. Before, a buff on a party member took up to 5 seconds to show, and your own up to a second. In combat the icons still wait until the fight ends.

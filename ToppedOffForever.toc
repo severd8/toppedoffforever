@@ -12,5 +12,7 @@
 
 Theme.lua
 Core.lua
+Locale.lua
 Options.lua
 Vendor.lua
+Bank.lua

@@ -188,6 +188,7 @@ local MIN_X = X_X - 6 - MIN_W    -- "Min" boxes line up in one column
 local PICK_X = 250               -- spell and blessing choices
 local PICK_W = LIST_W - PAD - PICK_X
 local LABEL_W = MIN_X - (PAD + 38) - 8   -- a switch label that stops before the Min column
+local COMBAT_X = MIN_X - 14 - 30         -- "In combat" switches on your own items, left of Min
 
 TO.OPTION_TABS = {
     { key = "buffs",    label = "Buffs" },
@@ -364,9 +365,19 @@ local function BuildBuffsTab(self, ctx, class)
                 if #self:KnownOptions(buff.cast) == 0 then NotLearned(sw, buff.label .. " on your party") end
                 ctx.row()
             end
+            ctx.charCheck("Also when it's running out on someone", "partyExpiring", SUB)
+            ctx.row()
+            local anyGroup = false
+            for _, buff in ipairs(partyBuffs) do if buff.group then anyGroup = true end end
+            if anyGroup then
+                ctx.charCheck("Cast the group version when " .. self.GROUP_MIN .. " or more in your party need it",
+                    "groupBuffs", SUB, "Prayer of Fortitude, Arcane Brilliance, Gift of the Wild and the like, "
+                    .. "when you've learned it and carry its reagent. Counts you too.")
+                ctx.row()
+            end
             ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
             ctx.row()
-            ctx.note("Shows how many party members are missing it. Click to buff the next one in range.")
+            ctx.note("Shows how many party members need it. Click to buff the next one in range.")
         end
     end
 
@@ -377,9 +388,9 @@ local function BuildBuffsTab(self, ctx, class)
         ctx.row()
         local keys, labels = {}, { none = "None" }
         for _, b in ipairs(self.BLESSING_NAMES) do
-            if self:Knows("Blessing of " .. b) then
+            if self:Knows(self.BLESSING_SPELLS[b]) then
                 keys[#keys + 1] = b
-                labels[b] = "Blessing of " .. b
+                labels[b] = self.BLESSING_SPELLS[b]
             end
         end
         keys[#keys + 1] = "none"
@@ -389,12 +400,14 @@ local function BuildBuffsTab(self, ctx, class)
             Dropdown(c, PICK_X, ctx.y - 1, PICK_W, keys, labels,
                 function()
                     local spell = TO:BlessingFor(cls)
-                    return spell and spell:gsub("^Blessing of ", "") or "none"
+                    return spell and TO:BlessingShort(spell) or "none"
                 end,
                 function(v) TO.char.blessings[cls] = v TO:RequestUpdate() end,
                 "Blessing to give " .. self.CLASS_PLURALS[cls] .. " in your party")
             ctx.row()
         end
+        ctx.charCheck("Also when it's running out on someone", "partyExpiring", SUB)
+        ctx.row()
         ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
         ctx.row()
         ctx.note("Shows how many party members are missing their blessing. Click to bless the next one in range. "
@@ -565,9 +578,18 @@ local function BuildSuppliesTab(self, ctx, class)
     end
 
     ctx.card("Your own items", "Min")
+    if #self.char.custom > 0 then
+        local h = Label(c, "Combat", COMBAT_X - 10, ctx.y + 18, "GameFontDisableSmall")
+        h:SetWidth(50)
+        h:SetJustifyH("CENTER")
+    end
     for _, item in ipairs(self.char.custom) do
         local name = item.name
-        ctx.fit(ctx.toggle("custom:" .. name:lower(), name, true))
+        ctx.fit(ctx.toggle("custom:" .. name:lower(), name, true), COMBAT_X)
+        local inCombat = Toggle(c, "", COMBAT_X, ctx.y - 4, function() return item.combat and true or false end,
+            function(v) item.combat = v or nil TO:RequestUpdate() end)
+        T.Tooltip(inCombat, "In combat", "Keep it on the combat bar, with potions and your Healthstone, "
+            .. "while the reminders hide in combat.")
         ctx.minBox(item.min, function(n) item.min = n end)
         local x = Button(c, "X", 20, X_X, ctx.y - 2, function()
             TO:RemoveCustom(name)
@@ -612,13 +634,15 @@ local function BuildSuppliesTab(self, ctx, class)
         end
     end
 
-    ctx.card("At vendors")
-    ctx.charCheck("Show a restock list", "restockAtVendor")
+    ctx.card("At vendors and the bank")
+    ctx.charCheck("Show a restock list at vendors", "restockAtVendor")
     ctx.row()
     ctx.charCheck("Show a Repair all button", "repairAtVendor")
     ctx.row()
-    ctx.note("Beside the vendor window: everything above that's below its Min and this vendor sells. "
-        .. "Nothing is bought until you click Restock.")
+    ctx.charCheck("Show what to take from the bank", "bankRestock")
+    ctx.row()
+    ctx.note("Beside the vendor or bank window: everything above that's below its Min and that this vendor "
+        .. "sells, or that's in your bank. Nothing is bought or moved until you click.")
 end
 
 ---------------------------------------------------------------------------
@@ -630,7 +654,7 @@ local function BuildMoreTab(self, ctx, class)
         ctx.card("Pet", class == "HUNTER" and "Min" or nil)
         if class == "HUNTER" then
             local sw = ctx.toggle("pet:summon", "Pet is out and alive", true)
-            if not self:Knows("Call Pet") then NotLearned(sw, "Pet is out and alive") end
+            if not self:Knows(self.PET_SPELLS.call) then NotLearned(sw, "Pet is out and alive") end
             ctx.row()
             ctx.toggle("pet:happy", "Pet is happy", true)
             ctx.row()
@@ -790,7 +814,7 @@ local function BuildGeneralTab(p)
     check:SetScript("OnClick", function() TO:Check() end)
     T.Note(other, "Lists this character's checks in chat.", 154, -59)
 
-    local cmds = Card(p, "Commands", 0, -218, PAGE_W, 150)
+    local cmds = Card(p, "Commands", 0, -218, PAGE_W, 167)
     local lines = {
         "|cff8fd3ff/topoff|r  open or close these options",
         "|cff8fd3ff/topoff toggle|r  show or hide the reminders",
@@ -798,6 +822,7 @@ local function BuildGeneralTab(p)
         "|cff8fd3ff/topoff check|r  list what's checked for your class",
         "|cff8fd3ff/topoff add 20 Item Name|r  keep an item stocked",
         "|cff8fd3ff/topoff remove Item Name|r  stop checking it",
+        "|cff8fd3ff/topoff unhide|r  bring back reminders you right-clicked to hide",
         "|cff8fd3ff/topoff reset|r  reset the reminders' position",
     }
     for i, l in ipairs(lines) do
