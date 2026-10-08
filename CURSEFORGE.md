@@ -1,5 +1,3 @@
-<p align="center"><img src="https://raw.githubusercontent.com/severd8/toppedoffforever/main/art/logo.png" width="160" alt="ToppedOff Forever logo"></p>
-
 # ToppedOff Forever
 
 **Never pull with a missing buff, empty reagents or a bare weapon again.**
@@ -29,9 +27,7 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 
 ## Installation
 
-1. Download the latest release.
-2. Unzip it into your WoW: Forever `Interface\AddOns` folder so you end up with an `AddOns\ToppedOffForever\` folder.
-3. Restart the game, or type `/reload` if it's already running.
+Install it with the CurseForge app, or download the file and unzip it into your WoW: Forever `Interface\AddOns` folder. Then restart the game or type `/reload`.
 
 Your class's checks are set up automatically. Type `/topoff check` to see them.
 
@@ -112,4 +108,4 @@ ToppedOff Forever is free. If it has saved you a wipe, you can [leave a small ti
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/severd8/toppedoffforever/blob/main/LICENSE).

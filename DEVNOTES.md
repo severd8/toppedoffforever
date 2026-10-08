@@ -22,6 +22,7 @@ A reminder addon for **World of Warcraft: Forever** (interface 16001, client 1.6
 - `Bindings.xml` — keybindings (loaded automatically, not listed in the `.toc`). `CLICK ToppedOffForeverButton1-3:LeftButton` press the first three icons; `TOPPEDOFFFOREVER_OPTIONS` opens the options. Names are set in `Core.lua`.
 - `tests/` — offline test suite (not shipped). `wowstub.lua` fakes the WoW API as Forever has it (no globals Forever lacks; `UnitInRange` returns hidden values); `run_tests.lua` holds the scenarios; `run.lua` runs them.
 - `CHANGELOG.md` — release notes shown on CurseForge. Newest version at the top.
+- `CURSEFORGE.md` — the CurseForge project description, pasted by hand (not shipped).
 - `.pkgmeta` — packager config (folder name, changelog, files left out of the download).
 - `.github/workflows/test.yml` — runs the tests on every push. `release.yml` — on a `v*` tag, runs the tests, then packages and uploads to CurseForge as `toppedoff-{project-version}{classic}{nolib}`. Needs the `CF_API_KEY` repository secret.
 
@@ -86,7 +87,7 @@ Only testable in game: Forever's exact spell and item names, real clicking of th
 
 ## Releasing
 
-1. Make the change, run the tests, and add a new section at the top of `CHANGELOG.md` (e.g. `## 1.0.1`).
+1. Make the change, run the tests, and add a new section at the top of `CHANGELOG.md` (e.g. `## 1.0.1`). If the change shows on the CurseForge project page (features, options, commands), update `CURSEFORGE.md` too (the README, adjusted: no logo, a short install note, full links) and paste the whole file into the project's description. The packager only uploads `CHANGELOG.md` with each file; the description never changes on its own.
 2. Commit and push to `main`. The **Tests** workflow must be green.
 3. Create the tag in GitHub Desktop (History tab → right-click the commit → Create Tag → e.g. `v1.0.1` → Push origin). Tags containing `beta` or `alpha` upload as Beta/Alpha files.
 4. The **Package and release** workflow runs the tests again, then uploads to CurseForge. Check the Actions tab for a green check and the CurseForge Files page (new files go through CurseForge review).
