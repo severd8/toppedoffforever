@@ -2057,7 +2057,7 @@ function TO:BuildReminders()
 end
 
 ---------------------------------------------------------------------------
--- Snooze: right-click a reminder to hide it for a while (10 minutes, or until a
+-- Snooze: Shift + right-click a reminder to hide it for a while (10 minutes, or until a
 -- loading screen or a new zone, whichever comes first). Not saved.
 ---------------------------------------------------------------------------
 TO.SNOOZE_SECS = 600
@@ -2130,18 +2130,19 @@ local function Button_OnEnter(self)
         GameTooltip:AddLine("Click to use " .. r.action.item .. " on your " ..
             (r.action.slot == 17 and "off hand" or "main hand"), 0.4, 1, 0.4)
     end
-    if r.id and self.snoozable then GameTooltip:AddLine("Right-click to hide it for 10 minutes", 0.6, 0.6, 0.6) end
+    if r.id and self.snoozable then GameTooltip:AddLine("Shift + right-click to hide it for 10 minutes", 0.6, 0.6, 0.6) end
     GameTooltip:Show()
 end
 
 function TO:CreateButton(i)
     local b = self:NewIconButton("ToppedOffForeverButton" .. i, self.bar)
-    -- Right-click hides the reminder for a while instead of casting (an empty
-    -- attribute is Blizzard's "do nothing", so the secure click skips it)
-    b:SetAttribute("*type2", "")
+    -- Shift + right-click hides the reminder for a while instead of casting (an empty
+    -- attribute is Blizzard's "do nothing", so the secure click skips it). A plain
+    -- right-click casts or uses, like a left-click.
+    b:SetAttribute("shift-type2", "")
     b.snoozable = true
     b:SetScript("PostClick", function(btn, button, down)
-        if button == "RightButton" and not down then TO:Snooze(btn.reminder) end
+        if button == "RightButton" and not down and IsShiftKeyDown() then TO:Snooze(btn.reminder) end
     end)
     self.buttons[i] = b
     return b
@@ -2923,7 +2924,7 @@ local function Help()
     print("  /topoff check — list what's checked for your class")
     print("  /topoff add <count> <item> — remind you when you have fewer than <count> of an item")
     print("  /topoff remove <item> — stop checking an item you added")
-    print("  /topoff unhide — bring back reminders you right-clicked to hide")
+    print("  /topoff unhide — bring back reminders you hid (Shift + right-click)")
     print("  /topoff reset — move the reminders back to the default position")
 end
 

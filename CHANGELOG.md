@@ -1,3 +1,7 @@
+## 1.9.1
+
+- **Hiding a reminder is now Shift + right-click.** In 1.9.0 a plain right-click hid it, so right-clicking your water or a potion to use it (as you would in your bags) hid it for 10 minutes instead. A plain right-click now casts or uses, like a left-click. `/topoff unhide` still brings hidden ones back.
+
 ## 1.9.0
 
 - **Right-click a reminder to hide it** for 10 minutes, or until you change zone. Handy for a buff you don't want right now. `/topoff unhide` brings it back.

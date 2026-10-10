@@ -2103,7 +2103,7 @@ TO.char.prefs.aura = "Devotion Aura"
 assertEq(TO:BuffPreference(aura), "Devotion Aura", "your own pick wins")
 TO.char.prefs = {}; STATE.talents = nil
 
-step("right-click a reminder to hide it")
+step("Shift + right-click a reminder to hide it")
 STATE.class = "MAGE"; SPELLBOOK, FUTURE = {}, {}
 LEARN("Arcane Intellect"); fire("SPELLS_CHANGED")
 TO.char.checks = {}; STATE.buffs = {}; STATE.bags = {}
@@ -2111,13 +2111,18 @@ refresh()
 local hb
 for _, b in ipairs(TO.buttons) do if b.reminder and b.reminder.id == "buff:intellect" then hb = b end end
 assert(hb, "Arcane Intellect icon shown")
-assertEq(hb.__attrs["*type2"], "", "right-click doesn't cast")
+assertEq(hb.__attrs["shift-type2"], "", "Shift + right-click doesn't cast")
+assertEq(hb.__attrs["*type2"], nil, "a plain right-click casts, like a left-click")
 AFTER, TO.soonPending = {}, false
+hb.__scripts.PostClick(hb, "RightButton", false)
+assertEq(TO.snoozed["buff:intellect"], nil, "a plain right-click doesn't hide (it drinks your water, say)")
+SHIFT = true
 hb.__scripts.PostClick(hb, "RightButton", true)
 assertEq(TO.snoozed["buff:intellect"], nil, "nothing on the press, only on the release")
 hb.__scripts.PostClick(hb, "LeftButton", false)
-assertEq(TO.snoozed["buff:intellect"], nil, "a left-click casts, it doesn't hide")
+assertEq(TO.snoozed["buff:intellect"], nil, "a Shift + left-click casts, it doesn't hide")
 hb.__scripts.PostClick(hb, "RightButton", false)
+SHIFT = false
 assert(lastLog("Arcane Intellect hidden for 10 minutes"), "says so in chat")
 runAfter()
 assertEq(ids()["buff:intellect"], nil, "hidden")

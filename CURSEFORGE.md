@@ -34,7 +34,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 ## Using it
 
 - **Move the icons.** They start unlocked, inside a frame with a "ToppedOff" header. Drag the header to move them, then lock it in the options or with `/topoff lock`. Clicking the icons works whether they're locked or not.
-- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Your buffs are cast on you, and party buffs and blessings on the party member shown. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you). **Right-click** an icon to hide it for 10 minutes; `/topoff unhide` brings it back.
+- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Your buffs are cast on you, and party buffs and blessings on the party member shown. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you). **Shift + right-click** an icon to hide it for 10 minutes; `/topoff unhide` brings it back.
 - **Open the options.** Type `/topoff`, left-click the minimap button, or right-click the "ToppedOff" header and choose **Settings**. The header menu also has **Lock**.
 - **Show or hide.** Right-click the minimap button, or type `/topoff toggle`.
 
@@ -70,7 +70,7 @@ Go to **Options → Keybindings → ToppedOff Forever**:
 | `/topoff check` | List your class buffs, weapon, reagents, your own items and durability, and whether each was found |
 | `/topoff add 20 Conjured Crystal Water` | Remind you when you have fewer than 20 of an item |
 | `/topoff remove Conjured Crystal Water` | Stop checking an item you added |
-| `/topoff unhide` | Bring back reminders you right-clicked to hide |
+| `/topoff unhide` | Bring back reminders you hid with Shift + right-click |
 | `/topoff reset` | Move the reminders back to the default position |
 
 `/toppedoff` works too.

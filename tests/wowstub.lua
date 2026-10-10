@@ -246,6 +246,8 @@ C_TooltipInfo = { GetItemByID = function(id)
     return nil
 end }
 function InCombatLockdown() return COMBAT end
+SHIFT = false
+function IsShiftKeyDown() return SHIFT end
 FAKE_TIME = 1000
 function GetTime() return FAKE_TIME end
 function IsInInstance() return STATE.instance, STATE.instance and "party" or "none" end

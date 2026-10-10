@@ -822,7 +822,7 @@ local function BuildGeneralTab(p)
         "|cff8fd3ff/topoff check|r  list what's checked for your class",
         "|cff8fd3ff/topoff add 20 Item Name|r  keep an item stocked",
         "|cff8fd3ff/topoff remove Item Name|r  stop checking it",
-        "|cff8fd3ff/topoff unhide|r  bring back reminders you right-clicked to hide",
+        "|cff8fd3ff/topoff unhide|r  bring back reminders you hid (Shift + right-click)",
         "|cff8fd3ff/topoff reset|r  reset the reminders' position",
     }
     for i, l in ipairs(lines) do
