@@ -92,7 +92,7 @@ WoW: Forever limits what addons can do in combat. ToppedOff Forever is built aro
 
 - **An icon doesn't appear for a buff.** Type `/topoff check`. The spell may not be learned yet, or the check may be turned off in the options.
 - **A weapon icon is grey.** The item you chose isn't in your bags. Hover for details.
-- **The icons disappeared.** You may have hidden them, turned on **Only in dungeons and raids**, or you may simply be topped off. Type `/topoff show`.
+- **The icons disappeared.** You may have hidden them, turned on **Show only in instances**, or you may simply be topped off. Type `/topoff show`. An icon you hid with Shift + right-click comes back with `/topoff unhide`.
 - **The icons are off-screen.** Type `/topoff reset`.
 - **"WoW blocked ..." in chat.** The game stopped an action and blamed ToppedOff. Please report it with the message.
 
