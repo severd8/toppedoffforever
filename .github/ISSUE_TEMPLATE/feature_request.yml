@@ -2,6 +2,7 @@ name: Feature request
 description: Suggest an idea for ToppedOff Forever
 title: "[Idea] "
 labels: ["enhancement"]
+assignees: ["severd8"]
 body:
   - type: textarea
     id: idea

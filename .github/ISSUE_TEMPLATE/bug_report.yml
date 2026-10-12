@@ -2,6 +2,7 @@ name: Bug report
 description: Something in ToppedOff Forever isn't working
 title: "[Bug] "
 labels: ["bug"]
+assignees: ["severd8"]
 body:
   - type: markdown
     attributes:
