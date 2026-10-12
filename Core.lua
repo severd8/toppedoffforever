@@ -281,9 +281,13 @@ function TO:IsEnabled(id, default, outside)
     return v
 end
 
-function TO:SetEnabled(id, on, outside)
-    local t = outside and self.char.checksOutside or self.char.checks
-    t[id] = on and true or false
+-- A setting that's back to what it would be anyway is cleared, not saved: the class
+-- default for the dungeon set, the dungeon setting for the outside set.
+function TO:SetEnabled(id, on, outside, default)
+    on = on and true or false
+    local t, usual = self.char.checks, default ~= false
+    if outside then t, usual = self.char.checksOutside, self:IsEnabled(id, default, false) end
+    if on == usual then t[id] = nil else t[id] = on end
     self:RequestUpdate()
 end
 
@@ -584,9 +588,11 @@ local function LongestLeft(buffs, names)
     return left
 end
 
-function TO:BuffPreference(buff)
+-- The spell a buff's reminder casts: your pick, else the one for your role (where the
+-- buff has one), else the first you know. ignorePick: what Automatic would choose.
+function TO:BuffPreference(buff, ignorePick)
     local known = self:KnownOptions(buff.cast)
-    local pref = self.char.prefs[buff.id]
+    local pref = not ignorePick and self.char.prefs[buff.id]
     for _, n in ipairs(known) do
         if n == pref then return n end
     end
@@ -1078,6 +1084,9 @@ function TO:UpdateAutoItems()
         local a = self.char.auto[slot.key]
         parts[#parts + 1] = slot.key .. ":" .. (a and a.id or 0) .. ":" .. (inBags[slot.key] and 1 or 0)
     end
+    -- The Buffs tab lists the elixirs in your bags, and Well-Rested while you carry the bag
+    for _, e in ipairs(self:BagElixirs()) do parts[#parts + 1] = e.name end
+    parts[#parts + 1] = (self.bag and self.bag[self.RESTED.item]) and "rested" or ""
     local sig = table.concat(parts, " ")
     if sig ~= self.autoSig then self.autoSig, self.autoChanged = sig, true end
 end
@@ -2495,7 +2504,7 @@ function TO:Update()
     self.reminders = list
     self:Layout(self.reminders)
     if self.merchantOpen and self.UpdateVendorPanel then self:UpdateVendorPanel() end
-    if self.autoChanged and self.RefreshSupplies and self:RefreshSupplies() then self.autoChanged = nil end
+    if self.autoChanged and self.RefreshLists and self:RefreshLists() then self.autoChanged = nil end
 end
 
 function TO:RequestUpdate()
@@ -2634,6 +2643,7 @@ end
 function TO:SetLocked(locked)
     self.db.locked = locked
     self:UpdateHeader()
+    if self.RefreshSettings then self:RefreshSettings() end   -- an open options window shows it
 end
 
 function TO:ApplySettings()
@@ -2829,6 +2839,7 @@ end
 function TO:SetShown(show)
     self.db.shown = show
     self:ApplyVisibility()
+    if self.RefreshSettings then self:RefreshSettings() end
     if InCombatLockdown() then
         Print("Will " .. (show and "show" or "hide") .. " when you leave combat.")
     else

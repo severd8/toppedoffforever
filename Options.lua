@@ -82,31 +82,38 @@ local function Label(parent, text, x, y, template, color)
     return fs
 end
 
--- On/off switch with its label. get() reads the setting, set(on) saves it.
+-- On/off switch with its label. get() reads the setting, set(on) saves it. Clicking
+-- the label works like the switch. A greyed-out switch (SetDisabled) ignores clicks.
 local function Toggle(parent, text, x, y, get, set, tip)
     local sw, new = Acquire(parent, "switch", function()
         local sw = T.SwitchWidget(parent)
         sw.label = NewText(parent, "GameFontHighlight")
         sw.label:SetPoint("TOPLEFT", sw, "TOPRIGHT", 8, 1)
+        T.Disabler(sw, { sw, sw.label })
         return RememberHover(sw)
     end)
     if not new then
         ResetText(sw.label)
         ResetHover(sw)
     end
+    sw:SetDisabled(false)
     sw:SetPoint("TOPLEFT", x, y)
     sw.label:SetText(text)
+    T.ClickableLabel(sw, sw.label)
     sw:SetScript("OnClick", function(self)
+        if self.disabled then return end
         self:SetOn(not self:IsOn())
         set(self:IsOn())
+        if parent.afterToggle then parent.afterToggle() end   -- switches that depend on this one
     end)
     if tip then T.Tooltip(sw, text, tip) end
     sw:SetOn(get())
     return sw
 end
 
--- A switch bound to an account-wide display setting
-local function Setting(parent, text, x, y, key, tip)
+-- A switch bound to an account-wide display setting. enabledWhen(): false greys it
+-- out, for a setting that does nothing until another one is changed.
+local function Setting(parent, text, x, y, key, tip, enabledWhen)
     local sw = Toggle(parent, text, x, y, function() return TO.db[key] end, function(v)
         if key == "locked" then
             TO:SetLocked(v)
@@ -114,45 +121,69 @@ local function Setting(parent, text, x, y, key, tip)
             TO.db[key] = v
             TO:ApplySettings()
         end
+        RunRefreshers()
     end, tip)
-    AddRefresher(function() sw:SetOn(TO.db[key]) end)
+    AddRefresher(function()
+        sw:SetOn(TO.db[key])
+        if enabledWhen then sw:SetDisabled(not enabledWhen()) end
+    end)
     return sw
 end
 
-local function Slider(parent, text, x, y, key, min, max, suffix)
+local function Slider(parent, text, x, y, key, min, max, suffix, tip)
     local s = T.Slider(parent, text, x, y, 244,
         function() return TO.db[key] end,
         function(v) TO.db[key] = v TO:ApplySettings() end, min, max, suffix)
+    if tip then T.Tooltip(s, text, tip) end
     AddRefresher(s.Refresh)
     return s
 end
 
--- Text box. Number boxes and text boxes are reused separately.
-local function EditBox(parent, width, x, y, text, numeric, onCommit)
-    local e = Acquire(parent, numeric and "number" or "edit", function()
+-- Text box. Number boxes and text boxes are reused separately. onCommit(text, box)
+-- runs on Enter or when the box loses focus; onEnter (optional) replaces it for Enter.
+local function EditBox(parent, width, x, y, text, numeric, onCommit, onEnter)
+    local e, new = Acquire(parent, numeric and "number" or "edit", function()
         local e = T.EditBox(parent, width)
         if numeric then
             e:SetNumeric(true)
             e:SetMaxLetters(4)
             e:SetJustifyH("CENTER")
         end
-        return e
+        T.Disabler(e, { e })
+        local setDisabled = e.SetDisabled
+        function e:SetDisabled(off)
+            setDisabled(self, off)
+            self:EnableMouse(not off)
+            if off then self:ClearFocus() end
+        end
+        return RememberHover(e)
     end)
+    if not new then ResetHover(e) end
+    e:SetDisabled(false)
+    e:SetWidth(width)
     e:SetPoint("TOPLEFT", x, y)
     e:SetText(text or "")
-    local function commit(self) if onCommit then onCommit(self:GetText()) end end
-    e:SetScript("OnEnterPressed", function(self) commit(self) self:ClearFocus() end)
+    local function commit(self) if onCommit and not self.disabled then onCommit(self:GetText(), self) end end
+    e:SetScript("OnEnterPressed", function(self)
+        if onEnter then onEnter(self) else commit(self) end
+        self:ClearFocus()
+    end)
     e:SetScript("OnEditFocusLost", commit)
     return e
 end
 
 local function Button(parent, text, width, x, y, onClick, height)
-    local b, new = Acquire(parent, "button", function() return RememberHover(FlatButton(parent, text, width)) end)
+    local b, new = Acquire(parent, "button", function()
+        local b = FlatButton(parent, text, width)
+        T.Disabler(b, { b })
+        return RememberHover(b)
+    end)
     if not new then ResetHover(b) end
+    b:SetDisabled(false)
     b:SetSize(width, height or 22)
     b:SetPoint("TOPLEFT", x, y)
     b:SetText(text)
-    b:SetScript("OnClick", onClick)
+    b:SetScript("OnClick", function(self) if not self.disabled then onClick(self) end end)
     return b
 end
 
@@ -163,6 +194,7 @@ local function Dropdown(parent, x, y, width, keys, labels, getter, setter, tip)
         return RememberHover(T.Dropdown(parent, width, keys, labels, getter, setter))
     end)
     if not new then ResetHover(b) end
+    b:SetDisabled(false)
     b.keys, b.labels, b.getter, b.setter = keys, labels, getter, setter
     b.menuTitle, b.menuLabels = nil, nil
     b:SetWidth(width)
@@ -219,9 +251,28 @@ function TO:EditingOutside()
 end
 
 -- Row helpers shared by the lists. `ctx` holds the list being filled and the y cursor.
+--
+-- Greyed-out controls: ctx.track(widget, shared, enabledWhen) records a control that
+-- is the same for both sets of checks (shared: greyed out while you edit the checks
+-- for outside dungeons, which only the on/off checks have) and/or does nothing until
+-- another setting is on (enabledWhen). c.applyStates() greys them; it runs after the
+-- list is drawn and after every switch click.
 local function Builder(c)
     local ctx = { c = c, y = 0 }
     local card
+    local states = {}
+    function ctx.track(w, shared, enabledWhen)
+        states[#states + 1] = { w = w, shared = shared, enabledWhen = enabledWhen }
+        return w
+    end
+    function c.applyStates()
+        local outside = TO:EditingOutside()
+        for _, st in ipairs(states) do
+            local off = (st.shared and outside) or (st.enabledWhen and not st.enabledWhen()) or false
+            st.w:SetDisabled(off)
+        end
+    end
+    c.afterToggle = c.applyStates
 
     local function closeCard()
         if not card then return end
@@ -259,6 +310,12 @@ local function Builder(c)
         ctx.y = ctx.y - 28
     end
 
+    -- A small grey line over settings that belong to every row above it
+    function ctx.subhead(text)
+        Label(c, text, PAD, ctx.y - 4, "GameFontDisableSmall")
+        ctx.y = ctx.y - 20
+    end
+
     function ctx.note(text)
         local n = Label(c, text, PAD + 38, ctx.y - 2, "GameFontDisableSmall")
         n:SetWidth(LIST_W - PAD - (PAD + 38))
@@ -273,24 +330,24 @@ local function Builder(c)
     end
 
     -- Switch bound to a check id (on/off per character, in the set being edited)
-    c.toggles = {}
-    function ctx.toggle(id, label, default, x)
+    function ctx.toggle(id, label, default, x, tip)
         local function get() return TO:IsEnabled(id, default, TO:EditingOutside()) end
-        local sw = Toggle(c, label, x or PAD, ctx.y - 4, get, function(v) TO:SetEnabled(id, v, TO:EditingOutside()) end)
-        sw.refresh = function() sw:SetOn(get()) end
-        c.toggles[#c.toggles + 1] = sw
+        return Toggle(c, label, x or PAD, ctx.y - 4, get,
+            function(v) TO:SetEnabled(id, v, TO:EditingOutside(), default) end, tip)
+    end
+
+    -- Switch bound to a per-character setting (the same for both sets of checks).
+    -- enabledWhen(): false greys it out (it does nothing until that's on).
+    function ctx.charCheck(label, key, x, tip, enabledWhen)
+        return ctx.track(Toggle(c, label, x or PAD, ctx.y - 4, function() return TO.char[key] and true or false end,
+            function(v) TO.char[key] = v TO:RequestUpdate() end, tip), true, enabledWhen)
+    end
+
+    -- Switch that isn't a saved check (elixirs to track)
+    function ctx.switch(label, get, set, shared)
+        local sw = Toggle(c, label, PAD, ctx.y - 4, get, set)
+        if shared ~= false then ctx.track(sw, true) end
         return sw
-    end
-
-    -- Switch bound to a per-character setting
-    function ctx.charCheck(label, key, x, tip)
-        return Toggle(c, label, x or PAD, ctx.y - 4, function() return TO.char[key] and true or false end,
-            function(v) TO.char[key] = v TO:RequestUpdate() end, tip)
-    end
-
-    -- Switch that isn't a saved check (elixirs to track, the Profiles choice)
-    function ctx.switch(label, get, set)
-        return Toggle(c, label, PAD, ctx.y - 4, get, set)
     end
 
     -- Keep a label clear of the Min column (or of a choice box at `untilX`)
@@ -300,22 +357,40 @@ local function Builder(c)
         return sw
     end
 
-    -- Min box in the Min column; onCommit gets the new number
-    function ctx.minBox(value, onCommit, allowZero)
-        return EditBox(c, MIN_W, MIN_X, ctx.y - 1, tostring(value), true, function(text)
+    -- Min box in the Min column. get() reads the saved number, onCommit(n) saves a new
+    -- one. Anything that isn't a whole number from 0 up puts the saved one back.
+    function ctx.minBox(get, onCommit, tip)
+        local box = EditBox(c, MIN_W, MIN_X, ctx.y - 1, tostring(get()), true, function(text, box)
             local n = tonumber(text)
-            if n and (n >= 1 or (allowZero and n >= 0)) then onCommit(math.floor(n)) TO:RequestUpdate() end
+            if n and n >= 0 then
+                n = math.floor(n)
+                if n ~= get() then onCommit(n) TO:RequestUpdate() end
+            end
+            box:SetText(tostring(get()))
         end)
+        T.Tooltip(box, "Min", tip or "You're reminded when you have fewer than this. 0 turns the reminder off.")
+        return ctx.track(box, true)
     end
-    function ctx.reagentMin(id, default)
-        return ctx.minBox(TO:ReagentMin(id, default), function(n) TO.char.mins[id] = n end, true)
+    function ctx.reagentMin(id, default, tip)
+        return ctx.minBox(function() return TO:ReagentMin(id, default) end,
+            function(n) TO.char.mins[id] = n end, tip)
     end
 
-    -- A choice of spells: a list to pick from
-    function ctx.spellPick(known, getter, setter)
-        local b = Dropdown(c, PICK_X, ctx.y - 1, PICK_W, known, function(k) return k or "" end, getter, setter)
-        T.Tooltip(b, "Click to choose which spell to cast")
-        return b
+    -- A choice of spells: a list to pick from. auto (optional): label for "Automatic",
+    -- the first choice, saved as no pick (getter returns false for it).
+    function ctx.spellPick(known, getter, setter, auto)
+        local keys = known
+        if auto then
+            keys = { false }
+            for _, k in ipairs(known) do keys[#keys + 1] = k end
+        end
+        local b = Dropdown(c, PICK_X, ctx.y - 1, PICK_W, keys,
+            function(k) if k then return k end return auto and auto() or "" end, getter, setter)
+        if auto then
+            b.menuLabels = setmetatable({}, { __index = function(_, k) return k or "Automatic (for your role)" end })
+        end
+        T.Tooltip(b, "Spell to cast", "Click to choose which spell the reminder casts.")
+        return ctx.track(b, true)
     end
 
     function ctx.row() ctx.y = ctx.y - ROW end
@@ -337,6 +412,7 @@ end
 ---------------------------------------------------------------------------
 local function BuildBuffsTab(self, ctx, class)
     local c = ctx.c
+    local function on(id, default) return TO:IsEnabled(id, default, TO:EditingOutside()) end
     local buffs = self.CLASS_BUFFS[class] or {}
     if #buffs > 0 then
         ctx.card("Your buffs")
@@ -349,8 +425,20 @@ local function BuildBuffsTab(self, ctx, class)
                     NotLearned(sw, buff.label)
                 elseif #known > 1 then
                     ctx.fit(sw, PICK_X)
-                    ctx.spellPick(known, function() return TO:BuffPreference(buff) end,
-                        function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end)
+                    if buff.byRole then
+                        -- Automatic: the spell for your role (Paladin auras)
+                        ctx.spellPick(known,
+                            function()
+                                local pick = TO.char.prefs[buff.id]
+                                for _, n in ipairs(known) do if n == pick then return n end end
+                                return false
+                            end,
+                            function(v) TO.char.prefs[buff.id] = v or nil TO:RequestUpdate() end,
+                            function() return "Automatic: " .. (TO:BuffPreference(buff, true) or "") end)
+                    else
+                        ctx.spellPick(known, function() return TO:BuffPreference(buff) end,
+                            function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end)
+                    end
                 end
                 ctx.row()
             end
@@ -360,22 +448,32 @@ local function BuildBuffsTab(self, ctx, class)
         for _, buff in ipairs(buffs) do if buff.party then partyBuffs[#partyBuffs + 1] = buff end end
         if #partyBuffs > 0 then
             ctx.card("Party buffs")
+            local anyGroup = false
             for _, buff in ipairs(partyBuffs) do
                 local sw = ctx.toggle("party:" .. buff.id, buff.label .. " on your party", not buff.off)
                 if #self:KnownOptions(buff.cast) == 0 then NotLearned(sw, buff.label .. " on your party") end
+                if buff.group then anyGroup = true end
                 ctx.row()
             end
-            ctx.charCheck("Also when it's running out on someone", "partyExpiring", SUB)
+            local function anyOn()
+                for _, buff in ipairs(partyBuffs) do
+                    if on("party:" .. buff.id, not buff.off) then return true end
+                end
+                return false
+            end
+            ctx.subhead("For every party buff")
+            ctx.charCheck("Also when it's running out on someone", "partyExpiring", SUB,
+                "Not only when someone is missing it: also when theirs has less than your warning time left "
+                .. "(Display tab).", anyOn)
             ctx.row()
-            local anyGroup = false
-            for _, buff in ipairs(partyBuffs) do if buff.group then anyGroup = true end end
             if anyGroup then
                 ctx.charCheck("Cast the group version when " .. self.GROUP_MIN .. " or more in your party need it",
                     "groupBuffs", SUB, "Prayer of Fortitude, Arcane Brilliance, Gift of the Wild and the like, "
-                    .. "when you've learned it and carry its reagent. Counts you too.")
+                    .. "when you've learned it and carry its reagent. You count too.", anyOn)
                 ctx.row()
             end
-            ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
+            ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB,
+                "In a raid, look at everyone, not just your own group. Also for blessings and Soulstones.", anyOn)
             ctx.row()
             ctx.note("Shows how many party members need it. Click to buff the next one in range.")
         end
@@ -394,21 +492,26 @@ local function BuildBuffsTab(self, ctx, class)
             end
         end
         keys[#keys + 1] = "none"
+        local function blessingOn() return on("party:blessing", true) end
         for _, cls in ipairs(self.BLESSING_CLASSES) do
             local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[cls]
             ctx.text(self.CLASS_PLURALS[cls], nil, color and { color.r, color.g, color.b } or { 1, 1, 1 })
-            Dropdown(c, PICK_X, ctx.y - 1, PICK_W, keys, labels,
+            ctx.track(Dropdown(c, PICK_X, ctx.y - 1, PICK_W, keys, labels,
                 function()
                     local spell = TO:BlessingFor(cls)
                     return spell and TO:BlessingShort(spell) or "none"
                 end,
                 function(v) TO.char.blessings[cls] = v TO:RequestUpdate() end,
-                "Blessing to give " .. self.CLASS_PLURALS[cls] .. " in your party")
+                "Blessing to give " .. self.CLASS_PLURALS[cls] .. " in your party"), true, blessingOn)
             ctx.row()
         end
-        ctx.charCheck("Also when it's running out on someone", "partyExpiring", SUB)
+        ctx.subhead("For every blessing")
+        ctx.charCheck("Also when it's running out on someone", "partyExpiring", SUB,
+            "Not only when someone is missing theirs: also when it has less than your warning time left "
+            .. "(Display tab).", blessingOn)
         ctx.row()
-        ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
+        ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB,
+            "In a raid, look at everyone, not just your own group.", blessingOn)
         ctx.row()
         ctx.note("Shows how many party members are missing their blessing. Click to bless the next one in range. "
             .. "A Greater Blessing, or the same blessing from another Paladin, counts.")
@@ -423,22 +526,26 @@ local function BuildBuffsTab(self, ctx, class)
         if #known == 0 then
             NotLearned(sw, "Weapon buff")
         elseif #known > 1 then
+            ctx.fit(sw, PICK_X)
             ctx.spellPick(known, function() return TO:WeaponConfig().spell end,
                 function(v) TO.char.weapon.spell = v TO:RequestUpdate() end)
         end
         ctx.row()
     else
         for _, key in ipairs({ "mh", "oh" }) do
-            ctx.toggle("weapon:" .. key, key == "mh" and "Main hand" or "Off hand", true)
-            EditBox(c, PICK_W, PICK_X, ctx.y - 1, w[key], false, function(text)
+            ctx.fit(ctx.toggle("weapon:" .. key, key == "mh" and "Main hand" or "Off hand", true), PICK_X)
+            local box = ctx.track(EditBox(c, PICK_W, PICK_X, ctx.y - 1, w[key], false, function(text)
                 TO.char.weapon[key] = strtrim and strtrim(text) or text
                 TO:RequestUpdate()
-            end)
+            end), true)
+            T.Tooltip(box, key == "mh" and "Main hand" or "Off hand",
+                "The poison, oil or stone to use on this weapon. Part of the name is enough. Blank turns it off.")
             ctx.row()
         end
         if class == "ROGUE" then
             ctx.fit(ctx.toggle("charges", "Warn when poison charges run low", true))
-            ctx.reagentMin("charges", self.CHARGES_DEFAULT_MIN)
+            ctx.reagentMin("charges", self.CHARGES_DEFAULT_MIN,
+                "You're warned when a poison has fewer charges than this. 0 turns the warning off.")
             ctx.row()
         end
         ctx.note("Item to use on each weapon, like Instant Poison or Wizard Oil. Blank = off. "
@@ -447,9 +554,10 @@ local function BuildBuffsTab(self, ctx, class)
 
     -- Well Fed
     ctx.card("Food buff")
-    ctx.toggle("wellfed", "Well Fed", true)
+    ctx.toggle("wellfed", "Well Fed", true, nil, "Reminds you when the buff from stat food is missing or running out.")
     ctx.row()
-    ctx.charCheck("Only in dungeons and raids", "wellFedInstanceOnly", SUB)
+    ctx.charCheck("Only in dungeons and raids", "wellFedInstanceOnly", SUB, nil,
+        function() return on("wellfed", true) end)
     ctx.row()
     ctx.note("Click the icon to eat your stat food (set on the Supplies tab).")
 
@@ -480,7 +588,9 @@ local function BuildBuffsTab(self, ctx, class)
         ctx.text("|cff808080No elixirs or flasks in your bags.|r")
         ctx.row()
     end
-    ctx.charCheck("Only in dungeons and raids", "elixirInstanceOnly", SUB)
+    ctx.subhead("For every elixir and flask")
+    ctx.charCheck("Only in dungeons and raids", "elixirInstanceOnly", SUB, nil,
+        function() return #TO.char.elixirs > 0 end)
     ctx.row()
     ctx.note("Elixirs and flasks in your bags are listed here. Turn one on to be reminded when its buff is "
         .. "missing or running out. Click the icon to drink it.")
@@ -492,7 +602,7 @@ end
 local function BuildSuppliesTab(self, ctx, class)
     local c = ctx.c
 
-    ctx.card("Food, water and potions", "Min")
+    ctx.card("Food, water, bandages and potions", "Min")
     self:UpdateAutoItems()
     local hasMana = self.MANA_CLASSES[class]
     local autoRows = {}
@@ -508,10 +618,12 @@ local function BuildSuppliesTab(self, ctx, class)
     end
     for _, slot in ipairs(self.AUTO_SLOTS) do
         if not slot.mana or hasMana then
-            local a = self.char.auto[slot.key]
             local sw = ctx.fit(ctx.toggle("auto:" .. slot.key, slotText(slot), true))
             autoRows[slot.key] = { sw = sw, slot = slot }
-            ctx.minBox(a and a.min or self.char.autoMins[slot.key] or slot.min, function(n)
+            ctx.minBox(function()
+                local a = TO.char.auto[slot.key]
+                return a and a.min or TO.char.autoMins[slot.key] or slot.min
+            end, function(n)
                 TO.char.autoMins[slot.key] = n
                 local now = TO.char.auto[slot.key]   -- (the item may have changed since the row was drawn)
                 if now then now.min = n end
@@ -521,33 +633,33 @@ local function BuildSuppliesTab(self, ctx, class)
     end
     -- Healthstone
     if class == "WARLOCK" then
-        if self:FirstKnown(self.HEALTHSTONE_SPELLS) then
-            ctx.fit(ctx.toggle("healthstone", "Healthstone (click to make one)", true))
-            ctx.row()
-        end
+        local sw = ctx.fit(ctx.toggle("healthstone", "Healthstone", true, nil,
+            "Reminds you when you have none. Click the reminder to make one."))
+        if not self:FirstKnown(self.HEALTHSTONE_SPELLS) then NotLearned(sw, "Healthstone") end
     else
-        ctx.fit(ctx.toggle("healthstone", "Healthstone, if a Warlock is along", true))
-        ctx.row()
+        ctx.fit(ctx.toggle("healthstone", "Healthstone in dungeons, if a Warlock is along", true, nil,
+            "In a dungeon or raid with a Warlock in your group, reminds you to ask for a Healthstone."))
     end
+    ctx.row()
     ctx.text("Stat food for")
     local focusKeys = { false }
     for _, k in ipairs(self.STAT_KEYS) do focusKeys[#focusKeys + 1] = k end
     local function focusLabel(k)
         if not k then
             local prio, role = TO:AutoStatPriority()
-            local who = role and TO.ROLE_LABELS[role] or "Auto"
+            local who = role and TO.ROLE_LABELS[role] or "Automatic"
             return who .. ": " .. TO.STAT_LABELS[prio[1]]
         end
         return TO.STAT_LABELS[k] .. " (your pick)"
     end
-    local focus = Dropdown(c, PICK_X, ctx.y - 1, PICK_W, focusKeys, focusLabel,
+    local focus = ctx.track(Dropdown(c, PICK_X, ctx.y - 1, PICK_W, focusKeys, focusLabel,
         function() return TO.char.statFocus or false end,
         function(k)
             TO:SetStatFocus(k or nil)
             TO:UpdateAutoItems()
             local row = autoRows.statfood
             if row then row.sw.label:SetText(slotText(row.slot)) end
-        end)
+        end), true)
     focus.menuTitle = "Stat food"
     focus.menuLabels = setmetatable({}, { __index = function(_, k)
         return k and TO.STAT_LABELS[k] or ("Automatic (" .. focusLabel(nil) .. ")")
@@ -561,7 +673,7 @@ local function BuildSuppliesTab(self, ctx, class)
 
     -- Mage conjures
     if class == "MAGE" then
-        ctx.card("Conjured food and water", "Min")
+        ctx.card("Conjured food, water and mana gem", "Min")
         for _, cj in ipairs(self.CONJURES) do
             local id = "conjure:" .. cj.key
             local sw = ctx.fit(ctx.toggle(id, cj.label, true))
@@ -571,7 +683,8 @@ local function BuildSuppliesTab(self, ctx, class)
         end
         local gem
         for _, g in ipairs(self.MANA_GEMS) do if self:Knows(g.spell) then gem = g break end end
-        local sw = ctx.fit(ctx.toggle("conjure:gem", gem and ("Mana gem: " .. gem.item) or "Mana gem", true))
+        local sw = ctx.fit(ctx.toggle("conjure:gem", gem and ("Mana gem: " .. gem.item) or "Mana gem", true, nil,
+            "Reminds you when you have no mana gem."))
         if not gem then NotLearned(sw, "Mana gem") end
         ctx.row()
         ctx.note("Click to conjure your best rank.")
@@ -586,35 +699,43 @@ local function BuildSuppliesTab(self, ctx, class)
     for _, item in ipairs(self.char.custom) do
         local name = item.name
         ctx.fit(ctx.toggle("custom:" .. name:lower(), name, true), COMBAT_X)
-        local inCombat = Toggle(c, "", COMBAT_X, ctx.y - 4, function() return item.combat and true or false end,
-            function(v) item.combat = v or nil TO:RequestUpdate() end)
-        T.Tooltip(inCombat, "In combat", "Keep it on the combat bar, with potions and your Healthstone, "
+        local inCombat = ctx.track(Toggle(c, "", COMBAT_X, ctx.y - 4, function() return item.combat and true or false end,
+            function(v) item.combat = v or nil TO:RequestUpdate() end), true)
+        T.Tooltip(inCombat, "On the combat bar", "Keep it on the combat bar, with your potions and Healthstone, "
             .. "while the reminders hide in combat.")
-        ctx.minBox(item.min, function(n) item.min = n end)
-        local x = Button(c, "X", 20, X_X, ctx.y - 2, function()
+        ctx.minBox(function() return item.min end, function(n) item.min = n end)
+        local x = ctx.track(Button(c, "X", 20, X_X, ctx.y - 2, function()
             TO:RemoveCustom(name)
             TO:ShowOptionsTab("supplies")
-        end, 20)
-        T.Tooltip(x, "Remove")
+        end, 20), true)
+        T.Tooltip(x, "Remove", "Stop checking " .. name .. ".")
         ctx.row()
     end
+    -- Adding one: name, Min, then Enter or +
     ctx.text("Item", PAD)
-    local nameBox = EditBox(c, MIN_X - 8 - (PAD + 38), PAD + 38, ctx.y - 1, "", false)
-    local minEdit = EditBox(c, MIN_W, MIN_X, ctx.y - 1, "20", true)
-    ctx.row()
-    Button(c, "Add", 90, PAD + 38, ctx.y - 1, function()
+    local nameBox, minEdit
+    local function add()
         if TO:AddCustom(nameBox:GetText(), minEdit:GetText()) then
             TO:ShowOptionsTab("supplies")
         else
-            TO.Print("type an item name and a number first.")
+            TO.Print("type an item's name and a Min of 1 or more first.")
         end
-    end)
+    end
+    nameBox = ctx.track(EditBox(c, MIN_X - 8 - (PAD + 38), PAD + 38, ctx.y - 1, "", false, nil, add), true)
+    T.Tooltip(nameBox, "Item to add", "Its exact name, like Major Healing Potion. Then press Enter or +.")
+    minEdit = ctx.track(EditBox(c, MIN_W, MIN_X, ctx.y - 1, "20", true, nil, add), true)
+    T.Tooltip(minEdit, "Min", "You're reminded when you have fewer than this.")
+    local plus = ctx.track(Button(c, "+", 20, X_X, ctx.y - 2, add, 20), true)
+    T.Tooltip(plus, "Add", "Add this item to your list.")
     ctx.row()
-    ctx.charCheck("Always show these, as a quick-use bar", "customAlways", PAD,
-        "Show your food, water, potions and items even when you have enough, dimmed, so you can click to use them. "
+    ctx.note("Anything else you want to keep stocked. Click an item's icon to use it.")
+
+    ctx.card("Quick-use bar")
+    ctx.charCheck("Always show food, water, potions and your own items", "customAlways", PAD,
+        "Show them even when you have enough, dimmed, so you can click to use them. "
         .. "Low ones are bright with a red count.")
     ctx.row()
-    ctx.note("Anything else you want to keep stocked. Exact item name.")
+    ctx.note("Off: they only show when you're low.")
 
     local reagents = self.CLASS_REAGENTS[class] or {}
     local showAmmo = self.AMMO_CLASSES[class] or class == "WARRIOR" or class == "ROGUE"
@@ -628,7 +749,8 @@ local function BuildSuppliesTab(self, ctx, class)
             ctx.row()
         end
         if showAmmo then
-            ctx.fit(ctx.toggle("ammo", "Ammo", self.AMMO_CLASSES[class] == true))
+            ctx.fit(ctx.toggle("ammo", "Ammo", self.AMMO_CLASSES[class] == true, nil,
+                "Counts the ammo you have equipped."))
             ctx.reagentMin("ammo", self.AMMO_DEFAULT_MIN)
             ctx.row()
         end
@@ -637,7 +759,7 @@ local function BuildSuppliesTab(self, ctx, class)
     ctx.card("At vendors and the bank")
     ctx.charCheck("Show a restock list at vendors", "restockAtVendor")
     ctx.row()
-    ctx.charCheck("Show a Repair all button", "repairAtVendor")
+    ctx.charCheck("Show the repair button at vendors", "repairAtVendor")
     ctx.row()
     ctx.charCheck("Show what to take from the bank", "bankRestock")
     ctx.row()
@@ -656,14 +778,16 @@ local function BuildMoreTab(self, ctx, class)
             local sw = ctx.toggle("pet:summon", "Pet is out and alive", true)
             if not self:Knows(self.PET_SPELLS.call) then NotLearned(sw, "Pet is out and alive") end
             ctx.row()
-            ctx.toggle("pet:happy", "Pet is happy", true)
+            ctx.toggle("pet:happy", "Pet is happy", true, nil,
+                "Reminds you when your pet is content or unhappy. Click to feed it.")
             ctx.row()
-            local food = ctx.toggle("pet:food", "Pet food", true)
-            food.label:SetWidth(90)
-            EditBox(c, MIN_X - 8 - 150, 150, ctx.y - 1, self.char.petFood or "", false, function(text)
-                TO.char.petFood = strtrim and strtrim(text) or text
-                TO:RequestUpdate()
-            end)
+            ctx.fit(ctx.toggle("pet:food", "Pet food", true), PICK_X)
+            local box = ctx.track(EditBox(c, MIN_X - 8 - PICK_X, PICK_X, ctx.y - 1, self.char.petFood or "", false,
+                function(text)
+                    TO.char.petFood = strtrim and strtrim(text) or text
+                    TO:RequestUpdate()
+                end), true)
+            T.Tooltip(box, "Pet food", "Your pet's food, like Roasted Quail. Part of the name is enough.")
             ctx.reagentMin("pet:food", self.PET_FOOD_DEFAULT_MIN)
             ctx.row()
             ctx.note("Type your pet's food, like Roasted Quail. Then one click feeds your pet, "
@@ -674,32 +798,39 @@ local function BuildMoreTab(self, ctx, class)
             if #known == 0 then
                 NotLearned(sw, "Demon is out")
             elseif #known > 1 then
+                ctx.fit(sw, PICK_X)
                 ctx.spellPick(known, function() return TO:PetSummonSpell() end,
                     function(v) TO.char.prefs.pet = v TO:RequestUpdate() end)
             end
             ctx.row()
         end
-        ctx.note("Not shown while mounted or resting in a town or inn.")
+        ctx.note("Not shown while you're mounted. The reminder to call or summon your pet also waits "
+            .. "while you're resting in a town or inn.")
     end
 
     if class == "WARLOCK" then
         ctx.card("Soulstone")
-        local sw = ctx.toggle("soulstone", "Someone in the group has one", true)
-        if not self:FirstKnown(self.SOULSTONE_SPELLS) then NotLearned(sw, "Someone in the group has one") end
+        local function stoneOn() return TO:IsEnabled("soulstone", true, TO:EditingOutside()) end
+        local sw = ctx.toggle("soulstone", "When nobody in your group has one", true, nil,
+            "In a group, reminds you when nobody has a Soulstone on them.")
+        if not self:FirstKnown(self.SOULSTONE_SPELLS) then NotLearned(sw, "When nobody in your group has one") end
         ctx.row()
-        ctx.charCheck("Only in dungeons and raids", "soulstoneInstanceOnly", SUB)
+        ctx.charCheck("Only in dungeons and raids", "soulstoneInstanceOnly", SUB, nil, stoneOn)
         ctx.row()
-        ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB)
+        ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB,
+            "In a raid, look at everyone, not just your own group.", stoneOn)
         ctx.row()
         ctx.note("Click to put your Soulstone on the healer (or your friendly target), or to make one.")
     end
 
-    ctx.card("Gear and bags", "Min")
-    ctx.fit(ctx.toggle("durability", "Low durability", true), 350)
-    Label(c, "|cff808080set % on the Display tab|r", 350, ctx.y - 7, "GameFontHighlightSmall")
+    ctx.card("Gear & bags", "Min")
+    ctx.fit(ctx.toggle("durability", "Low durability", true))
     ctx.row()
-    ctx.fit(ctx.toggle("bags", "Free bag slots", true))
-    ctx.reagentMin("bags", self.BAGS_DEFAULT_MIN)
+    ctx.note(("Warns when your most worn item is below %d%%. Change it on the Display tab (for all your characters).")
+        :format(TO.db.durabilityPct))
+    ctx.fit(ctx.toggle("bags", "Low bag space", true))
+    ctx.reagentMin("bags", self.BAGS_DEFAULT_MIN,
+        "You're warned when you have fewer free bag slots than this. 0 turns the warning off.")
     ctx.row()
 end
 
@@ -733,8 +864,9 @@ local function BuildProfilesTab(self, ctx)
         end)
     ctx.row()
     ctx.note("Turn this on to have a lighter set of checks while questing. The Buffs, Supplies and "
-        .. MoreTab()[1] .. " tabs then have an \"Editing\" choice at the top: turn checks on and off for dungeons and raids, or for "
-        .. "everywhere else. Anything you don't change outside follows the dungeon setting.")
+        .. MoreTab()[1] .. " tabs then have an \"Editing\" choice at the top: turn checks on and off for dungeons "
+        .. "and raids, or for everywhere else. Anything you don't change outside follows the dungeon setting. "
+        .. "Only the on/off checks are separate; Min counts and other choices are shared.")
 
     ctx.card("Copy another character")
     local others = self:OtherCharacters()
@@ -778,52 +910,62 @@ local LIST_BUILDERS = { buffs = BuildBuffsTab, supplies = BuildSuppliesTab, more
 ---------------------------------------------------------------------------
 local function BuildDisplayTab(p)
     local rem = Card(p, "Reminders", 0, 0, PAGE_W, 150)
-    Setting(rem, "Show reminders", 12, -30, "shown")
+    Setting(rem, "Show reminders", 12, -30, "shown", "Also with /topoff show and /topoff hide, or a right-click "
+        .. "on the minimap button.")
     Setting(rem, "Lock position", 12, -56, "locked", "Unlock to drag the reminders by the ToppedOff header above them.")
     Setting(rem, "Show header and frame", 12, -82, "showHeader",
-        "The ToppedOff frame around the icons. It always shows while unlocked, so you can drag it by the header.")
-    Setting(rem, "Only in dungeons and raids", 284, -30, "onlyInInstance")
+        "The ToppedOff header and frame around the icons once they're locked. While unlocked they always show, "
+        .. "so you can drag them: lock the position to choose.", function() return TO.db.locked end)
+    Setting(rem, "Show only in instances", 284, -30, "onlyInInstance",
+        "Dungeons, raids and battlegrounds. Elsewhere the reminders and the combat bar stay hidden.")
     Setting(rem, "Hide in combat", 284, -56, "hideInCombat",
         "Reminders can only change out of combat, so hiding them in combat keeps things tidy.")
     Setting(rem, "Keep potions in combat", 308, -82, "combatBar",
-        "While the reminders are hidden in combat, your healing and mana potions, Healthstone and bandage stay on screen in one row, with live counts and cooldowns.")
+        "While the reminders are hidden in combat, your potions, mana gem, Healthstone, bandage and the items you "
+        .. "mark Combat (Supplies tab) stay on screen in one row, with live counts and cooldowns. "
+        .. "Needs Hide in combat on.", function() return TO.db.hideInCombat end)
     local reset = FlatButton(rem, "Reset position", 130)
     reset:SetPoint("TOPLEFT", 12, -114)
     reset:SetScript("OnClick", function() SlashCmdList.TOPPEDOFFFOREVER("reset") end)
     T.Note(rem, "Position changes wait until combat ends.", 154, -119)
 
     local size = Card(p, "Size", 0, -160, PAGE_W, 80)
-    Slider(size, "Icon size", 12, -30, "iconSize", 20, 64)
-    Slider(size, "Icons per row", 284, -30, "iconsPerRow", 4, 16)
-
+    Slider(size, "Icon size", 12, -30, "iconSize", 20, 64, nil, "How big the reminder icons are.")
+    Slider(size, "Icons per row", 284, -30, "iconsPerRow", 4, 16, nil,
+        "Buffs, and things to top off, each wrap onto a new row after this many.")
     local warn = Card(p, "Warnings", 0, -250, PAGE_W, 80)
-    Slider(warn, "Warn before buffs run out", 12, -30, "warnMinutes", 1, 10, " min")
-    Slider(warn, "Durability warning below", 284, -30, "durabilityPct", 5, 75, "%")
+    Slider(warn, "Warn before buffs run out", 12, -30, "warnMinutes", 1, 10, " min",
+        "Buffs, weapon enhancements, elixirs, Well Fed and party buffs get an orange border this long before "
+        .. "they run out, and a red one near the end.")
+    Slider(warn, "Durability warning below", 284, -30, "durabilityPct", 5, 75, "%",
+        "You're warned when your most worn item drops below this.")
 end
 
 local function BuildGeneralTab(p)
     local chat = Card(p, "Chat reminders", 0, 0, PAGE_W, 110)
     Setting(chat, "On ready check", 12, -30, "readyCheck", "Lists anything missing in chat when a ready check starts.")
-    Setting(chat, "On entering a dungeon or raid", 12, -56, "instanceReminder")
-    Setting(chat, "Play a sound with chat reminders", 12, -82, "sound")
+    Setting(chat, "On entering a dungeon or raid", 12, -56, "instanceReminder",
+        "Lists anything missing in chat a few seconds after you enter a dungeon, raid or battleground.")
+    Setting(chat, "Play a sound with chat reminders", 12, -82, "sound", "A raid warning sound with each chat reminder.")
 
     local other = Card(p, "Other", 0, -120, PAGE_W, 88)
-    Setting(other, "Show minimap icon", 12, -30, "minimap")
-    local check = FlatButton(other, "Check spells", 130)
+    Setting(other, "Show minimap icon", 12, -30, "minimap",
+        "Left-click it for these options, right-click to show or hide the reminders.")
+    local check = FlatButton(other, "List my checks", 130)
     check:SetPoint("TOPLEFT", 12, -54)
     check:SetScript("OnClick", function() TO:Check() end)
-    T.Note(other, "Lists this character's checks in chat.", 154, -59)
+    T.Note(other, "Lists this character's checks in chat, and whether each was found.", 154, -59)
 
     local cmds = Card(p, "Commands", 0, -218, PAGE_W, 167)
     local lines = {
-        "|cff8fd3ff/topoff|r  open or close these options",
-        "|cff8fd3ff/topoff toggle|r  show or hide the reminders",
-        "|cff8fd3ff/topoff lock|r / |cff8fd3ff/topoff unlock|r  lock or unlock the reminders",
-        "|cff8fd3ff/topoff check|r  list what's checked for your class",
-        "|cff8fd3ff/topoff add 20 Item Name|r  keep an item stocked",
-        "|cff8fd3ff/topoff remove Item Name|r  stop checking it",
-        "|cff8fd3ff/topoff unhide|r  bring back reminders you hid (Shift + right-click)",
-        "|cff8fd3ff/topoff reset|r  reset the reminders' position",
+        "|cffe8a040/topoff|r  open or close these options",
+        "|cffe8a040/topoff toggle|r  show or hide the reminders",
+        "|cffe8a040/topoff lock|r / |cffe8a040/topoff unlock|r  lock or unlock the reminders",
+        "|cffe8a040/topoff check|r  list what's checked for your class",
+        "|cffe8a040/topoff add 20 Item Name|r  keep an item stocked",
+        "|cffe8a040/topoff remove Item Name|r  stop checking it",
+        "|cffe8a040/topoff unhide|r  bring back reminders you hid (Shift + right-click)",
+        "|cffe8a040/topoff reset|r  reset the reminders' position",
     }
     for i, l in ipairs(lines) do
         local fs = Text(cmds, l, "GameFontHighlightSmall")
@@ -854,11 +996,14 @@ function TO:BuildChecksList()
             function() return TO.editOutside and true or false end,
             function(v)
                 TO.editOutside = v
-                for _, sw in ipairs(c.toggles) do sw.refresh() end
-            end)
+                TO:BuildChecksList()
+            end, "Which set of on/off checks this page shows and changes.")
         ctx.row()
+        ctx.note("Only the on/off checks are separate. Greyed-out settings are shared by both; "
+            .. "change them while editing dungeons and raids.")
     end
     LIST_BUILDERS[tab](self, ctx, self:PlayerClass())
+    c.applyStates()
     scroll:SetContent(LIST_W, ctx.finish(), scroll.shown == tab)
     scroll.shown = tab
 end
@@ -870,15 +1015,22 @@ function TO:ShowOptionsTab(key)
     win:ShowTab(key)
 end
 
--- The Supplies tab names the items the slots follow. When they change while it's
--- showing, draw it again; not while you're typing in one of its boxes (returns false,
--- and it's tried again at the next update).
-function TO:RefreshSupplies()
-    if not (self.config and self.config:IsShown() and self.optionsTab == "supplies") then return true end
+-- The Supplies tab names the items the slots follow, and the Buffs tab lists the elixirs
+-- in your bags. When they change while one is showing, draw it again; not while you're
+-- typing in one of its boxes (returns false, and it's tried again at the next update).
+function TO:RefreshLists()
+    local tab = self.optionsTab
+    if not (self.config and self.config:IsShown() and (tab == "supplies" or tab == "buffs")) then return true end
     local focus = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
     if focus then return false end
     self:BuildChecksList()
     return true
+end
+
+-- A display setting changed outside the window (a slash command, the header menu, the
+-- minimap button): the open window shows it
+function TO:RefreshSettings()
+    if self.config and self.config:IsShown() then RunRefreshers() end
 end
 
 function TO:RefreshConfig()
@@ -919,7 +1071,7 @@ function TO:BuildConfig()
     self.config = T.Window({
         name = "ToppedOffForeverOptions",
         tabs = tabs,
-        hint = "/topoff to open  -  /topoff check to list your checks",
+        hint = "Shift + right-click a reminder to hide it for 10 minutes  -  /topoff unhide brings it back",
         version = function()
             local get = C_AddOns and C_AddOns.GetAddOnMetadata
             local v = get and get(ADDON, "Version")

@@ -1,3 +1,20 @@
+## 1.10.0
+
+A going-over of the options window: everything shows what's really saved, and settings that do nothing right now say so.
+
+- **Greyed out when it does nothing**: "Show header and frame" until the position is locked (while unlocked the frame always shows), "Keep potions in combat" until Hide in combat is on, and settings under a check that's off, like "Only in dungeons and raids" under Well Fed, or the party settings when no party buff is checked.
+- **Separate checks outside dungeons**: while you edit the outside set, the settings both sets share (Min counts, choices, the switches that aren't checks) are greyed out, and the page says why.
+- The Lock and Show reminders switches follow `/topoff lock`, `/topoff hide`, the header menu and the minimap button while the window is open.
+- A Min box you leave empty (or with something that isn't a number) shows your saved Min again instead of what you typed. 0 now works on every Min: no reminder for that one.
+- **Paladin aura**: the list has **Automatic** (the aura for your role) again after you've picked one.
+- **Your own items**: type a name and press Enter (or the new **+** button) to add it.
+- The settings that apply to every party buff, blessing or elixir sit under a small "For every ..." line, instead of under the last row.
+- **Quick-use bar** has its own card on the Supplies tab: it covers food, water and potions as well as your own items.
+- Clearer names: "Show only in instances" (Display), "Healthstone in dungeons, if a Warlock is along", "Low bag space", "List my checks", and the Soulstone check. The Gear & bags tab says what the durability warning is set to.
+- More tooltips: what Min means, the party and Soulstone settings, the sliders, the weapon and pet food boxes, the chat reminders and the minimap icon. The combat bar's tooltip lists everything that's on it.
+- Clicking a setting's name works like clicking its switch.
+- A new elixir in your bags shows on the open Buffs tab.
+
 ## 1.9.2
 
 - The shared look, updated with BattleText Forever: slider names in the options are white like the other settings.

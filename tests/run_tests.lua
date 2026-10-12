@@ -1805,22 +1805,23 @@ local function hover(kind, text)   -- every tooltip of the visible widgets with 
     return table.concat(found, " || "), shown
 end
 TO:ShowOptionsTab("supplies")
-local tipText, tipShown = hover("switch", "Always show these")
-assertEq(tipText:find("Always show these, as a quick-use bar / Show your food, water, potions and items ", 1, true), 1, "switch: title, then the tip")
+local tipText, tipShown = hover("switch", "Always show food")
+assertEq(tipText:find("Always show food, water, potions and your own items / Show them even when you have enough", 1, true), 1, "switch: title, then the tip")
 assert(tipText:find("%[111 wrap%]$"), "the tip is white and wraps")
 assertEq(tipShown, true, "and the tooltip is shown")
 assertEq(hover("switch", "Healing Potion"), "", "a switch without a tip has no tooltip")
-assertEq(hover("button", "X"), "Remove", "the X says what it does")
+assertEq(hover("button", "X"), "Remove / Stop checking Healing Potion. [111 wrap]", "the X says what it does")
+assertEq(hover("button", "+"), "Add / Add this item to your list. [111 wrap]", "and so does the +")
+assertEq(hover("box", "20"):find("Min / You're reminded when you have fewer than this", 1, true) ~= nil, true, "Min boxes say what Min means")
 assertEq(hover("choice", ": "):find("Stat food / Automatic picks food for your role, and falls back to any stat food. Pick a stat", 1, true), 1,
     "stat food choice: title and explanation")
-assertEq(hover("button", "Add"), "", "plain buttons have none")
 for _, w in ipairs(listWidgets()) do
     if kindOf(w) == "button" and w:IsVisible() then
-        assertEq(table.concat(w.__size, "x"), shownText(w) == "X" and "20x20" or "90x22", shownText(w) .. " button size")
+        assertEq(table.concat(w.__size, "x"), "20x20", shownText(w) .. " button size")
     end
 end
--- Hovering a button lights it up, with or without a tooltip, and leaving puts it back
-for _, name in ipairs({ "Add", "X" }) do
+-- Hovering a button lights it up, and leaving puts it back
+for _, name in ipairs({ "+", "X" }) do
     for _, w in ipairs(listWidgets()) do
         if kindOf(w) == "button" and w:IsVisible() and shownText(w) == name then
             w.__scripts.OnEnter(w)
@@ -1859,7 +1860,7 @@ for _, w in ipairs(listWidgets()) do
     if w.__kind == "Texture" and w:IsVisible() and w.__pos and w.__pos[2] == 0 and w.__width then firstCard = w end
 end
 assertEq(firstCard and firstCard.__height, 28 + 3 * 26 + 6, "a card wraps its rows")
-assertEq(hover("choice", "Blessing of Might"):find("Click to choose which spell to cast || Blessing to give Warriors in your party [111 wrap] || Blessing to give ", 1, true), 1,
+assertEq(hover("choice", "Blessing of Might"):find("Spell to cast / Click to choose which spell the reminder casts. [111 wrap] || Blessing to give Warriors in your party [111 wrap] || Blessing to give ", 1, true), 1,
     "a spell choice, then the blessing choices, which show only their tip")
 rawset(GameTooltip, "AddLine", nil)
 TO:RemoveCustom("Healing Potion"); TO:OpenConfig()
@@ -2268,4 +2269,97 @@ TO.char.checks = {}; STATE.buffs = {}; refresh()
 assertEq(ids()["buff:intellect"].action.spell, "DE Arcane Intellect", "the check works in that language")
 STATE.buffs = { ["DE Arcane Intellect"] = 1800 }; refresh()
 assertEq(ids()["buff:intellect"], nil, "and sees the buff")
+
+step("options: greyed out when they'd do nothing, and always showing what's saved")
+-- (English names again for the rest)
+STATE.locale = nil
+for _, list in pairs(TO.nameRefs) do for _, ref in ipairs(list) do ref[1][ref[2]] = ref[3] end end
+if not TO.config:IsShown() then TO:OpenConfig() end
+TO:ShowOptionsTab("display")
+TO.db.locked, TO.db.hideInCombat = false, true; TO:OpenConfig(); TO:OpenConfig()
+local frameSw, potionsSw = switch("Show header and frame"), switch("Keep potions in combat")
+assertEq(frameSw.disabled, true, "header and frame: greyed out while unlocked (it always shows then)")
+local before = TO.db.showHeader
+click(frameSw)
+assertEq(TO.db.showHeader, before, "and a click does nothing")
+click(switch("Lock position"))
+assertEq(TO.db.locked and frameSw.disabled, false, "locking makes it a real choice")
+assertEq(potionsSw.disabled, false, "potions in combat: on while reminders hide in combat")
+click(switch("Hide in combat"))
+assertEq(potionsSw.disabled, true, "greyed out once they don't hide")
+click(switch("Hide in combat"))
+SlashCmdList.TOPPEDOFFFOREVER("unlock")
+assertEq(switch("Lock position"):IsOn(), false, "/topoff unlock with the window open: the switch follows")
+SlashCmdList.TOPPEDOFFFOREVER("hide")
+assertEq(switch("Show reminders"):IsOn(), false, "and /topoff hide")
+SlashCmdList.TOPPEDOFFFOREVER("show")
+-- Min boxes put the saved number back when what's typed can't be used
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Power Word: Fortitude", "Prayer of Fortitude", "Divine Spirit"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.mins = {}, {}
+TO:ShowOptionsTab("supplies")
+local candleBox
+for _, w in ipairs(listWidgets()) do
+    if w.__kind == "EditBox" and w:IsVisible() and w.__text == "10" and w.__pos[1] > 400 then candleBox = w end
+end
+assert(candleBox, "the candles' Min box")
+candleBox:SetText(""); candleBox.__scripts.OnEditFocusLost(candleBox)
+assertEq(candleBox.__text, "10", "an empty box shows the saved Min again")
+candleBox:SetText("007"); candleBox.__scripts.OnEditFocusLost(candleBox)
+assertEq(TO.char.mins["reagent:candle"] .. " " .. candleBox.__text, "7 7", "a new Min is saved and shown as saved")
+candleBox:SetText("0"); candleBox.__scripts.OnEditFocusLost(candleBox)
+assertEq(TO.char.mins["reagent:candle"], 0, "0 is allowed (no reminder)")
+TO.char.mins = {}
+-- Enter in the item box adds it
+TO:ShowOptionsTab("supplies")
+local nameBox
+for _, w in ipairs(listWidgets()) do
+    if w.__kind == "EditBox" and w:IsVisible() and w.__text == "" and w.__pos[1] < 100 then nameBox = w end
+end
+nameBox:SetText("Major Healing Potion"); nameBox.__scripts.OnEnterPressed(nameBox)
+assertEq(TO.char.custom[#TO.char.custom].name, "Major Healing Potion", "Enter in the item box adds it")
+TO:RemoveCustom("Major Healing Potion")
+-- Party settings grey out when no party buff is checked
+TO:ShowOptionsTab("buffs")
+local expSw = switch("Also when it's running out")
+assertEq(expSw.disabled, false, "party settings on while a party buff is checked")
+click(switch("Power Word: Fortitude on your party")); click(switch("Divine Spirit on your party"))
+assertEq(expSw.disabled, true, "greyed out with none checked")
+click(switch("Power Word: Fortitude on your party"))
+assertEq(expSw.disabled, false, "back when one is")
+TO.char.checks = {}
+-- A switch put back to its default isn't saved
+TO:ShowOptionsTab("buffs")
+click(switch("Inner Fire")); click(switch("Inner Fire"))
+assertEq(TO.char.checks["buff:innerfire"], nil, "off and on again: nothing saved, the default applies")
+-- Editing the checks for outside dungeons: what's shared is greyed out
+TO.char.splitProfiles = true; TO.editOutside = true
+TO:ShowOptionsTab("buffs")
+assertEq(switch("Inner Fire").disabled, false, "outside: the on/off checks can be changed")
+assertEq(switch("Only in dungeons and raids").disabled, true, "shared settings are greyed out")
+click(switch("Inner Fire"))
+assertEq(TO.char.checksOutside["buff:innerfire"], false, "and an outside check is saved as outside")
+TO.char.splitProfiles, TO.editOutside, TO.char.checksOutside = false, false, {}
+-- Paladin aura: Automatic is a choice of its own
+STATE.class = "PALADIN"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Devotion Aura", "Retribution Aura"); fire("SPELLS_CHANGED")
+STATE.talents = { { "Holy", 0 }, { "Protection", 31 }, { "Retribution", 0 } }
+TO.char.prefs = {}
+TO:ShowOptionsTab("buffs")
+local auraBox
+for _, w in ipairs(listWidgets()) do if kindOf(w) == "choice" and w:IsVisible() and (w.__text or ""):find("Aura") then auraBox = w end end
+assertEq(auraBox.__text, "Automatic: Devotion Aura", "Automatic shows what it picks")
+auraBox.Choose("Retribution Aura")
+assertEq(TO.char.prefs.aura, "Retribution Aura", "a pick is saved")
+auraBox.Choose(false)
+assertEq(TO.char.prefs.aura, nil, "and Automatic clears it again")
+STATE.talents = nil
+-- A new elixir in your bags shows on the open Buffs tab
+STATE.bags = {}; refresh()
+TO:ShowOptionsTab("buffs")
+STATE.bags = { { id = 941, name = "Elixir of Fortitude", count = 1 } }
+refresh()
+assert(switch("Elixir of Fortitude"), "a new elixir shows in the open window")
+STATE.bags = {}
+TO:OpenConfig()
 print("ALL TESTS PASSED")

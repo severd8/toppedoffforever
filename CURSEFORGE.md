@@ -43,11 +43,11 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 | Tab | What's there |
 |---|---|
 | **Buffs** | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, Well-Rested (while you carry the sleeping bag), elixirs and flasks |
-| **Supplies** | The best food, water, bandage and potions in your bags, Healthstone, stat food choice, conjured food and water (Mages), your own items (and which go on the combat bar), reagents and ammo, vendor restock, repair and the bank list |
+| **Supplies** | The best food, water, bandage and potions in your bags, Healthstone, stat food choice, conjured food, water and mana gem (Mages), your own items (and which go on the combat bar), the quick-use bar, reagents and ammo, vendor restock, repair and the bank list |
 | **Pet & gear** (Hunters and Warlocks), **Gear & bags** (everyone else) | Pet, Soulstone (Warlocks), durability and bag space |
 | **Profiles** | Separate checks outside dungeons, copy another character |
-| **Display** | Show reminders, lock, show header and frame, only in dungeons and raids, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |
-| **General** | Chat reminders and sound, minimap icon, Check spells, the slash commands |
+| **Display** | Show reminders, lock, show header and frame, show only in instances, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |
+| **General** | Chat reminders and sound, minimap icon, List my checks, the slash commands |
 
 The first four tabs are saved per character. Display and General are shared by all your characters.
 
