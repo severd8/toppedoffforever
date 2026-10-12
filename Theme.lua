@@ -1,7 +1,8 @@
 -- The shared look of severd8's WoW: Forever addons: flat dark panels, gold text,
 -- red accents, the logo header bar, and the settings window with tabs down the
--- left. This same file ships in TauntMaster Forever, ToppedOff Forever and
--- Outfitter Forever. Change it in one, then copy it to the others.
+-- left. This same file ships in TauntMaster Forever, ToppedOff Forever,
+-- Outfitter Forever and BattleText Forever. Change it in one, then copy it to
+-- the others.
 
 local ADDON, ns = ...
 local T = {}
@@ -12,6 +13,7 @@ local BRANDS = {
     TauntMasterForever = { name = "TauntMaster Forever", short = "TauntMaster", logo = "Media\\logo" },
     ToppedOffForever   = { name = "ToppedOff Forever",   short = "ToppedOff",   logo = "Media\\Icon" },
     OutfitterForever   = { name = "Outfitter Forever",   short = "Outfitter",   logo = "Textures\\Logo" },
+    BattleTextForever  = { name = "BattleText Forever",  short = "BattleText",  logo = "Media\\Icon" },
 }
 local brand = BRANDS[ADDON] or { name = tostring(ADDON), short = tostring(ADDON), logo = "" }
 T.NAME = brand.name     -- window titles, chat, tooltips
@@ -216,12 +218,33 @@ function T.Note(parent, text, x, y, width)
 end
 
 function T.RowLabel(parent, text, x, y)
-    local fs = Text(parent, text, "GameFontHighlight", C.muted)
+    local fs = Text(parent, text, "GameFontHighlight")
     fs:SetPoint("TOPLEFT", x, y - 4)
     return fs
 end
 
+-- Greys a control out (and back): b:SetDisabled(true). Widgets that take clicks
+-- check b.disabled; the tooltip still shows, to say why.
+local DISABLED_ALPHA = 0.4
+local function Disabler(widget, parts)
+    function widget:SetDisabled(off)
+        self.disabled = off and true or false
+        local a = self.disabled and DISABLED_ALPHA or 1
+        for _, part in ipairs(parts) do part:SetAlpha(a) end
+    end
+end
+T.Disabler = Disabler
+
+-- Makes the text beside a control part of it: hovering or clicking the text
+-- is the same as the control (its click area stretches over the text)
+function T.ClickableLabel(widget, label, gap)
+    local w = label.GetStringWidth and label:GetStringWidth()
+    w = type(w) == "number" and w or 0
+    widget:SetHitRectInsets(0, -((gap or 8) + math.ceil(w)), -4, -4)
+end
+
 -- A switch with its label to the right. Returns the switch and the label.
+-- Clicking or hovering the label works like the switch.
 function T.LabeledSwitch(parent, text, x, y, labelWidth)
     local b = T.SwitchWidget(parent)
     b:SetPoint("TOPLEFT", x, y)
@@ -229,11 +252,14 @@ function T.LabeledSwitch(parent, text, x, y, labelWidth)
     label:SetPoint("TOPLEFT", b, "TOPRIGHT", 8, 1)
     if labelWidth then label:SetWidth(labelWidth); label:SetWordWrap(true) end
     b.label = label
+    T.ClickableLabel(b, label)
+    Disabler(b, { b, label })
     return b, label
 end
 
 -- Dropdown: shows the current choice; click for a menu of the choices (or step
 -- to the next one where the game has no menus). labels[key] is the text shown.
+-- Set b.menuScroll to a height to make a long menu scroll.
 function T.Dropdown(parent, width, keys, labels, getter, setter)
     local b = CreateFrame("Button", nil, parent)
     b:SetSize(width, 22)
@@ -252,10 +278,13 @@ function T.Dropdown(parent, width, keys, labels, getter, setter)
     end
     local function refresh() b:SetText(label(b.getter())) end
     local function choose(k) b.setter(k); refresh() end
+    Disabler(b, { b })
     b:SetScript("OnClick", function(self)
+        if self.disabled then return end
         if MenuUtil and MenuUtil.CreateContextMenu then
             MenuUtil.CreateContextMenu(self, function(_, root)
                 if self.menuTitle then root:CreateTitle(self.menuTitle) end
+                if self.menuScroll and root.SetScrollMode then root:SetScrollMode(self.menuScroll) end
                 for _, k in ipairs(self.keys) do
                     root:CreateRadio(self.menuLabels and self.menuLabels[k] or label(k),
                         function() return self.getter() == k end, function() choose(k) end)
@@ -276,9 +305,14 @@ end
 
 -- Flat slider: label on the left, value on the right, thin track with a gold
 -- knob. get() reads the setting, set(v) saves it; s.Refresh() repaints it.
-function T.Slider(parent, text, x, y, width, get, set, min, max, suffix, step, fmt)
+-- zeroText: what the value reads at 0 ("Off"), when 0 means the setting does nothing.
+function T.Slider(parent, text, x, y, width, get, set, min, max, suffix, step, fmt, zeroText)
     suffix, step, fmt = suffix or "", step or 1, fmt or "%d"
-    local title = Text(parent, text, "GameFontHighlight", C.muted)
+    local function show(v)
+        if zeroText and v == 0 then return zeroText end
+        return fmt:format(v) .. suffix
+    end
+    local title = Text(parent, text, "GameFontHighlight")
     title:SetPoint("TOPLEFT", x, y)
     local value = Text(parent, "", "GameFontNormal")
     value:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + width, y)
@@ -309,12 +343,19 @@ function T.Slider(parent, text, x, y, width, get, set, min, max, suffix, step, f
     s:SetScript("OnValueChanged", function(_, v)
         v = math.floor(v / step + 0.5) * step
         if step >= 1 then v = math.floor(v + 0.5) end
-        value:SetText(fmt:format(v) .. suffix)
+        value:SetText(show(v))
         if get() ~= v then set(v) end
     end)
     function s.Refresh()
         s:SetValue(get())
-        value:SetText(fmt:format(get()) .. suffix)
+        value:SetText(show(get()))
+    end
+    s.title, s.valueText = title, value
+    Disabler(s, { s, title, value })
+    local setDisabled = s.SetDisabled
+    function s:SetDisabled(off)
+        setDisabled(self, off)
+        self:EnableMouse(not off)
     end
     return s
 end

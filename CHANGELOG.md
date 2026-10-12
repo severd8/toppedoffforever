@@ -1,3 +1,7 @@
+## 1.9.2
+
+- The shared look, updated with BattleText Forever: slider names in the options are white like the other settings.
+
 ## 1.9.1
 
 - **Hiding a reminder is now Shift + right-click.** In 1.9.0 a plain right-click hid it, so right-clicking your water or a potion to use it (as you would in your bags) hid it for 10 minutes instead. A plain right-click now casts or uses, like a left-click. `/topoff unhide` still brings hidden ones back.
