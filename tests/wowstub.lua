@@ -384,6 +384,8 @@ C_Item = {
     -- STATE.gear[id] = equipLoc marks gear that isn't in your bags (it's equipped).
     GetItemInfoInstant = function(id)
         if id == 900 then return id, "Weapon", "Dagger", "INVTYPE_WEAPON", nil, 2, 15 end
+        -- STATE.weaponTypes[id] = weapon subclass (7 sword, 4 mace, ...)
+        if STATE.weaponTypes and STATE.weaponTypes[id] then return id, "Weapon", "Weapon", "INVTYPE_WEAPON", nil, 2, STATE.weaponTypes[id] end
         local e = itemById(id)
         local loc = (e and e.equipLoc) or (STATE.gear and STATE.gear[id])
         if loc then return id, "Armor", "Miscellaneous", loc, nil, 4, 0 end

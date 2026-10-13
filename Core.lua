@@ -121,6 +121,23 @@ TO.WEAPON_DEFAULTS = {
     ROGUE = { kind = "item", mh = "Instant Poison", oh = "Instant Poison" },
 }
 
+-- With no item set for a hand, any of these in your bags is used (the best rank: highest
+-- item ID). Sharpening stones only go on sharp weapons and weightstones on blunt ones
+-- (by the weapon's subclass); oils on any; poisons for Rogues only.
+TO.WEAPON_ITEMS = {
+    { text = "sharpening stone", fits = "sharp" },
+    { text = "weightstone", fits = "blunt" },
+    { text = "wizard oil", oil = true }, { text = "mana oil", oil = true },
+    { text = "shadow oil", oil = true }, { text = "frost oil", oil = true },
+    { text = "poison", rogue = true },
+}
+-- Weapon subclasses: axes, polearms, swords, daggers are sharp; maces and staves blunt;
+-- fist weapons take either
+local SHARP = { [0] = true, [1] = true, [6] = true, [7] = true, [8] = true, [15] = true, [13] = true }
+local BLUNT = { [4] = true, [5] = true, [10] = true, [13] = true }
+-- Casters reach for an oil first, everyone else for a stone (or poison)
+TO.OIL_FIRST = { MAGE = true, PRIEST = true, WARLOCK = true, DRUID = true, PALADIN = true }
+
 -- Reagents and class items. Checked only if you know one of the `requires` spells.
 -- Any item in `items` counts toward the total (e.g. both candle ranks).
 TO.CLASS_REAGENTS = {
@@ -566,6 +583,35 @@ local function HasWeapon(slot)
     return Str(equipLoc) ~= nil and WEAPON_LOCS[equipLoc] == true
 end
 
+-- The weapon enhancement in your bags for the weapon in a slot (16 main hand, 17 off
+-- hand), when you haven't set one yourself. nil when there's none.
+function TO:AutoWeaponItem(slot)
+    local weapon = Num(GetInventoryItemID("player", slot))
+    if not weapon then return nil end
+    local sub = Num(select(7, C_Item.GetItemInfoInstant(weapon)))
+    local rogue = self:PlayerClass() == "ROGUE"
+    local best, bestOil
+    for key, e in pairs(self.bag or {}) do
+        for _, w in ipairs(self.WEAPON_ITEMS) do
+            if key:find(w.text, 1, true) then
+                local ok = (w.fits == "sharp" and (sub == nil or SHARP[sub]))
+                    or (w.fits == "blunt" and (sub == nil or BLUNT[sub]))
+                    or w.oil or (w.rogue and rogue)
+                if ok then
+                    if w.oil then
+                        if not bestOil or e.id > bestOil.id then bestOil = e end
+                    elseif not best or e.id > best.id then
+                        best = e
+                    end
+                end
+                break
+            end
+        end
+    end
+    if self.OIL_FIRST[self:PlayerClass()] then return bestOil or best end
+    return best or bestOil
+end
+
 local function FormatTime(sec)
     if sec >= 60 then return math.ceil(sec / 60) .. "m" end
     return math.floor(sec) .. "s"
@@ -666,7 +712,15 @@ function TO:CheckWeapons(list)
                     end
                 else
                     local want = cfg[h.key]
-                    if want ~= "" then
+                    if want == "" then
+                        -- Nothing set: whatever stone, oil or poison you carry for this weapon
+                        local item = self:AutoWeaponItem(h.slot)
+                        if item then
+                            r.label = h.label .. ": " .. item.name
+                            r.icon = item.icon
+                            r.action = { item = item.name, slot = h.slot }
+                        end
+                    else
                         local item = self:FindBagItem(want)
                         r.label = h.label .. ": " .. (item and item.name or want)
                         if item then
@@ -2904,7 +2958,9 @@ function TO:Check()
         for _, key in ipairs({ "mh", "oh" }) do
             local label = key == "mh" and "Main hand" or "Off hand"
             if w[key] == "" then
-                print("  " .. label .. ": not set (optional, set it in /topoff)")
+                local item = self:AutoWeaponItem(key == "mh" and 16 or 17)
+                print("  " .. label .. ": automatic — " .. (item and ("found " .. item.name)
+                    or "no sharpening stone, weightstone or oil in your bags"))
             else
                 local item = self:FindBagItem(w[key])
                 print("  " .. Colored(item ~= nil, label .. ": " .. w[key] ..

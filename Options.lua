@@ -539,7 +539,8 @@ local function BuildBuffsTab(self, ctx, class)
                 TO:RequestUpdate()
             end), true)
             T.Tooltip(box, key == "mh" and "Main hand" or "Off hand",
-                "The poison, oil or stone to use on this weapon. Part of the name is enough. Blank turns it off.")
+                "The poison, oil or stone to use on this weapon. Part of the name is enough. Blank: whatever "
+                .. "sharpening stone, weightstone or oil (or poison) you carry for this weapon.")
             ctx.row()
         end
         if class == "ROGUE" then
@@ -548,8 +549,8 @@ local function BuildBuffsTab(self, ctx, class)
                 "You're warned when a poison has fewer charges than this. 0 turns the warning off.")
             ctx.row()
         end
-        ctx.note("Item to use on each weapon, like Instant Poison or Wizard Oil. Blank = off. "
-            .. "Your best rank in your bags is used.")
+        ctx.note("Item to use on each weapon, like Instant Poison or Wizard Oil. Blank: any sharpening stone "
+            .. "(sharp weapons), weightstone (blunt ones) or oil in your bags. Your best rank is used.")
     end
 
     -- Well Fed

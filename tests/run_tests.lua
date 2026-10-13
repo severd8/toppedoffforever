@@ -292,6 +292,32 @@ assertEq(r["buff:shout"], nil, "Battle Shout is off by default")
 TO.char.weapon.mh = "Sharpening Stone"
 refresh()
 assert(ids()["weapon:mh"], "item set = weapon reminder")
+-- Nothing set: a stone or oil in your bags is used, the right one for the weapon
+TO.char.weapon.mh = nil
+STATE.weaponTypes = { [902] = 7, [903] = 4 }   -- a sword, a mace
+STATE.mh, STATE.oh = 902, nil
+local savedBags = STATE.bags
+STATE.bags = { { id = 3239, name = "Rough Weightstone", count = 5 }, { id = 2862, name = "Rough Sharpening Stone", count = 5 },
+    { id = 12404, name = "Dense Sharpening Stone", count = 2 } }
+refresh()
+local wm = ids()["weapon:mh"]
+assertEq(wm and wm.action.item, "Dense Sharpening Stone", "sword, nothing set: the best sharpening stone in your bags")
+assertEq(wm.label, "Main hand: Dense Sharpening Stone", "named on the icon")
+STATE.mh = 903; refresh()
+assertEq(ids()["weapon:mh"].action.item, "Rough Weightstone", "a mace gets the weightstone")
+STATE.enchant.mh = 1800000; refresh()
+assertEq(ids()["weapon:mh"], nil, "enhanced: nothing to do")
+STATE.enchant.mh = nil
+STATE.bags = { { id = 3239, name = "Rough Weightstone", count = 5 } }; STATE.mh = 902; refresh()
+assertEq(ids()["weapon:mh"], nil, "only a weightstone for a sword: no reminder")
+STATE.bags = {}; refresh()
+assertEq(ids()["weapon:mh"], nil, "nothing in your bags: no reminder")
+STATE.bags = { { id = 20748, name = "Brilliant Mana Oil", count = 1 }, { id = 12404, name = "Dense Sharpening Stone", count = 1 } }; refresh()
+assertEq(ids()["weapon:mh"].action.item, "Dense Sharpening Stone", "a Warrior reaches for the stone first")
+STATE.class = "MAGE"; refresh()
+assertEq(ids()["weapon:mh"].action.item, "Brilliant Mana Oil", "a caster for the oil")
+STATE.class = "WARRIOR"
+STATE.bags, STATE.mh, STATE.weaponTypes = savedBags, nil, nil
 
 step("ammo (hunter)")
 STATE.class = "HUNTER"
