@@ -1,3 +1,7 @@
+## 1.11.3
+
+- Release notes only. Nothing else changed.
+
 ## 1.11.2
 
 - Release notes only: the oil or stone change is listed under 1.11.1, where it belongs. Nothing else changed.
