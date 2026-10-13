@@ -1,3 +1,7 @@
+## 1.11.2
+
+- Release notes only: the oil or stone change is listed under 1.11.1, where it belongs. Nothing else changed.
+
 ## 1.11.1
 
 - **Oil or stone follows your spec** for Paladins, Druids, Priests and Shamans: casters and healers get an oil first, melee and tanks a stone (a Retribution Paladin gets the stone). Everyone else still goes by class.
