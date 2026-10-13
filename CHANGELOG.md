@@ -1,6 +1,6 @@
 ## 1.11.0
 
-- **Sharpening stones, weightstones and oils are tracked when you carry them.** With no item set for a weapon on the Buffs tab, ToppedOff watches that weapon whenever a stone or oil that fits it is in your bags: sharpening stones for swords, axes, daggers and polearms, weightstones for maces and staves, oils for anything. Click the icon to apply your best one. Casters get an oil first, everyone else a stone. Turn it off with the Main hand or Off hand switch.
+- **Sharpening stones, weightstones and oils are tracked when you carry them.** With no item set for a weapon on the Buffs tab, ToppedOff watches that weapon whenever a stone or oil that fits it is in your bags: sharpening stones for swords, axes, daggers and polearms, weightstones for maces and staves, oils for anything. Click the icon to apply your best one. Casters and healers get an oil first, melee and tanks a stone: by your spec for Paladins, Druids, Priests and Shamans (a Retribution Paladin gets the stone), by class for everyone else. Turn it off with the Main hand or Off hand switch.
 
 ## 1.10.0
 

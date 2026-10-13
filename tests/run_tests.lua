@@ -316,6 +316,12 @@ STATE.bags = { { id = 20748, name = "Brilliant Mana Oil", count = 1 }, { id = 12
 assertEq(ids()["weapon:mh"].action.item, "Dense Sharpening Stone", "a Warrior reaches for the stone first")
 STATE.class = "MAGE"; refresh()
 assertEq(ids()["weapon:mh"].action.item, "Brilliant Mana Oil", "a caster for the oil")
+STATE.class = "PALADIN"; STATE.talents = { { "Holy", 0 }, { "Protection", 5 }, { "Retribution", 31 } }; refresh()
+assertEq(ids()["weapon:mh"].action.item, "Dense Sharpening Stone", "a Retribution Paladin for the stone")
+STATE.talents = { { "Holy", 31 }, { "Protection", 0 }, { "Retribution", 5 } }; refresh()
+assertEq(ids()["weapon:mh"].action.item, "Brilliant Mana Oil", "a Holy Paladin for the oil")
+STATE.talents = nil; refresh()
+assertEq(ids()["weapon:mh"].action.item, "Brilliant Mana Oil", "no spec: the class default (oil)")
 STATE.class = "WARRIOR"
 STATE.bags, STATE.mh, STATE.weaponTypes = savedBags, nil, nil
 

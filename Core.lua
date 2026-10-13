@@ -135,8 +135,10 @@ TO.WEAPON_ITEMS = {
 -- fist weapons take either
 local SHARP = { [0] = true, [1] = true, [6] = true, [7] = true, [8] = true, [15] = true, [13] = true }
 local BLUNT = { [4] = true, [5] = true, [10] = true, [13] = true }
--- Casters reach for an oil first, everyone else for a stone (or poison)
+-- Casters and healers reach for an oil first, melee and tanks for a stone (or poison).
+-- By your role (PlayerSpecRole) where it's known, else by class.
 TO.OIL_FIRST = { MAGE = true, PRIEST = true, WARLOCK = true, DRUID = true, PALADIN = true }
+TO.OIL_FIRST_ROLES = { caster = true, healer = true, melee = false, tank = false }
 
 -- Reagents and class items. Checked only if you know one of the `requires` spells.
 -- Any item in `items` counts toward the total (e.g. both candle ranks).
@@ -608,7 +610,13 @@ function TO:AutoWeaponItem(slot)
             end
         end
     end
-    if self.OIL_FIRST[self:PlayerClass()] then return bestOil or best end
+    local class = self:PlayerClass()
+    local oilFirst = self.OIL_FIRST[class]
+    if self.ROLE_STATS[class] then   -- hybrids: by spec or group role
+        local role = self:PlayerSpecRole()
+        if role and self.OIL_FIRST_ROLES[role] ~= nil then oilFirst = self.OIL_FIRST_ROLES[role] end
+    end
+    if oilFirst then return bestOil or best end
     return best or bestOil
 end
 
