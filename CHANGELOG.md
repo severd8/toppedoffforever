@@ -1,3 +1,7 @@
+## 1.12.0
+
+- **Position and lock are saved per character.** Move or lock the reminders on one character and your others stay where you put them. Each character starts from where the reminders were before this update.
+
 ## 1.11.3
 
 - Release notes only. Nothing else changed.

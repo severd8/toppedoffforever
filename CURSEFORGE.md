@@ -49,7 +49,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 | **Display** | Show reminders, lock, show header and frame, show only in instances, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |
 | **General** | Chat reminders and sound, minimap icon, List my checks, the slash commands |
 
-The first four tabs are saved per character. Display and General are shared by all your characters.
+The first four tabs are saved per character. Display and General are shared by all your characters, except where the reminders sit and whether they're locked, which each character keeps for itself.
 
 ### Keybindings
 

@@ -111,10 +111,11 @@ local function Toggle(parent, text, x, y, get, set, tip)
     return sw
 end
 
--- A switch bound to an account-wide display setting. enabledWhen(): false greys it
--- out, for a setting that does nothing until another one is changed.
+-- A switch bound to a display setting: account-wide, except the lock (per character).
+-- enabledWhen(): false greys it out, for a setting that does nothing until another one is changed.
 local function Setting(parent, text, x, y, key, tip, enabledWhen)
-    local sw = Toggle(parent, text, x, y, function() return TO.db[key] end, function(v)
+    local function store() return key == "locked" and TO.char or TO.db end
+    local sw = Toggle(parent, text, x, y, function() return store()[key] end, function(v)
         if key == "locked" then
             TO:SetLocked(v)
         else
@@ -124,7 +125,7 @@ local function Setting(parent, text, x, y, key, tip, enabledWhen)
         RunRefreshers()
     end, tip)
     AddRefresher(function()
-        sw:SetOn(TO.db[key])
+        sw:SetOn(store()[key])
         if enabledWhen then sw:SetDisabled(not enabledWhen()) end
     end)
     return sw
@@ -916,7 +917,7 @@ local function BuildDisplayTab(p)
     Setting(rem, "Lock position", 12, -56, "locked", "Unlock to drag the reminders by the ToppedOff header above them.")
     Setting(rem, "Show header and frame", 12, -82, "showHeader",
         "The ToppedOff header and frame around the icons once they're locked. While unlocked they always show, "
-        .. "so you can drag them: lock the position to choose.", function() return TO.db.locked end)
+        .. "so you can drag them: lock the position to choose.", function() return TO.char.locked end)
     Setting(rem, "Show only in instances", 284, -30, "onlyInInstance",
         "Dungeons, raids and battlegrounds. Elsewhere the reminders and the combat bar stay hidden.")
     Setting(rem, "Hide in combat", 284, -56, "hideInCombat",

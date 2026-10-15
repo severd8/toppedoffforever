@@ -359,7 +359,7 @@ assertEq(TO.config:IsShown(), false, "/topoff again closes it")
 for _, cmd in ipairs({ "", "", "lock", "unlock", "check", "toggle", "toggle", "help", "reset" }) do
     SlashCmdList.TOPPEDOFFFOREVER(cmd)
 end
-assertEq(TO.db.locked, false, "unlocked")
+assertEq(TO.char.locked, false, "unlocked")
 assertEq(TO.box.__shown, true, "frame shown when unlocked")
 assertEq(TO.header.__point, "TOPRIGHT", "header runs along the top of the frame")
 assertEq(TO.box.__frameLevel, 1, "frame sits behind the icons")
@@ -479,7 +479,7 @@ assertEq(LOG[#LOG], "|TInterface\\AddOns\\ToppedOffForever\\Media\\Icon:0|t |cff
     "chat lines start with the logo and the addon's name")
 
 step("frame width")
-TO.db.locked, TO.db.onlyInInstance = false, false
+TO.char.locked, TO.db.onlyInInstance = false, false
 TO:Layout({ { id = "a", label = "A" } })
 assertEq(TO.main.__size[1], 84, "one reminder: still two icons wide")
 TO:Layout({ { id = "a", label = "A" }, { id = "b", label = "B" }, { id = "c", label = "C" } })
@@ -493,14 +493,14 @@ for _, b in ipairs(TO.buttons) do if b.reminder then b.__scripts.OnEnter(b) end 
 
 step("frame pinned by its top-left corner")
 TO.main.__left, TO.main.__top = 300, 500
-TO.db.point = { "CENTER", "CENTER", 0, -150 }
+TO.char.point = { "CENTER", "CENTER", 0, -150 }
 TO:RestorePosition()
-assertEq(TO.db.point[1], "TOPLEFT", "old center position converted")
-assertEq(TO.db.point[3], 300, "left edge kept")
-assertEq(TO.db.point[4], 500, "top edge kept")
+assertEq(TO.char.point[1], "TOPLEFT", "old center position converted")
+assertEq(TO.char.point[3], 300, "left edge kept")
+assertEq(TO.char.point[4], 500, "top edge kept")
 assertEq(TO.main.__point, "TOPLEFT", "frame anchored top-left")
 TO.main.__left = 320; TO:SavePosition()
-assertEq(TO.db.point[3], 320, "drag saves the top-left corner")
+assertEq(TO.char.point[3], 320, "drag saves the top-left corner")
 step("auto-tracked best items")
 STATE.class = "WARRIOR"; STATE.level = 30; STATE.buffs = {}
 TO.char.custom = {}; TO.char.auto = {}; TO.char.statFocus = nil; TO.char.customAlways = false; TO.char.checks = {}
@@ -1368,13 +1368,13 @@ for _, f in ipairs(ALL_FRAMES) do
     if f.__scripts.OnMouseUp and f.__scripts.OnDragStart and f.__parent == TO.box then header = f end
 end
 assert(header, "header found")
-TO.db.locked = false
+TO.char.locked = false
 header.__scripts.OnMouseUp(header, "RightButton")
 assertEq(items[1].text, "ToppedOff Forever", "menu title")
 assertEq(items[2].text, "Lock", "lock checkbox")
 assertEq(items[2].isSel(), false, "unlocked")
 items[2].onSel()
-assertEq(TO.db.locked, true, "locked from the menu")
+assertEq(TO.char.locked, true, "locked from the menu")
 assertEq(items[3].text, "Settings", "settings button")
 if TO.config and TO.config:IsShown() then TO:OpenConfig() end
 items[3].fn()
@@ -1509,14 +1509,14 @@ for _, f in ipairs(ALL_FRAMES) do
     if f.__scripts.OnMouseUp and f.__scripts.OnDragStart and f.__parent == TO.box then dragHeader = f end
 end
 assert(dragHeader, "header found")
-TO.db.locked = false
+TO.char.locked = false
 -- Out of combat: a drag moves the window and saves where it ends up
 TO.main.__left, TO.main.__top = 300, 400
 dragHeader.__scripts.OnDragStart(dragHeader)
 assertEq(TO.main.__moving, true, "drag starts out of combat")
 dragHeader.__scripts.OnDragStop(dragHeader)
 assertEq(TO.main.__moving, false, "drag ends")
-assertEq(TO.db.point[3], 300, "position saved")
+assertEq(TO.char.point[3], 300, "position saved")
 -- In combat: dragging touches nothing protected, and says why
 COMBAT = true; BLOCKED = {}
 dragHeader.__scripts.OnDragStart(dragHeader)
@@ -1530,16 +1530,16 @@ TO.main.__left, TO.main.__top = 500, 600
 dragHeader.__scripts.OnDragStart(dragHeader)
 fire("PLAYER_REGEN_DISABLED")
 assertEq(TO.main.__moving, false, "drag ended as combat starts")
-assertEq(TO.db.point[3], 500, "position saved as combat starts")
+assertEq(TO.char.point[3], 500, "position saved as combat starts")
 COMBAT = true; BLOCKED = {}
 dragHeader.__scripts.OnDragStop(dragHeader)
 assertEq(#BLOCKED, 0, "releasing the mouse in combat touched protected things: " .. table.concat(BLOCKED, ", "))
 -- Locked: no drag
 COMBAT = false; fire("PLAYER_REGEN_ENABLED"); tick()
-TO.db.locked = true
+TO.char.locked = true
 dragHeader.__scripts.OnDragStart(dragHeader)
 assertEq(TO.main.__moving, false, "locked window doesn't move")
-TO.db.locked = false; TO.main.__left, TO.main.__top = nil, nil
+TO.char.locked = false; TO.main.__left, TO.main.__top = nil, nil
 step("blocked-action report")
 local mark = #LOG
 fire("ADDON_ACTION_FORBIDDEN", "ToppedOffForever", "UseContainerItem()")
@@ -2030,6 +2030,23 @@ ToppedOffForeverDB, ToppedOffForeverCharDB = savedDB, savedChar
 fire("ADDON_LOADED", ADDON)
 refresh()
 
+step("position and lock are saved per character")
+savedDB, savedChar = ToppedOffForeverDB, ToppedOffForeverCharDB
+ToppedOffForeverDB = { locked = true, point = { "TOPLEFT", "BOTTOMLEFT", 111, 222 } }   -- from before 1.x: account-wide
+ToppedOffForeverCharDB = nil
+fire("ADDON_LOADED", ADDON)
+assertEq(TO.char.locked, true, "an existing character keeps its old lock")
+assertEq(TO.char.point[3] .. " " .. TO.char.point[4], "111 222", "and its old position")
+TO.char.point[3] = 333
+assertEq(ToppedOffForeverDB.point[3], 111, "moving one character doesn't move the account's")
+ToppedOffForeverCharDB = { locked = false, point = { "TOPLEFT", "BOTTOMLEFT", 5, 6 } }   -- an alt with its own
+fire("ADDON_LOADED", ADDON)
+assertEq(TO.char.locked, false, "a character's own lock wins")
+assertEq(TO.char.point[3], 5, "and its own position")
+ToppedOffForeverDB, ToppedOffForeverCharDB = savedDB, savedChar
+fire("ADDON_LOADED", ADDON)
+refresh()
+
 step("only API that Forever has")
 -- Forever (build 1.60.1) has none of these globals; the stub doesn't define them either
 assertEq(GetPetHappiness or GetSpecialization or GetTalentTabInfo or IsPlayerSpell or GetCoinTextureString, nil,
@@ -2308,14 +2325,14 @@ STATE.locale = nil
 for _, list in pairs(TO.nameRefs) do for _, ref in ipairs(list) do ref[1][ref[2]] = ref[3] end end
 if not TO.config:IsShown() then TO:OpenConfig() end
 TO:ShowOptionsTab("display")
-TO.db.locked, TO.db.hideInCombat = false, true; TO:OpenConfig(); TO:OpenConfig()
+TO.char.locked, TO.db.hideInCombat = false, true; TO:OpenConfig(); TO:OpenConfig()
 local frameSw, potionsSw = switch("Show header and frame"), switch("Keep potions in combat")
 assertEq(frameSw.disabled, true, "header and frame: greyed out while unlocked (it always shows then)")
 local before = TO.db.showHeader
 click(frameSw)
 assertEq(TO.db.showHeader, before, "and a click does nothing")
 click(switch("Lock position"))
-assertEq(TO.db.locked and frameSw.disabled, false, "locking makes it a real choice")
+assertEq(TO.char.locked and frameSw.disabled, false, "locking makes it a real choice")
 assertEq(potionsSw.disabled, false, "potions in combat: on while reminders hide in combat")
 click(switch("Hide in combat"))
 assertEq(potionsSw.disabled, true, "greyed out once they don't hide")
