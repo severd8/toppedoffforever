@@ -303,6 +303,46 @@ C_Spell = {
         return { name = n, spellID = s.id, iconID = s.icon }
     end,
 }
+-- Mana: STATE.noMana[spell] = true when you can't afford it right now; STATE.manaCost[spell]
+-- = its cost. (Your mana itself is hidden on Forever; whether a spell is affordable isn't.)
+C_Spell.IsSpellUsable = function(n)
+    local short = (STATE.noMana and STATE.noMana[n]) or false
+    return not short, short
+end
+C_Spell.GetSpellPowerCost = function(n)
+    local c = STATE.manaCost and STATE.manaCost[n]
+    if not c then return nil end
+    return { { type = 0, name = "MANA", cost = c, minCost = c, costPercent = 0, costPerSec = 0 } }
+end
+-- Curves (C_CurveUtil): the hidden health and mana percentages are only ever handed back
+-- through one, as a hidden value. STATE.healthPct / STATE.manaPct: 0 to 1.
+C_CurveUtil = { CreateCurve = function()
+    local c = { points = {} }
+    function c:AddPoint(x, y) table.insert(self.points, { x, y }) end
+    function c:Evaluate(x)
+        local p = self.points
+        if #p == 0 then return 0 end
+        if x <= p[1][1] then return p[1][2] end
+        for i = 2, #p do
+            if x <= p[i][1] then
+                local a, b = p[i - 1], p[i]
+                return a[2] + (b[2] - a[2]) * (x - a[1]) / (b[1] - a[1])
+            end
+        end
+        return p[#p][2]
+    end
+    return c
+end }
+function UnitHealthPercent(u, predicted, curve)
+    local x = STATE.healthPct or 1
+    return secret(curve and curve:Evaluate(x) or x)
+end
+function UnitPowerPercent(u, powerType, unmodified, curve)
+    local x = STATE.manaPct or 1
+    return secret(curve and curve:Evaluate(x) or x)
+end
+STATE.feign = {}
+function UnitIsFeignDeath(u) return STATE.feign[u] or false end
 -- STATE.knownOnly = { name = true }: known, but missing from the spellbook scan
 C_SpellBook.IsSpellKnown = function(id, bank)
     for _, n in ipairs(SPELLBOOK) do if SPELLS[n].id == id then return true end end

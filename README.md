@@ -13,17 +13,19 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 ## Features
 
 - **Shows what's wrong, plus a quick-use bar.** Buffs, reagents and gear only show when something needs fixing. Your food, water, bandages and potions stay on screen as a dimmed bar you can click, and turn bright with a red count when they run low.
-- **Class buffs for every class** (Rogues get poisons instead). The icon gets an **orange border** when a buff is about to run out and turns **red** near the end. **Click to cast it on yourself.** Group versions and buffs from other players count, and you pick which Blessing, Aura, Aspect, Armor or weapon buff is cast. Paladins get the aura for their role until they pick one.
-- **Party buffs and blessings.** See how many party members are missing your buff, or have it running out, and **click to buff the next one in range**. When 3 or more in your party need it and you carry the reagent, the click casts the group version (Prayer of Fortitude, Arcane Brilliance, Gift of the Wild). Paladins choose a blessing for each class. The whole raid can be included.
+- **Class buffs for every class** (Rogues get poisons instead). The icon gets an **orange border** when a buff is about to run out and turns **red** near the end. **Click to cast it on yourself.** Group versions and buffs from other players count, and you pick which Blessing, Aura, Aspect, Armor or weapon buff is cast. Paladins get the aura for their role until they pick one. A buff you haven't the mana for yet is greyed out, and says what it costs. Each buff can have its own warning time.
+- **Party buffs and blessings.** See how many party members are missing your buff, or have it running out, and **click to buff the next one in range**. When 3 or more in your party need it and you carry the reagent, the click casts the group version (Prayer of Fortitude, Arcane Brilliance, Gift of the Wild); short of mana for that, it buffs them one at a time. Paladins choose a blessing for each class. The whole raid can be included.
+- **Wrong buffs.** A red icon when a buff is hurting you: Aspect of the Cheetah or the Pack in a dungeon, Righteous Fury when you aren't the tank, Blessing of Salvation when you are. Click to take it off (Hunters: to cast their own Aspect over it).
+- **Resurrect.** Priests, Paladins and Shamans see who in the group is dead after a fight. **Click to bring back the next one in range.**
 - **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and sharpening stones, weightstones and oils: any in your bags is picked up for the weapon it fits, or choose one yourself. **Click to apply it**; your best rank is used, and low poison charges are flagged.
-- **Food, water, bandages and potions, picked for you.** Each row follows your bags: it's the best of its kind you're carrying, plus the right **stat food for your class or role**. Swap one food for another, or run out of your best potion, and the row changes with it. A **Well Fed** reminder (in dungeons and raids by default) eats your stat food with a click.
+- **Food, water, bandages and potions, picked for you.** Each row follows your bags: it's the best of its kind you're carrying, plus the right **stat food for your class or role**. Swap one food for another, or run out of your best potion, and the row changes with it. After a fight your food **glows** when your health is low, and your water when your mana is. A **Well Fed** reminder (in dungeons and raids by default) eats your stat food with a click.
 - **Combat bar.** In combat, your healing and mana potions, mana gem, Healthstone and bandage stay clickable, with counts and the potion cooldown. Add any of your own items to it.
-- **Reagents, ammo and class items.** Soul Shards, runes, powders, candles, Ankhs, totems and more, checked once you've learned a spell that needs them, and ammo for Hunters. Set your own minimums.
+- **Reagents, ammo and class items.** Soul Shards, runes, powders, candles, Ankhs, totems and more, checked once you've learned a spell that needs them, and ammo for Hunters. Set your own minimums, and a most for Soul Shards so they don't fill your bags.
 - **Well-Rested**, if you carry a Cozy Sleeping Bag: an icon when the experience bonus is missing, below 3 stacks (it reads 1/3 or 2/3) or running out. Click it to unfurl the bag.
 - **Class extras.** Hunter and Warlock pets (missing, dead or unhappy, with one-click feeding), Soulstones, Healthstones, Mage conjures, and the elixirs and flasks you choose.
 - **Gear and bags.** Low durability and low bag space warnings.
 - **Vendors.** One click restocks everything you're short on that the vendor sells, with the cost shown first, and a **Repair all** button. For food, water, bandages and potions it buys the best the vendor has that you can use. Nothing is bought until you click.
-- **Bank.** Beside the bank window, a list of what you're short on that's in your bank. One click moves it to your bags.
+- **Bank.** Beside the bank window, a list of what you're short on that's in your bank. One click moves it to your bags. ToppedOff remembers what's in there, so away from the bank a reminder says how many more you have in it, and `/topoff shop` lists everything you're short on.
 - **Your own items.** Add anything with a minimum count, and **click the icon to use it**.
 - **Profiles and reminders.** A lighter set of checks outside dungeons, copy a character's setup to an alt, chat reminders on ready checks and when you enter a dungeon, and keybindings for the first three reminders.
 
@@ -46,8 +48,8 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 
 | Tab | What's there |
 |---|---|
-| **Buffs** | Your buffs and which spell to cast, party buffs, party blessings (Paladins), whole-raid option, weapon enhancements, Well Fed, Well-Rested (while you carry the sleeping bag), elixirs and flasks |
-| **Supplies** | The best food, water, bandage and potions in your bags, Healthstone, stat food choice, conjured food, water and mana gem (Mages), your own items (and which go on the combat bar), the quick-use bar, reagents and ammo, vendor restock, repair and the bank list |
+| **Buffs** | Your buffs, which spell to cast and how long before it runs out to warn, wrong buffs, party buffs, party blessings (Paladins), whole-raid option, resurrect, weapon enhancements, Well Fed, Well-Rested (while you carry the sleeping bag), elixirs and flasks |
+| **Supplies** | The best food, water, bandage and potions in your bags, Healthstone, stat food choice, conjured food, water and mana gem (Mages), your own items (and which go on the combat bar), the quick-use bar and its glow, reagents and ammo (and the most Soul Shards), vendor restock, repair and the bank list |
 | **Pet & gear** (Hunters and Warlocks), **Gear & bags** (everyone else) | Pet, Soulstone (Warlocks), durability and bag space |
 | **Profiles** | Separate checks outside dungeons, copy another character |
 | **Display** | Show reminders, lock, show header and frame, show only in instances, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |
@@ -71,7 +73,8 @@ Go to **Options → Keybindings → ToppedOff Forever**:
 | `/topoff` | Open or close the options |
 | `/topoff show` · `/topoff hide` · `/topoff toggle` | Show or hide the reminders |
 | `/topoff lock` · `/topoff unlock` | Lock or unlock the reminders' position |
-| `/topoff check` | List your class buffs, weapon, reagents, your own items and durability, and whether each was found |
+| `/topoff check` | List your class buffs, weapon, reagents, your own items and durability, and whether each was found, then your shopping list |
+| `/topoff shop` | List everything you're short on, and how much of it is in your bank |
 | `/topoff add 20 Conjured Crystal Water` | Remind you when you have fewer than 20 of an item |
 | `/topoff remove Conjured Crystal Water` | Stop checking an item you added |
 | `/topoff unhide` | Bring back reminders you hid with Shift + right-click |
@@ -86,12 +89,13 @@ WoW: Forever limits what addons can do in combat. ToppedOff Forever is built aro
 - **It never acts on its own.** Every buff, weapon enhancement, purchase and item use is your click.
 - **Reminders update out of combat.** They're hidden in combat by default (except the combat bar) and refresh as soon as it ends.
 - **Replacing a weapon enhancement** that hasn't run out makes the game ask you to confirm.
-- **Spell and item names** are the Classic ones. On a game in another language, ToppedOff asks the game for its own names, but food, water and potions are still only recognised in English. If something isn't found, `/topoff check` shows it in yellow. Please report it.
+- **Spell and item names** are the Classic ones. On a game in another language, ToppedOff asks the game for its own names, and recognises food, water, bandages and potions by what they do. Stat food is still only recognised in English. If something isn't found, `/topoff check` shows it in yellow. Please report it.
 
 ## Troubleshooting
 
 - **An icon doesn't appear for a buff.** Type `/topoff check`. The spell may not be learned yet, or the check may be turned off in the options.
 - **A weapon icon is grey.** The item you chose isn't in your bags. Hover for details.
+- **A buff icon is grey.** You haven't the mana to cast it yet. Hover to see what it costs.
 - **The icons disappeared.** You may have hidden them, turned on **Show only in instances**, or you may simply be topped off. Type `/topoff show`. An icon you hid with Shift + right-click comes back with `/topoff unhide`.
 - **The icons are off-screen.** Type `/topoff reset`.
 - **"WoW blocked ..." in chat.** The game stopped an action and blamed ToppedOff. Please report it with the message.

@@ -21,7 +21,7 @@ TO.SPELL_IDS = {
     ["Power Word: Fortitude"] = 1243, ["Prayer of Fortitude"] = 21562, ["Inner Fire"] = 588,
     ["Divine Spirit"] = 14752, ["Prayer of Spirit"] = 27681, ["Shadow Protection"] = 976,
     ["Prayer of Shadow Protection"] = 27683, ["Shadowguard"] = 18137, ["Touch of Weakness"] = 2652,
-    ["Fear Ward"] = 6346, ["Levitate"] = 1706,
+    ["Fear Ward"] = 6346, ["Levitate"] = 1706, ["Resurrection"] = 2006,
     -- Druid
     ["Mark of the Wild"] = 1126, ["Gift of the Wild"] = 21849, ["Thorns"] = 467, ["Omen of Clarity"] = 16864,
     ["Rebirth"] = 20484,
@@ -42,6 +42,7 @@ TO.SPELL_IDS = {
     ["Devotion Aura"] = 465, ["Retribution Aura"] = 7294, ["Concentration Aura"] = 19746,
     ["Sanctity Aura"] = 20218, ["Shadow Resistance Aura"] = 19876, ["Frost Resistance Aura"] = 19888,
     ["Fire Resistance Aura"] = 19891, ["Righteous Fury"] = 25780, ["Divine Intervention"] = 19752,
+    ["Redemption"] = 7328,
     -- Hunter
     ["Aspect of the Hawk"] = 13165, ["Aspect of the Monkey"] = 13163, ["Aspect of the Cheetah"] = 5118,
     ["Aspect of the Pack"] = 13159, ["Aspect of the Wild"] = 20043, ["Aspect of the Beast"] = 13161,
@@ -50,7 +51,7 @@ TO.SPELL_IDS = {
     ["Battle Shout"] = 6673,
     -- Shaman
     ["Lightning Shield"] = 324, ["Windfury Weapon"] = 8232, ["Flametongue Weapon"] = 8024,
-    ["Frostbrand Weapon"] = 8033, ["Rockbiter Weapon"] = 8017, ["Reincarnation"] = 20608,
+    ["Frostbrand Weapon"] = 8033, ["Rockbiter Weapon"] = 8017, ["Reincarnation"] = 20608, ["Ancestral Spirit"] = 2008,
     ["Stoneskin Totem"] = 8071, ["Earthbind Totem"] = 2484, ["Strength of Earth Totem"] = 8075,
     ["Searing Totem"] = 3599, ["Fire Nova Totem"] = 1535, ["Magma Totem"] = 8190,
     ["Healing Stream Totem"] = 5394, ["Mana Spring Totem"] = 5675, ["Poison Cleansing Totem"] = 8166,
@@ -97,6 +98,8 @@ function TO:NameRefs()
             for _, b in ipairs(rg.buy or {}) do items[#items + 1] = { b, 1, b[1] } end
         end
     end
+    for _, w in ipairs(self.WRONG_BUFFS) do list(w.auras, spells) end
+    map(self.REZ_SPELLS, spells)
     list(self.WARLOCK_PETS, spells)
     list(self.SOULSTONE_SPELLS, spells)
     list(self.HEALTHSTONE_SPELLS, spells)

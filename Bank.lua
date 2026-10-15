@@ -51,6 +51,18 @@ function TO:ScanBank()
     return stacks
 end
 
+-- Keeps what's in your bank, so a reminder can say "12 more in your bank" while you're
+-- away from it. Saved per character; looked at again each time the bank is open.
+function TO:RememberBank(bank)
+    local counts = {}
+    for key, stacks in pairs(bank or self:ScanBank()) do
+        local n = 0
+        for _, st in ipairs(stacks) do n = n + st.count end
+        counts[key] = n
+    end
+    self.char.bankItems = counts
+end
+
 -- Rows to take: { name, icon, need, take, stacks = { ... } }. Whole stacks, biggest
 -- first, until you have your Min (a stack can't be split from here, so you may get a few more).
 function TO:BankPlan()
@@ -223,12 +235,16 @@ events:SetScript("OnEvent", function(_, event)
     if event == "BANKFRAME_OPENED" then
         TO.bankOpen = true
         if TO.bankPanel then TO.bankPanel.skipped, TO.bankPanel.waiting = {}, false end
+        TO:RememberBank()
         TO:UpdateBankPanel()
+        TO:RequestUpdate()
     elseif event == "BANKFRAME_CLOSED" then
         TO.bankOpen = false
         TO:UpdateBankPanel()
     elseif TO.bankOpen then
         if event == "BAG_UPDATE_DELAYED" and TO.bankPanel then TO.bankPanel.waiting = false end
+        TO:RememberBank()
         TO:UpdateBankPanel()
+        TO:RequestUpdate()
     end
 end)

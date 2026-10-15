@@ -220,6 +220,7 @@ local MIN_W = 44
 local MIN_X = X_X - 6 - MIN_W    -- "Min" boxes line up in one column
 local PICK_X = 250               -- spell and blessing choices
 local PICK_W = LIST_W - PAD - PICK_X
+local PICK_SHORT_W = MIN_X - 8 - PICK_X  -- a choice that stops before the Min (or Warn) column
 local LABEL_W = MIN_X - (PAD + 38) - 8   -- a switch label that stops before the Min column
 local COMBAT_X = MIN_X - 14 - 30         -- "In combat" switches on your own items, left of Min
 
@@ -376,16 +377,25 @@ local function Builder(c)
         return ctx.minBox(function() return TO:ReagentMin(id, default) end,
             function(n) TO.char.mins[id] = n end, tip)
     end
+    -- Warn box in the Min column: minutes before a buff runs out that it shows. The Display
+    -- tab's time is the default; typing that clears this one's own.
+    function ctx.warnBox(id)
+        local box = ctx.minBox(function() return TO.Num(TO.char.warn[id]) or TO.db.warnMinutes end,
+            function(n) TO.char.warn[id] = (n ~= TO.db.warnMinutes) and n or nil end)
+        T.Tooltip(box, "Warn", "Minutes before it runs out that the reminder shows, with an orange border. "
+            .. "Leave it at " .. TO.db.warnMinutes .. " to follow the Display tab. 0: only once it's gone.")
+        return box
+    end
 
     -- A choice of spells: a list to pick from. auto (optional): label for "Automatic",
     -- the first choice, saved as no pick (getter returns false for it).
-    function ctx.spellPick(known, getter, setter, auto)
+    function ctx.spellPick(known, getter, setter, auto, width)
         local keys = known
         if auto then
             keys = { false }
             for _, k in ipairs(known) do keys[#keys + 1] = k end
         end
-        local b = Dropdown(c, PICK_X, ctx.y - 1, PICK_W, keys,
+        local b = Dropdown(c, PICK_X, ctx.y - 1, width or PICK_W, keys,
             function(k) if k then return k end return auto and auto() or "" end, getter, setter)
         if auto then
             b.menuLabels = setmetatable({}, { __index = function(_, k) return k or "Automatic (for your role)" end })
@@ -416,7 +426,7 @@ local function BuildBuffsTab(self, ctx, class)
     local function on(id, default) return TO:IsEnabled(id, default, TO:EditingOutside()) end
     local buffs = self.CLASS_BUFFS[class] or {}
     if #buffs > 0 then
-        ctx.card("Your buffs")
+        ctx.card("Your buffs", "Warn")
         for _, buff in ipairs(buffs) do
             local known = self:KnownOptions(buff.cast)
             -- Racial buffs only for races that have them; a passive spell needs no check at all
@@ -424,35 +434,63 @@ local function BuildBuffsTab(self, ctx, class)
                 local sw = ctx.toggle("buff:" .. buff.id, buff.label, not buff.off)
                 if #known == 0 then
                     NotLearned(sw, buff.label)
-                elseif #known > 1 then
-                    ctx.fit(sw, PICK_X)
-                    if buff.byRole then
-                        -- Automatic: the spell for your role (Paladin auras)
-                        ctx.spellPick(known,
-                            function()
-                                local pick = TO.char.prefs[buff.id]
-                                for _, n in ipairs(known) do if n == pick then return n end end
-                                return false
-                            end,
-                            function(v) TO.char.prefs[buff.id] = v or nil TO:RequestUpdate() end,
-                            function() return "Automatic: " .. (TO:BuffPreference(buff, true) or "") end)
+                else
+                    ctx.warnBox("buff:" .. buff.id)
+                    if #known > 1 then
+                        ctx.fit(sw, PICK_X)
+                        if buff.byRole then
+                            -- Automatic: the spell for your role (Paladin auras)
+                            ctx.spellPick(known,
+                                function()
+                                    local pick = TO.char.prefs[buff.id]
+                                    for _, n in ipairs(known) do if n == pick then return n end end
+                                    return false
+                                end,
+                                function(v) TO.char.prefs[buff.id] = v or nil TO:RequestUpdate() end,
+                                function() return "Automatic: " .. (TO:BuffPreference(buff, true) or "") end,
+                                PICK_SHORT_W)
+                        else
+                            ctx.spellPick(known, function() return TO:BuffPreference(buff) end,
+                                function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end, nil, PICK_SHORT_W)
+                        end
                     else
-                        ctx.spellPick(known, function() return TO:BuffPreference(buff) end,
-                            function(v) TO.char.prefs[buff.id] = v TO:RequestUpdate() end)
+                        ctx.fit(sw)
                     end
                 end
                 ctx.row()
             end
         end
+        ctx.note("Warn: minutes before a buff runs out that its reminder shows. The Display tab sets it "
+            .. "for every buff; change it here for one.")
+
+        -- Buffs that do you harm where you are
+        local wrongs = {}
+        for _, w in ipairs(self.WRONG_BUFFS) do if w.classes[class] then wrongs[#wrongs + 1] = w end end
+        if #wrongs > 0 then
+            ctx.card("Wrong buffs")
+            local WHEN = { instance = "in dungeons and raids", tank = "when you're the tank",
+                notTank = "in a group, when you aren't the tank" }
+            for _, w in ipairs(wrongs) do
+                ctx.fit(ctx.toggle("wrong:" .. w.id, w.label .. " " .. WHEN[w.when], true, nil, w.why), nil)
+                ctx.row()
+            end
+            ctx.note("A red icon when you have one of these on where it does harm. Click to take it off"
+                .. (class == "HUNTER" and ", or to cast your own Aspect over it." or ".")
+                .. (class == "DRUID" and " Druids count as the tank when they pick the Tank role in the group." or ""))
+        end
 
         local partyBuffs = {}
         for _, buff in ipairs(buffs) do if buff.party then partyBuffs[#partyBuffs + 1] = buff end end
         if #partyBuffs > 0 then
-            ctx.card("Party buffs")
+            ctx.card("Party buffs", "Warn")
             local anyGroup = false
             for _, buff in ipairs(partyBuffs) do
-                local sw = ctx.toggle("party:" .. buff.id, buff.label .. " on your party", not buff.off)
-                if #self:KnownOptions(buff.cast) == 0 then NotLearned(sw, buff.label .. " on your party") end
+                local sw = ctx.fit(ctx.toggle("party:" .. buff.id, buff.label .. " on your party", not buff.off))
+                if #self:KnownOptions(buff.cast) == 0 then
+                    NotLearned(sw, buff.label .. " on your party")
+                else
+                    ctx.warnBox("party:" .. buff.id)
+                end
                 if buff.group then anyGroup = true end
                 ctx.row()
             end
@@ -482,8 +520,9 @@ local function BuildBuffsTab(self, ctx, class)
 
     -- Paladin: which blessing each class in your party gets
     if class == "PALADIN" then
-        ctx.card("Party blessings")
-        ctx.toggle("party:blessing", "Bless your party", true)
+        ctx.card("Party blessings", "Warn")
+        ctx.fit(ctx.toggle("party:blessing", "Bless your party", true))
+        ctx.warnBox("party:blessing")
         ctx.row()
         local keys, labels = {}, { none = "None" }
         for _, b in ipairs(self.BLESSING_NAMES) do
@@ -518,24 +557,40 @@ local function BuildBuffsTab(self, ctx, class)
             .. "A Greater Blessing, or the same blessing from another Paladin, counts.")
     end
 
+    -- Resurrect dead party members
+    local rez = self.REZ_SPELLS[class]
+    if rez then
+        ctx.card("Resurrect")
+        local sw = ctx.toggle("rez", "Dead party members", true, nil,
+            "Out of combat, shows who in your group is dead. Click to cast " .. rez .. " on the next one in range.")
+        if not self:Knows(rez) then NotLearned(sw, "Dead party members") end
+        ctx.row()
+        ctx.note("Click to cast " .. rez .. " on the next one in range. With \"In raids, check the whole raid\" "
+            .. "on, the whole raid counts.")
+    end
+
     -- Weapon enhancement
-    ctx.card("Weapon enhancement", class == "ROGUE" and "Min" or nil)
+    ctx.card("Weapon enhancement", "Warn")
     local w = self:WeaponConfig()
     if w.kind == "spell" then
         local known = self:KnownOptions(w.cast)
-        local sw = ctx.toggle("weapon:mh", "Weapon buff", true)
+        local sw = ctx.fit(ctx.toggle("weapon:mh", "Weapon buff", true))
         if #known == 0 then
             NotLearned(sw, "Weapon buff")
-        elseif #known > 1 then
-            ctx.fit(sw, PICK_X)
-            ctx.spellPick(known, function() return TO:WeaponConfig().spell end,
-                function(v) TO.char.weapon.spell = v TO:RequestUpdate() end)
+        else
+            ctx.warnBox("weapon:mh")
+            if #known > 1 then
+                ctx.fit(sw, PICK_X)
+                ctx.spellPick(known, function() return TO:WeaponConfig().spell end,
+                    function(v) TO.char.weapon.spell = v TO:RequestUpdate() end, nil, PICK_SHORT_W)
+            end
         end
         ctx.row()
     else
         for _, key in ipairs({ "mh", "oh" }) do
             ctx.fit(ctx.toggle("weapon:" .. key, key == "mh" and "Main hand" or "Off hand", true), PICK_X)
-            local box = ctx.track(EditBox(c, PICK_W, PICK_X, ctx.y - 1, w[key], false, function(text)
+            ctx.warnBox("weapon:" .. key)
+            local box = ctx.track(EditBox(c, PICK_SHORT_W, PICK_X, ctx.y - 1, w[key], false, function(text)
                 TO.char.weapon[key] = strtrim and strtrim(text) or text
                 TO:RequestUpdate()
             end), true)
@@ -546,8 +601,9 @@ local function BuildBuffsTab(self, ctx, class)
         end
         if class == "ROGUE" then
             ctx.fit(ctx.toggle("charges", "Warn when poison charges run low", true))
-            ctx.reagentMin("charges", self.CHARGES_DEFAULT_MIN,
-                "You're warned when a poison has fewer charges than this. 0 turns the warning off.")
+            local box = ctx.reagentMin("charges", self.CHARGES_DEFAULT_MIN)
+            T.Tooltip(box, "Charges", "You're warned when a poison has fewer charges than this. "
+                .. "0 turns the warning off.")
             ctx.row()
         end
         ctx.note("Item to use on each weapon, like Instant Poison or Wizard Oil. Blank: any sharpening stone "
@@ -555,8 +611,9 @@ local function BuildBuffsTab(self, ctx, class)
     end
 
     -- Well Fed
-    ctx.card("Food buff")
-    ctx.toggle("wellfed", "Well Fed", true, nil, "Reminds you when the buff from stat food is missing or running out.")
+    ctx.card("Food buff", "Warn")
+    ctx.fit(ctx.toggle("wellfed", "Well Fed", true, nil, "Reminds you when the buff from stat food is missing or running out."))
+    ctx.warnBox("wellfed")
     ctx.row()
     ctx.charCheck("Only in dungeons and raids", "wellFedInstanceOnly", SUB, nil,
         function() return on("wellfed", true) end)
@@ -565,19 +622,21 @@ local function BuildBuffsTab(self, ctx, class)
 
     -- Well-Rested, for those carrying the sleeping bag
     if self.bag and self.bag[self.RESTED.item] then
-        ctx.card("Experience bonus")
-        ctx.toggle("rested", "Well-Rested", true)
+        ctx.card("Experience bonus", "Warn")
+        ctx.fit(ctx.toggle("rested", "Well-Rested", true))
+        ctx.warnBox("rested")
         ctx.row()
         ctx.note("From your Cozy Sleeping Bag. Shown when it's missing, running out or below "
             .. self.RESTED.stacks .. " stacks. Click the icon to unfurl the bag.")
     end
 
     -- Elixirs and flasks
-    ctx.card("Elixirs and flasks")
+    ctx.card("Elixirs and flasks", #self.char.elixirs > 0 and "Warn" or nil)
     local shown = {}
     for _, el in ipairs(self.char.elixirs) do
         shown[el.name:lower()] = true
         ctx.fit(ctx.switch(el.name, function() return true end, function(v) TO:TrackElixir(el.name, v) end))
+        ctx.warnBox("elixir:" .. el.name:lower())
         ctx.row()
     end
     for _, e in ipairs(self:BagElixirs()) do
@@ -737,7 +796,11 @@ local function BuildSuppliesTab(self, ctx, class)
         "Show them even when you have enough, dimmed, so you can click to use them. "
         .. "Low ones are bright with a red count.")
     ctx.row()
-    ctx.note("Off: they only show when you're low.")
+    ctx.charCheck("Light up food and water when your health or mana is low", "glowLow", PAD,
+        "After a fight, your food glows green when your health is low, and your water when your mana is. "
+        .. "Full glow below half, none from 70% up. Not while you're already eating or drinking.")
+    ctx.row()
+    ctx.note("With the first one off, they only show when you're low, so they can't light up either.")
 
     local reagents = self.CLASS_REAGENTS[class] or {}
     local showAmmo = self.AMMO_CLASSES[class] or class == "WARRIOR" or class == "ROGUE"
@@ -749,6 +812,15 @@ local function BuildSuppliesTab(self, ctx, class)
             if not self:FirstKnown(rg.requires) then NotLearned(sw, rg.label) end
             ctx.reagentMin(id, rg.min)
             ctx.row()
+            if rg.max then
+                local learned = self:FirstKnown(rg.requires) ~= nil
+                ctx.text("Max " .. rg.label .. "s to carry", SUB)
+                ctx.track(ctx.reagentMin(id .. ":max", rg.max, "You're warned when you carry more than this, "
+                    .. "since they take up bag space. 0: no most."), true, function()
+                    return learned and TO:IsEnabled(id, true, TO:EditingOutside())
+                end)
+                ctx.row()
+            end
         end
         if showAmmo then
             ctx.fit(ctx.toggle("ammo", "Ammo", self.AMMO_CLASSES[class] == true, nil,
@@ -938,7 +1010,7 @@ local function BuildDisplayTab(p)
     local warn = Card(p, "Warnings", 0, -250, PAGE_W, 80)
     Slider(warn, "Warn before buffs run out", 12, -30, "warnMinutes", 1, 10, " min",
         "Buffs, weapon enhancements, elixirs, Well Fed and party buffs get an orange border this long before "
-        .. "they run out, and a red one near the end.")
+        .. "they run out, and a red one near the end. Change it for one buff with its Warn box on the Buffs tab.")
     Slider(warn, "Durability warning below", 284, -30, "durabilityPct", 5, 75, "%",
         "You're warned when your most worn item drops below this.")
 end
@@ -958,12 +1030,13 @@ local function BuildGeneralTab(p)
     check:SetScript("OnClick", function() TO:Check() end)
     T.Note(other, "Lists this character's checks in chat, and whether each was found.", 154, -59)
 
-    local cmds = Card(p, "Commands", 0, -218, PAGE_W, 167)
+    local cmds = Card(p, "Commands", 0, -218, PAGE_W, 184)
     local lines = {
         "|cffe8a040/topoff|r  open or close these options",
         "|cffe8a040/topoff toggle|r  show or hide the reminders",
         "|cffe8a040/topoff lock|r / |cffe8a040/topoff unlock|r  lock or unlock the reminders",
         "|cffe8a040/topoff check|r  list what's checked for your class",
+        "|cffe8a040/topoff shop|r  list what you're short on, and what's in your bank",
         "|cffe8a040/topoff add 20 Item Name|r  keep an item stocked",
         "|cffe8a040/topoff remove Item Name|r  stop checking it",
         "|cffe8a040/topoff unhide|r  bring back reminders you hid (Shift + right-click)",

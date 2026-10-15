@@ -1886,12 +1886,13 @@ assertEq(TO.db.minimap, false, "and saves a click")
 TO:OpenConfig(); TO.db.minimap = true; TO:OpenConfig()   -- changed while the window was closed
 assertEq(minimap:IsOn(), true, "reopening the window shows the setting as it is now")
 TO:ShowOptionsTab("buffs")
--- A card is as tall as its rows: title, three rows (Blessing, Aura, Righteous Fury), padding
+-- A card is as tall as its rows: title, three rows (Blessing, Aura, Righteous Fury), the
+-- note about the Warn boxes, padding
 local firstCard
 for _, w in ipairs(listWidgets()) do
     if w.__kind == "Texture" and w:IsVisible() and w.__pos and w.__pos[2] == 0 and w.__width then firstCard = w end
 end
-assertEq(firstCard and firstCard.__height, 28 + 3 * 26 + 6, "a card wraps its rows")
+assertEq(firstCard and firstCard.__height, 28 + 3 * 26 + 18 + 6, "a card wraps its rows")
 assertEq(hover("choice", "Blessing of Might"):find("Spell to cast / Click to choose which spell the reminder casts. [111 wrap] || Blessing to give Warriors in your party [111 wrap] || Blessing to give ", 1, true), 1,
     "a spell choice, then the blessing choices, which show only their tip")
 rawset(GameTooltip, "AddLine", nil)
@@ -2411,4 +2412,208 @@ refresh()
 assert(switch("Elixir of Fortitude"), "a new elixir shows in the open window")
 STATE.bags = {}
 TO:OpenConfig()
+
+step("wrong buffs: Cheetah in a dungeon, Righteous Fury off-tank, Salvation on the tank")
+STATE.class = "HUNTER"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Aspect of the Hawk", "Aspect of the Cheetah", "Aspect of the Pack"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.prefs = {}, {}
+STATE.buffs = { ["Aspect of the Cheetah"] = 0 }; STATE.instance = false; refresh()
+assertEq(ids()["wrong:cheetah"], nil, "out in the world Cheetah is fine")
+STATE.instance = true; refresh()
+local wb = ids()["wrong:cheetah"]
+assert(wb and wb.urgentNow, "in a dungeon: a red icon")
+assertEq(wb.action.spell, "Aspect of the Hawk", "click casts your own Aspect over it")
+TO.char.prefs.aspect = "Aspect of the Pack"; refresh()
+assertEq(ids()["wrong:cheetah"].action.spell, "Aspect of the Hawk", "not another wrong one, even if it's your pick")
+assert(TO:IsBuffReminder(wb), "in the buff row")
+TO.char.checks["wrong:cheetah"] = false; refresh()
+assertEq(ids()["wrong:cheetah"], nil, "can be turned off")
+TO.char.checks, TO.char.prefs = {}, {}
+STATE.class = "PALADIN"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Righteous Fury", "Blessing of Might"); fire("SPELLS_CHANGED")
+STATE.buffs = { ["Righteous Fury"] = 1700, ["Blessing of Might"] = 1700 }
+STATE.talents = { { "Holy", 31 }, { "Protection", 0 }, { "Retribution", 0 } }
+refresh()
+local rf = ids()["wrong:rfury"]
+assert(rf, "a Holy Paladin with Righteous Fury in a dungeon")
+assertEq(rf.action.macro, "/cancelaura Righteous Fury", "click takes it off")
+STATE.talents = { { "Holy", 0 }, { "Protection", 31 }, { "Retribution", 0 } }; refresh()
+assertEq(ids()["wrong:rfury"], nil, "the tank wants it")
+STATE.buffs["Blessing of Salvation"] = 300; refresh()
+assertEq(ids()["wrong:salvation"].action.macro, "/cancelaura Blessing of Salvation", "Salvation on the tank")
+STATE.talents = nil; refresh()
+assertEq(ids()["wrong:salvation"] or ids()["wrong:rfury"], nil, "no talents: no telling, no warning")
+STATE.class = "DRUID"; SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED")
+STATE.buffs = { ["Greater Blessing of Salvation"] = 900 }; refresh()
+assertEq(ids()["wrong:salvation"], nil, "a Druid isn't the tank unless they pick the role")
+STATE.roles = { player = "TANK" }; refresh()
+assert(ids()["wrong:salvation"], "with the Tank role: the Greater one counts too")
+STATE.roles, STATE.instance, STATE.buffs = {}, false, {}
+
+step("not enough mana: greyed out, and one at a time instead of the group version")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Power Word: Fortitude", "Prayer of Fortitude"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.groupBuffs = {}, true
+STATE.bags = { { id = 911, name = "Sacred Candle", count = 5 } }
+STATE.party = { "party1", "party2", "party3" }
+STATE.partyClass = { party1 = "WARRIOR", party2 = "MAGE", party3 = "ROGUE" }
+STATE.partyBuffs = { party1 = {}, party2 = {}, party3 = {} }
+STATE.noMana = { ["Prayer of Fortitude"] = true }; STATE.manaCost = { ["Prayer of Fortitude"] = 1695 }
+refresh()
+local nm = ids()["party:fortitude"]
+assertEq(nm.action.spell, "Power Word: Fortitude", "short of mana for Prayer: the single buff instead")
+assertEq(nm.action.unit, "party1", "on the first one who needs it")
+assert(nm.detail:find("Not enough mana for Prayer of Fortitude, so one at a time", 1, true), "says why")
+assertEq(nm.noMana, nil, "the single one can be afforded")
+local mine = ids()["buff:fortitude"]
+assertEq(mine.noMana, nil, "your own buff is affordable")
+STATE.noMana["Power Word: Fortitude"] = true; STATE.manaCost["Power Word: Fortitude"] = 400; refresh()
+nm, mine = ids()["party:fortitude"], ids()["buff:fortitude"]
+assertEq(nm.action.spell, "Prayer of Fortitude", "neither affordable: the group version, greyed")
+assertEq(nm.noMana, true, "greyed out")
+assert(mine.detail:find("Not enough mana for Power Word: Fortitude (it costs 400)", 1, true), "with its cost")
+local fb
+for _, b in ipairs(TO.buttons) do if b.reminder and b.reminder.id == "buff:fortitude" then fb = b end end
+assertEq(fb.icon.__desat, true, "the icon is grey")
+STATE.noMana, STATE.manaCost = nil, nil; refresh()
+assertEq(ids()["buff:fortitude"].noMana, nil, "with mana again: back to normal")
+
+step("resurrect dead party members")
+LEARN("Resurrection"); fire("SPELLS_CHANGED")
+STATE.dead = { party2 = true, party3 = true }; STATE.outOfRange = { party2 = true }; refresh()
+local rz = ids()["rez"]
+assertEq(rz and rz.text, "2", "two dead")
+assert(rz.detail:find("Dead: Name_party2, Name_party3", 1, true), "named")
+assertEq(rz.action.spell .. " " .. rz.action.unit, "Resurrection party3", "click brings back the one in range")
+assertEq(ids()["party:fortitude"].text, "1", "the dead aren't counted for buffs")
+STATE.feign = { party3 = true }; refresh()
+assertEq(ids()["rez"].action, nil, "Feign Death isn't dead; the other is too far")
+STATE.feign = {}
+STATE.noMana = { Resurrection = true }; refresh()
+assertEq(ids()["rez"].noMana, true, "not enough mana for it: greyed")
+STATE.noMana = nil
+TO.char.checks.rez = false; refresh()
+assertEq(ids()["rez"], nil, "can be turned off")
+TO.char.checks = {}
+STATE.dead, STATE.outOfRange = {}, {}
+STATE.party, STATE.partyClass, STATE.partyBuffs, STATE.bags = {}, {}, {}, {}
+
+step("a warning time for each buff")
+STATE.buffs = { ["Power Word: Fortitude"] = 600 }; TO.db.warnMinutes = 3; refresh()
+assertEq(ids()["buff:fortitude"], nil, "10 minutes left, 3 minute warning: nothing yet")
+TO.char.warn["buff:fortitude"] = 15; refresh()
+local wf = ids()["buff:fortitude"]
+assertEq(wf and wf.warn, 900, "its own 15 minutes")
+local wbtn
+for _, b in ipairs(TO.buttons) do if b.reminder == wf then wbtn = b end end
+assertEq(wbtn.urgency, "expiring", "orange: the border follows its own time too")
+TO.char.warn["buff:fortitude"] = 0; STATE.buffs["Power Word: Fortitude"] = 30; refresh()
+assertEq(ids()["buff:fortitude"], nil, "0: only once it's gone")
+TO.char.warn = {}
+TO:OpenConfig(); TO:ShowOptionsTab("buffs")
+local warnBox
+for _, w in ipairs(listWidgets()) do
+    if w.__kind == "EditBox" and w:IsVisible() and w.__text == "3" and not warnBox then warnBox = w end
+end
+assert(warnBox, "a Warn box beside the buff")
+warnBox:SetText("12"); warnBox.__scripts.OnEditFocusLost(warnBox)
+assertEq(TO.char.warn["buff:fortitude"], 12, "saved for that buff")
+warnBox:SetText("3"); warnBox.__scripts.OnEditFocusLost(warnBox)
+assertEq(TO.char.warn["buff:fortitude"], nil, "the Display tab's time again: nothing saved")
+TO:OpenConfig()
+STATE.buffs = {}
+
+step("too many Soul Shards")
+STATE.class = "WARLOCK"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Drain Soul"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.mins = {}, {}
+STATE.bags = { { id = 6265, name = "Soul Shard", count = 20 }, { id = 6265, name = "Soul Shard", count = 14 } }
+refresh()
+local sm = ids()["reagent:shard:max"]
+assertEq(sm and sm.text, "34/30", "34, more than the Max of 30")
+assert(sm.detail:find("destroy 4", 1, true), "says how many to get rid of")
+assertEq(ids()["reagent:shard"], nil, "and not low")
+TO.char.mins["reagent:shard:max"] = 0; refresh()
+assertEq(ids()["reagent:shard:max"], nil, "a Max of 0: no limit")
+TO.char.mins = {}
+TO.char.checks["reagent:shard"] = false; refresh()
+assertEq(ids()["reagent:shard:max"], nil, "off with the Soul Shard check")
+TO.char.checks = {}; STATE.bags = {}
+
+step("what's in your bank, remembered")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Prayer of Fortitude"); fire("SPELLS_CHANGED")
+TO.char.checks, TO.char.auto, TO.char.custom = {}, {}, {}
+TO.char.bankRestock = false   -- remembered even with the bank list off
+STATE.bags = { { id = 931, name = "Sacred Candle", count = 4 } }
+STATE.bank = { [6] = { { id = 931, name = "Sacred Candle", count = 20 }, { id = 931, name = "Sacred Candle", count = 5 } } }
+fire("BANKFRAME_OPENED"); fire("BANKFRAME_CLOSED")
+STATE.bank = nil
+assertEq(TO.char.bankItems["sacred candle"], 25, "counted while it was open")
+refresh()
+assert(ids()["reagent:candle"].detail:find("25 more in your bank", 1, true), "and named in the reminder, away from it")
+LOG = {}
+SlashCmdList.TOPPEDOFFFOREVER("shop")
+assert(lastLog("shopping list:"), "/topoff shop")
+assert(lastLog("6 %a+ Candle .*all in your bank"), "what you need, and that the bank has it (any rank)")
+STATE.bags = { { id = 931, name = "Sacred Candle", count = 40 } }; LOG = {}
+SlashCmdList.TOPPEDOFFFOREVER("shop")
+assert(lastLog("nothing, you're topped off"), "nothing to buy")
+LOG = {}
+SlashCmdList.TOPPEDOFFFOREVER("check")
+assert(lastLog("shopping list"), "/topoff check ends with it too")
+TO.char.bankItems, TO.char.bankRestock, STATE.bags = {}, true, {}
+
+step("food and water light up when health or mana is low")
+STATE.class = "MAGE"; TO.char.auto, TO.char.custom = {}, {}; TO.char.checks = {}
+TO.char.customAlways, TO.char.glowLow = true, true
+STATE.bags = {
+    { id = 7951, name = "Wild Hog Shank", count = 20, tip = "Use: Restores 294 health over 21 sec. Must remain seated while eating." },
+    { id = 7952, name = "Melon Juice", count = 20, tip = "Use: Restores 835 mana over 27 sec. Must remain seated while drinking." },
+}
+STATE.healthPct, STATE.manaPct = 0.4, 1; refresh()
+local function glowOf(id)
+    for _, b in ipairs(TO.buttons) do
+        if b.reminder and b.reminder.id == id then
+            local a = b.glow.__alpha
+            return issecretvalue(a) and a.v or a
+        end
+    end
+end
+assertEq(glowOf("auto:food"), 1, "40% health: the food glows")
+assertEq(glowOf("auto:water"), 0, "full mana: the water doesn't")
+STATE.manaPct = 0.6; fire("UNIT_POWER_UPDATE", "player")
+assertEq(glowOf("auto:water"), 0.5, "60% mana: half a glow, straight from the event")
+STATE.buffs = { Food = 20 }; refresh()
+assertEq(glowOf("auto:food"), 0, "already eating: no glow")
+STATE.buffs = {}
+TO.char.glowLow = false; refresh()
+assertEq(glowOf("auto:food"), 0, "turned off")
+TO.char.glowLow = true; STATE.healthPct, STATE.manaPct = nil, nil; STATE.bags = {}; TO.char.customAlways = false
+
+step("food and water in another language")
+STATE.locale = "deDE"
+STATE.spellNames = { [433] = "Essen", [430] = "Trinken", [746] = "Erste Hilfe", [439] = "Heiltrank", [437] = "Mana wiederherstellen" }
+ITEM_SPELL_TRIGGER_ONUSE, ITEM_MIN_LEVEL = "Benutzen:", "Benötigt Stufe %d"
+STATE.bags = {
+    { id = 7961, name = "Wildschweinhaxe", count = 20, spell = "Essen",
+      tip = "Benötigt Stufe 25\nBenutzen: Stellt im Verlauf von 21 Sek. 294 Punkt(e) Gesundheit wieder her." },
+    { id = 7962, name = "Brot", count = 20, spell = "Essen",
+      tip = "Benutzen: Stellt im Verlauf von 18 Sek. 61 Punkt(e) Gesundheit wieder her." },
+    { id = 7963, name = "Melonensaft", count = 5, spell = "Trinken",
+      tip = "Benutzen: Stellt im Verlauf von 27 Sek. 835 Punkt(e) Mana wieder her." },
+    { id = 7964, name = "Heiltrank", count = 3, spell = "Heiltrank",
+      tip = "Benutzen: Stellt 455 bis 585 Punkt(e) Gesundheit wieder her." },
+    { id = 7965, name = "Gewürztes Wolfsfleisch", count = 5, spell = "Essen",
+      tip = "Benutzen: Stellt im Verlauf von 21 Sek. 294 Punkt(e) Gesundheit wieder her. Wenn Ihr mindestens 10 Sek. esst, erhaltet Ihr 8 Ausdauer für 15 Min." },
+}
+TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wildschweinhaxe", "the biggest food, from its Use line")
+assertEq(TO.char.auto.food.score, 294, "the amount, not the seconds")
+assertEq(TO:ItemKind(7961).level, 25, "and its level, in that language")
+assertEq(TO.char.auto.water and TO.char.auto.water.name, "Melonensaft", "water")
+assertEq(TO.char.auto.healing and TO.char.auto.healing.score, 520, "a potion: the middle of its range")
+assertEq(TO:ItemKind(7965).food, nil, "stat food isn't taken for plain food")
+STATE.locale, STATE.spellNames, ITEM_SPELL_TRIGGER_ONUSE, ITEM_MIN_LEVEL = nil, nil, nil, nil
+STATE.bags = {}; TO.char.auto = {}
 print("ALL TESTS PASSED")

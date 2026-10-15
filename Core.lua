@@ -141,10 +141,11 @@ TO.OIL_FIRST = { MAGE = true, PRIEST = true, WARLOCK = true, DRUID = true, PALAD
 TO.OIL_FIRST_ROLES = { caster = true, healer = true, melee = false, tank = false }
 
 -- Reagents and class items. Checked only if you know one of the `requires` spells.
--- Any item in `items` counts toward the total (e.g. both candle ranks).
+-- Any item in `items` counts toward the total (e.g. both candle ranks). `max`: also
+-- warn when you carry more than this (your own Max, 0 for none, is saved as "<id>:max").
 TO.CLASS_REAGENTS = {
     WARLOCK = {
-        { id = "shard", label = "Soul Shard", items = { "Soul Shard" }, min = 5, requires = { "Drain Soul" } },
+        { id = "shard", label = "Soul Shard", items = { "Soul Shard" }, min = 5, max = 30, requires = { "Drain Soul" } },
     },
     MAGE = {
         { id = "teleport", label = "Rune of Teleportation", items = { "Rune of Teleportation" }, min = 2,
@@ -259,6 +260,9 @@ local CHAR_DEFAULTS = {       -- per character: what to check, and where the rem
     restockAtVendor = true,   -- restock list at vendors
     bankRestock = true,       -- list of what to take from the bank, beside the bank window
     repairAtVendor = true,    -- repair button at vendors
+    warn = {},                -- check id -> minutes before it runs out to warn (missing = Display tab's)
+    glowLow = true,           -- light up food and water when your health or mana is low
+    bankItems = {},           -- what was in your bank when you last had it open: lowercase name -> count
 }
 
 -- Fills in missing settings. A saved value of the wrong type (a damaged or
@@ -302,6 +306,13 @@ end
 
 -- A setting that's back to what it would be anyway is cleared, not saved: the class
 -- default for the dungeon set, the dungeon setting for the outside set.
+-- Seconds before a buff runs out that its reminder shows (and the border turns orange):
+-- the time set for that check on the Buffs tab, else the Display tab's for every buff
+function TO:WarnSecs(id)
+    local m = id and Num(self.char.warn[id])
+    return (m or self.db.warnMinutes) * 60
+end
+
 function TO:SetEnabled(id, on, outside, default)
     on = on and true or false
     local t, usual = self.char.checks, default ~= false
@@ -574,6 +585,40 @@ local function SpellIcon(name)
     return TO.ICONS.unknown
 end
 
+-- True when you haven't the mana for a spell right now. Asked of the spell by name, so
+-- it's the rank a click casts (your best), and the game's own cost for it. Your mana
+-- itself is hidden from addons on Forever; whether a spell can be afforded isn't.
+local function NoMana(spell)
+    if not (spell and C_Spell and C_Spell.IsSpellUsable) then return false end
+    local ok, _, short = pcall(C_Spell.IsSpellUsable, spell)
+    return ok and Plain(short) == true
+end
+TO.NoMana = NoMana
+
+-- A spell's mana cost (nil if the game won't say, or it costs none)
+local function ManaCost(spell)
+    if not (C_Spell and C_Spell.GetSpellPowerCost) then return nil end
+    local ok, costs = pcall(C_Spell.GetSpellPowerCost, spell)
+    if not ok or type(costs) ~= "table" then return nil end
+    for _, c in ipairs(costs) do
+        if type(c) == "table" and (Num(c.type) == 0 or Str(c.name) == "MANA") then
+            local n = Num(c.cost) or Num(c.minCost)
+            if n and n > 0 then return n end
+        end
+    end
+    return nil
+end
+
+-- Greys a reminder out, and says so, when you can't afford its spell yet
+function TO:MarkMana(r, spell)
+    if not NoMana(spell) then return false end
+    r.noMana = true
+    local cost = ManaCost(spell)
+    r.detail = (r.detail and (r.detail .. "\n") or "") .. "Not enough mana for " .. spell
+        .. (cost and (" (it costs " .. cost .. ")") or "")
+    return true
+end
+
 local WEAPON_LOCS = { INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true, INVTYPE_WEAPONMAINHAND = true,
     INVTYPE_WEAPONOFFHAND = true }
 
@@ -675,18 +720,92 @@ function TO:WeaponConfig()
 end
 
 function TO:CheckBuffs(list)
-    local warn = self.db.warnMinutes * 60
     for _, buff in ipairs(self.CLASS_BUFFS[self:PlayerClass()] or {}) do
         local id = "buff:" .. buff.id
         local spell = self:BuffPreference(buff)
         if spell and self:IsEnabled(id, not buff.off) then
+            local warn = self:WarnSecs(id)
             local left = LongestLeft(self.buffs, buff.auras or buff.cast)
+            local r
             if not left then
-                list[#list + 1] = { id = id, label = buff.label, icon = SpellIcon(spell),
+                r = { id = id, label = buff.label, icon = SpellIcon(spell),
                     detail = "Missing", action = { spell = spell } }
             elseif left > 0 and left < warn then
-                list[#list + 1] = { id = id, label = buff.label, icon = SpellIcon(spell), text = FormatTime(left),
+                r = { id = id, label = buff.label, icon = SpellIcon(spell), text = FormatTime(left),
                     detail = "Runs out in " .. FormatTime(left), action = { spell = spell }, expires = left }
+            end
+            if r then
+                r.warn = warn
+                self:MarkMana(r, spell)
+                list[#list + 1] = r
+            end
+        end
+    end
+end
+
+-- Buffs that do you harm where you are: the click puts it right. `when` says where it's
+-- wrong; `fix` = "cancel" takes it off, "aspect" casts your own Aspect over it.
+TO.WRONG_BUFFS = {
+    { id = "cheetah", label = "Aspect of the Cheetah", classes = { HUNTER = true }, when = "instance", fix = "aspect",
+      auras = { "Aspect of the Cheetah" }, why = "You're dazed when something hits you. Not for dungeons and raids." },
+    { id = "pack", label = "Aspect of the Pack", classes = { HUNTER = true }, when = "instance", fix = "aspect",
+      auras = { "Aspect of the Pack" }, why = "Your party is dazed when something hits them. Not for dungeons and raids." },
+    { id = "rfury", label = "Righteous Fury", classes = { PALADIN = true }, when = "notTank", fix = "cancel",
+      auras = { "Righteous Fury" }, why = "It makes you draw more threat, and you aren't the tank." },
+    { id = "salvation", label = "Blessing of Salvation", classes = { WARRIOR = true, PALADIN = true, DRUID = true },
+      when = "tank", fix = "cancel", auras = { "Blessing of Salvation", "Greater Blessing of Salvation" },
+      why = "It lowers the threat you make, and you're the tank." },
+}
+
+-- You're the tank: Protection Warriors and Paladins by their talents (or group role);
+-- Druids only by the group role you picked, since Feral is cats as well as bears
+function TO:IsTank()
+    local class = self:PlayerClass()
+    if class == "DRUID" then return Str(UnitGroupRolesAssigned and UnitGroupRolesAssigned("player")) == "TANK" end
+    if class ~= "WARRIOR" and class ~= "PALADIN" then return false end
+    return self:PlayerSpecRole() == "tank"
+end
+
+function TO:CheckWrongBuffs(list)
+    local class = self:PlayerClass()
+    for _, w in ipairs(self.WRONG_BUFFS) do
+        local id = "wrong:" .. w.id
+        if w.classes[class] and self:IsEnabled(id, true) then
+            local wrong = false
+            if w.when == "instance" then
+                wrong = self:InInstance()
+            elseif w.when == "tank" then
+                wrong = (IsInGroup() or self:InInstance()) and self:IsTank()
+            elseif w.when == "notTank" then
+                local role = self:PlayerSpecRole()
+                wrong = (IsInGroup() or self:InInstance()) and role ~= nil and role ~= "tank"
+            end
+            local aura
+            if wrong then
+                for _, a in ipairs(w.auras) do
+                    if self.buffs[a:lower()] then aura = a break end
+                end
+            end
+            if aura then
+                local r = { id = id, label = aura, icon = SpellIcon(w.auras[1]), urgentNow = true, text = "!",
+                    detail = "Wrong buff here. " .. w.why }
+                if w.fix == "aspect" then
+                    -- Your own Aspect, unless that's the wrong one too: then Hawk, or Monkey
+                    local aspect = self.CLASS_BUFFS.HUNTER[1]   -- cast: Hawk, Monkey, Cheetah, ...
+                    local pick = self:BuffPreference(aspect)
+                    for _, other in ipairs(self.WRONG_BUFFS) do
+                        if pick and other.auras[1] == pick then pick = nil end
+                    end
+                    pick = pick or self:FirstKnown({ aspect.cast[1], aspect.cast[2] })
+                    if pick then
+                        r.action = { spell = pick }
+                        r.clickText = "Click to cast " .. pick .. " instead"
+                    end
+                else
+                    r.action = { macro = "/cancelaura " .. aura }
+                    r.clickText = "Click to take it off"
+                end
+                list[#list + 1] = r
             end
         end
     end
@@ -696,13 +815,13 @@ function TO:CheckWeapons(list)
     local cfg = self:WeaponConfig()
     local hasMH, mhExp, mhCharges, _, hasOH, ohExp, ohCharges = GetWeaponEnchantInfo()
     local minCharges = self:ReagentMin("charges", self.CHARGES_DEFAULT_MIN)
-    local warn = self.db.warnMinutes * 60
     local hands = {
         { key = "mh", slot = 16, label = "Main hand", has = hasMH, exp = mhExp, charges = Num(mhCharges) },
         { key = "oh", slot = 17, label = "Off hand", has = hasOH, exp = ohExp, charges = Num(ohCharges) },
     }
     for _, h in ipairs(hands) do
         local id = "weapon:" .. h.key
+        local warn = self:WarnSecs(id)
         if self:IsEnabled(id, true) and HasWeapon(h.slot) and not IsSecret(h.has) then
             local left = h.has and (Num(h.exp) or 0) / 1000 or nil
             -- Poisons also run out of charges
@@ -710,13 +829,14 @@ function TO:CheckWeapons(list)
                 and h.charges < minCharges and self:IsEnabled("charges", true)
             local needs = (not h.has) or (left and left > 0 and left < warn) or lowCharges
             if needs then
-                local r = { id = id, slot = h.slot }
+                local r = { id = id, slot = h.slot, warn = warn }
                 if cfg.kind == "spell" then
                     -- Shaman weapon buffs only go on the main hand
                     if h.key == "mh" and cfg.spell then
                         r.label = h.label .. ": " .. cfg.spell
                         r.icon = SpellIcon(cfg.spell)
                         r.action = { spell = cfg.spell }
+                        r.manaSpell = cfg.spell
                     end
                 else
                     local want = cfg[h.key]
@@ -753,6 +873,7 @@ function TO:CheckWeapons(list)
                         r.detail = "No weapon enhancement"
                     end
                     if r.noItem then r.detail = r.detail .. "\nNo " .. r.noItem .. " in your bags" end
+                    if r.manaSpell then self:MarkMana(r, r.manaSpell) end
                     list[#list + 1] = r
                 end
             end
@@ -764,15 +885,39 @@ function TO:ReagentMin(id, default)
     return Num(self.char.mins[id]) or default
 end
 
+-- What was in your bank the last time you had it open (Bank.lua remembers it), for
+-- any of `names`: "12 more in your bank", or nil
+function TO:BankCount(names)
+    local total = 0
+    for _, n in ipairs(names) do total = total + (Num(self.char.bankItems[n:lower()]) or 0) end
+    return total
+end
+
+function TO:BankLine(names)
+    local n = self:BankCount(names)
+    if n > 0 then return "\n" .. n .. " more in your bank" end
+    return ""
+end
+
 function TO:CheckReagents(list)
     for _, rg in ipairs(self.CLASS_REAGENTS[self:PlayerClass()] or {}) do
         local id = "reagent:" .. rg.id
         if self:IsEnabled(id, true) and self:FirstKnown(rg.requires) then
             local min = self:ReagentMin(id, rg.min)
             local have, icon = self:BagCount(rg.items)
+            icon = icon or self:ItemIconByName(rg.items[1])
             if have < min then
-                list[#list + 1] = { id = id, label = rg.label, icon = icon or self:ItemIconByName(rg.items[1]),
-                    text = have .. "/" .. min, detail = ("%d in your bags (want %d)"):format(have, min) }
+                list[#list + 1] = { id = id, label = rg.label, icon = icon,
+                    text = have .. "/" .. min,
+                    detail = ("%d in your bags (want %d)"):format(have, min) .. self:BankLine(rg.items) }
+            end
+            -- Too many (Soul Shards fill your bags): a Max of 0 is no limit
+            local max = rg.max and self:ReagentMin(id .. ":max", rg.max)
+            if max and max > 0 and have > max then
+                list[#list + 1] = { id = id .. ":max", label = "Too many: " .. rg.label, icon = icon,
+                    text = have .. "/" .. max, low = true,
+                    detail = ("%d in your bags, more than your Max of %d. They take up bag space: "
+                        .. "destroy %d to get back to it."):format(have, max, have - max) }
             end
         end
     end
@@ -784,7 +929,7 @@ function TO:CheckReagents(list)
             if low or self.char.customAlways then
                 local r = { id = id, label = c.name, icon = icon or self:ItemIconByName(c.name),
                     text = have .. "/" .. c.min, low = low, stocked = not low, ownItem = true,
-                    detail = low and ("%d in your bags (want %d)"):format(have, c.min)
+                    detail = low and (("%d in your bags (want %d)"):format(have, c.min) .. self:BankLine({ c.name }))
                         or ("%d in your bags. Topped off."):format(have) }
                 -- Click to use it (food, drink, potions, bandages on yourself)
                 local e = self.bag[c.name:lower()]
@@ -1009,11 +1154,33 @@ function TO:ItemKind(id)
     if not UseTextLoaded(id) then return nil end   -- its "Use:" line isn't there yet; try again next scan
     local text = TooltipText(id)
     if not text then return nil end   -- not loaded yet; try again next scan
-    local k = { level = tonumber(text:match("requires level (%d+)")) or 0 }
+    local english = self:IsEnglish()
+    local k = { level = tonumber(text:match(english and "requires level (%d+)" or self:LevelPattern())) or 0 }
     if IsRecipe(id, text) then
         itemKinds[id] = k   -- nothing it's good for
         return k
     end
+    if not english then
+        self:LocalizedKind(id, text, k)
+    else
+        self:EnglishKind(text, k)
+    end
+    if not (k.food or k.water or k.bandage or k.healing or k.mana or k.stats) then
+        -- Nothing to track, as far as this tooltip says. Look again for a while.
+        u = u or { first = now }
+        u.at, u.k = now, k
+        if now - u.first < UNSURE_FOR then
+            unsure[id] = u
+            return k
+        end
+    end
+    unsure[id] = nil
+    itemKinds[id] = k
+    return k
+end
+
+-- The tooltip read in English: "Restores 294 health over 21 sec... while eating"
+function TO:EnglishKind(text, k)
     local wellFed = text:match("well fed(.*)")
     if wellFed then
         local stats, any = {}, false
@@ -1048,18 +1215,68 @@ function TO:ItemKind(id)
     hLo, hHi, mLo, mHi = Amount(hLo), Amount(hHi), Amount(mLo), Amount(mHi)
     if hLo and hHi and not mLo then k.healing = (hLo + hHi) / 2 end
     if mLo and mHi and not hLo then k.mana = (mLo + mHi) / 2 end
-    if not (k.food or k.water or k.bandage or k.healing or k.mana or k.stats) then
-        -- Nothing to track, as far as this tooltip says. Look again for a while.
-        u = u or { first = now }
-        u.at, u.k = now, k
-        if now - u.first < UNSURE_FOR then
-            unsure[id] = u
-            return k
+end
+
+-- Other game languages: the kind comes from the item's "Use:" spell, whose name the game
+-- gives in its own language ("Food", "Drink", "First Aid", ...: TO.KIND_SPELLS), and the
+-- amount from the numbers on its "Use:" line. Food, water and bandages: the biggest number
+-- (what's restored; the other is the seconds it takes). Potions: the middle of the two
+-- biggest ("70 to 90"). Food whose line goes on (more than two numbers: "...become well
+-- fed and gain 12 Stamina for 15 min") is stat food. Which stats it gives can't be read
+-- yet, so it isn't tracked, and isn't taken for plain food either.
+TO.KIND_SPELLS = { food = 433, water = 430, bandage = 746, healing = 439, mana = 437 }
+
+function TO:IsEnglish()
+    local loc = GetLocale and Str(GetLocale())
+    return loc == nil or loc == "enUS" or loc == "enGB"
+end
+
+-- "Requires Level %d" in this game's language, as a pattern
+function TO:LevelPattern()
+    local s = (Str(ITEM_MIN_LEVEL) or "Requires Level %d"):lower()
+    s = s:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%d", "(%%d+)")
+    return s
+end
+
+-- The localized spell names behind each kind, lowercase: name -> kind
+local kindNames
+function TO:KindNames()
+    if kindNames then return kindNames end
+    local out, any = {}, false
+    for kind, sid in pairs(self.KIND_SPELLS) do
+        local n = C_Spell and C_Spell.GetSpellName and Str(C_Spell.GetSpellName(sid))
+        if n then out[n:lower()] = kind any = true end
+    end
+    if any then kindNames = out end   -- not loaded yet: asked again next time
+    return out
+end
+
+function TO:LocalizedKind(id, text, k)
+    if not (C_Item and C_Item.GetItemSpell) then return end
+    local ok, spellName = pcall(C_Item.GetItemSpell, id)
+    spellName = ok and Str(spellName)
+    local kind = spellName and self:KindNames()[spellName:lower()]
+    if not kind then return end
+    local prefix = (Str(ITEM_SPELL_TRIGGER_ONUSE) or "Use:"):lower()
+    local nums = {}
+    for line in text:gmatch("[^\n]+") do
+        if line:find(prefix, 1, true) == 1 then
+            for n in line:gmatch("%d[%d%.,]*") do
+                local v = tonumber((n:gsub("[%.,]", "")))
+                if v then nums[#nums + 1] = v end
+            end
+            break
         end
     end
-    unsure[id] = nil
-    itemKinds[id] = k
-    return k
+    if #nums == 0 then return end
+    table.sort(nums, function(a, b) return a > b end)
+    if kind == "healing" or kind == "mana" then
+        k[kind] = nums[2] and (nums[1] + nums[2]) / 2 or nums[1]
+    elseif kind == "food" and #nums > 2 then
+        return   -- stat food
+    else
+        k[kind] = nums[1]
+    end
 end
 
 -- How good an item is for a slot (nil = not that kind of item)
@@ -1253,12 +1470,12 @@ end
 function TO:CheckPartyBuffs(list)
     local units, raid = self:GroupUnits()
     if #units == 0 then return end
-    local warn = self.db.warnMinutes * 60
     local watchExpiring = self.char.partyExpiring
     for _, buff in ipairs(self.CLASS_BUFFS[self:PlayerClass()] or {}) do
         local id = "party:" .. buff.id
         local spell = buff.party and self:BuffPreference(buff)
         if spell and self:IsEnabled(id, not buff.off) then
+            local warn = self:WarnSecs(id)
             local missing, expiring, target, soonest, soonTarget = {}, {}, nil, nil, nil
             for _, u in ipairs(units) do
                 local usable = CanBeBuffed(u)
@@ -1286,19 +1503,27 @@ function TO:CheckPartyBuffs(list)
                 if #missing > 0 then lines[#lines + 1] = "Missing on: " .. table.concat(missing, ", ") end
                 if #expiring > 0 then lines[#lines + 1] = "Running out on: " .. table.concat(expiring, ", ") end
                 local r = { id = id, label = buff.label .. (raid and " (raid)" or " (party)"), icon = SpellIcon(spell),
-                    text = tostring(#missing + #expiring), detail = table.concat(lines, "\n") }
+                    text = tostring(#missing + #expiring), detail = table.concat(lines, "\n"), warn = warn }
                 if #missing == 0 then r.expires = soonest end   -- orange, then red, like your own buffs
                 target = target or soonTarget
                 local group = self:GroupSpell(buff)
                 local partyCount = group and self:PartyNeeding(buff, watchExpiring and warn or 0) or 0
-                if group and partyCount >= self.GROUP_MIN then
+                -- The group version costs much more: short of mana for it, buff one at a time
+                local groupShort = group and partyCount >= self.GROUP_MIN and NoMana(group) and target ~= nil
+                    and not NoMana(spell)
+                if group and partyCount >= self.GROUP_MIN and not groupShort then
                     -- One cast on yourself covers your whole party
                     r.icon = SpellIcon(group)
                     r.action = { spell = group, unit = "player" }
                     r.clickText = "Click to cast " .. group .. " on your party (" .. partyCount .. " need it)"
+                    self:MarkMana(r, group)
                 elseif target then
                     r.action = { spell = spell, unit = target }
                     r.clickText = "Click to cast " .. spell .. " on " .. (Str(UnitName(target)) or "them")
+                    if groupShort then
+                        r.detail = r.detail .. "\nNot enough mana for " .. group .. ", so one at a time"
+                    end
+                    self:MarkMana(r, spell)
                 else
                     r.detail = r.detail .. "\nNobody who needs it is in range"
                 end
@@ -1350,7 +1575,7 @@ function TO:CheckPartyBlessings(list)
     if self:PlayerClass() ~= "PALADIN" or not self:IsEnabled("party:blessing", true) then return end
     local units, raid = self:GroupUnits()
     if #units == 0 then return end
-    local warn = self.db.warnMinutes * 60
+    local warn = self:WarnSecs("party:blessing")
     local names, soon, target, targetSpell, anySpell = {}, {}, nil, nil, nil
     local soonest, soonTarget, soonSpell
     for _, u in ipairs(units) do
@@ -1380,11 +1605,12 @@ function TO:CheckPartyBlessings(list)
     if #soon > 0 then lines[#lines + 1] = "Running out: " .. table.concat(soon, ", ") end
     local r = { id = "party:blessing", label = raid and "Blessings (raid)" or "Blessings (party)",
         icon = SpellIcon(targetSpell or anySpell),
-        text = tostring(#names + #soon), detail = table.concat(lines, "\n") }
+        text = tostring(#names + #soon), detail = table.concat(lines, "\n"), warn = warn }
     if #names == 0 then r.expires = soonest end
     if target then
         r.action = { spell = targetSpell, unit = target }
         r.clickText = "Click to cast " .. targetSpell .. " on " .. (Str(UnitName(target)) or "them")
+        self:MarkMana(r, targetSpell)
     else
         r.detail = r.detail .. "\nNobody who needs one is in range"
     end
@@ -1435,11 +1661,12 @@ end
 function TO:CheckElixirs(list)
     if #self.char.elixirs == 0 then return end
     if self.char.elixirInstanceOnly and not self:InInstance() then return end
-    local warn = self.db.warnMinutes * 60
     for _, el in ipairs(self.char.elixirs) do
+        local id = "elixir:" .. el.name:lower()
+        local warn = self:WarnSecs(id)
         local left = LongestLeft(self.buffs, el.auras or { el.name })
         if not left or (left > 0 and left < warn) then
-            local r = { id = "elixir:" .. el.name:lower(), label = el.name,
+            local r = { id = id, label = el.name, warn = warn,
                 detail = left and ("Runs out in " .. FormatTime(left)) or "Missing" }
             if left then r.text, r.expires = FormatTime(left), left end
             local e = self.bag and self.bag[el.name:lower()]
@@ -1450,7 +1677,7 @@ function TO:CheckElixirs(list)
             else
                 r.icon = (el.id and ItemIcon(el.id)) or self.ICONS.unknown
                 r.noItem = el.name
-                r.detail = r.detail .. "\nNo " .. el.name .. " in your bags"
+                r.detail = r.detail .. "\nNo " .. el.name .. " in your bags" .. self:BankLine({ el.name })
             end
             list[#list + 1] = r
         end
@@ -1525,7 +1752,8 @@ function TO:CheckPet(list)
         if have < min then
             list[#list + 1] = { id = "pet:food", label = "Pet food: " .. (food and food.name or foodName),
                 icon = food and food.icon or self:ItemIconByName(foodName), text = have .. "/" .. min, low = true,
-                detail = ("%d in your bags (want %d)"):format(have, min) }
+                detail = ("%d in your bags (want %d)"):format(have, min)
+                    .. self:BankLine({ food and food.name or foodName }) }
         end
     end
 end
@@ -1559,6 +1787,36 @@ function TO:CheckSoulstone(list)
         r.action = { spell = create }
         r.clickText = "Click to cast " .. create
         r.detail = r.detail .. "\nNo Soulstone in your bags"
+    end
+    list[#list + 1] = r
+end
+
+-- Resurrect: group members who are dead, out of combat. Click to bring back the next one
+-- in range. (Rebirth isn't here: it's for fights, with a long cooldown and a reagent.)
+TO.REZ_SPELLS = { PRIEST = "Resurrection", PALADIN = "Redemption", SHAMAN = "Ancestral Spirit" }
+
+function TO:CheckResurrect(list)
+    local spell = self.REZ_SPELLS[self:PlayerClass()]
+    if not (spell and self:Knows(spell) and self:IsEnabled("rez", true)) then return end
+    if Plain(UnitIsDeadOrGhost("player")) then return end
+    local dead, target = {}, nil
+    for _, u in ipairs((self:GroupUnits())) do
+        local isDead = Plain(UnitIsDeadOrGhost(u)) == true and Plain(UnitIsConnected(u)) ~= false
+            and not (UnitIsFeignDeath and Plain(UnitIsFeignDeath(u)))
+        if isDead then
+            dead[#dead + 1] = Str(UnitName(u)) or u
+            if not target and InSpellRange(spell, u) then target = u end
+        end
+    end
+    if #dead == 0 then return end
+    local r = { id = "rez", label = "Resurrect", icon = SpellIcon(spell), text = tostring(#dead),
+        detail = "Dead: " .. table.concat(dead, ", ") }
+    if target then
+        r.action = { spell = spell, unit = target }
+        r.clickText = "Click to cast " .. spell .. " on " .. (Str(UnitName(target)) or "them")
+        self:MarkMana(r, spell)
+    else
+        r.detail = r.detail .. "\nNobody dead is in range"
     end
     list[#list + 1] = r
 end
@@ -1681,11 +1939,11 @@ function TO:CheckWellFed(list)
         if buffs[a] then return end   -- eating right now
     end
     local left = LongestLeft(buffs, self.WELL_FED_AURAS)
-    local warn = self.db.warnMinutes * 60
+    local warn = self:WarnSecs(id)
     if left and (left == 0 or left >= warn) then return end
 
     local food = self.char.auto.statfood
-    local r = { id = id, label = "Well Fed", icon = self.ICONS.wellFed }
+    local r = { id = id, label = "Well Fed", icon = self.ICONS.wellFed, warn = warn }
     if left then
         r.text = FormatTime(left)
         r.detail = "Runs out in " .. FormatTime(left)
@@ -1701,7 +1959,7 @@ function TO:CheckWellFed(list)
     else
         r.noItem = food and food.name or "stat food"
         if food then r.icon = ItemIcon(food.id) or r.icon end
-        r.detail = r.detail .. "\nNo " .. r.noItem .. " in your bags"
+        r.detail = r.detail .. "\nNo " .. r.noItem .. " in your bags" .. (food and self:BankLine({ food.name }) or "")
     end
     list[#list + 1] = r
 end
@@ -1723,11 +1981,12 @@ function TO:CheckRested(list)
     local stacks = left and self.buffStacks and self.buffStacks[self.RESTED.aura]
     if stacks and stacks < 1 then stacks = 1 end   -- having it at all is one stack
     local short = stacks and stacks < max
-    local running = left and left > 0 and left < self.db.warnMinutes * 60
+    local warn = self:WarnSecs(id)
+    local running = left and left > 0 and left < warn
     if left and not short and not running then return end
 
     local r = { id = id, label = "Well-Rested", icon = e.icon or ItemIcon(e.id) or self.ICONS.unknown,
-        action = { use = "item:" .. e.id, useName = e.name } }
+        action = { use = "item:" .. e.id, useName = e.name }, warn = warn }
     local lines = {}
     if not left then
         lines[#lines + 1] = "Missing"
@@ -1781,7 +2040,7 @@ function TO:CheckAutoItems(list)
             local min = a.min or slot.min
             local low = have < min
             if low or self.char.customAlways then
-                local detail = low and ("%d in your bags (want %d)"):format(have, min)
+                local detail = low and (("%d in your bags (want %d)"):format(have, min) .. self:BankLine({ a.name }))
                     or ("%d in your bags. Topped off."):format(have)
                 if others > 0 then detail = detail .. "\n" .. others .. " of them are others just as good" end
                 if nextBest then detail = detail .. "\nOut of " .. a.name .. ": this is the next best in your bags" end
@@ -1789,7 +2048,11 @@ function TO:CheckAutoItems(list)
                     icon = (e and e.icon) or ItemIcon(e and e.id or a.id) or self:ItemIconByName(name),
                     text = have .. "/" .. min, low = low, stocked = not low, ownItem = true,
                     detail = detail .. "\nAuto-tracked: best " .. slot.label:lower() }
-                if e then r.action = { use = "item:" .. e.id, useName = e.name } end
+                if e then
+                    r.action = { use = "item:" .. e.id, useName = e.name }
+                    -- Lights up when your health (food) or mana (water) is low: see UpdateGlows
+                    if self.char.glowLow then r.glow = self.GLOW_SLOTS[slot.key] end
+                end
                 list[#list + 1] = r
             end
         end
@@ -1803,7 +2066,7 @@ end
 TO.COPY_FIELDS = { "checks", "checksOutside", "splitProfiles", "prefs", "mins", "weapon", "custom",
     "customAlways", "statFocus", "wellFedInstanceOnly", "elixirs", "elixirInstanceOnly",
     "soulstoneInstanceOnly", "petFood", "blessings", "wholeRaid", "restockAtVendor", "repairAtVendor",
-    "partyExpiring", "groupBuffs", "bankRestock" }
+    "partyExpiring", "groupBuffs", "bankRestock", "warn", "glowLow" }
 
 local function DeepCopy(v)
     if type(v) ~= "table" then return v end
@@ -2068,8 +2331,9 @@ function TO:CheckAmmo(list)
     local have = Num(GetInventoryItemCount("player", 0)) or 0
     local min = self:ReagentMin(id, self.AMMO_DEFAULT_MIN)
     if have < min then
+        local name = ItemName(ammo)
         list[#list + 1] = { id = id, label = "Ammo", icon = ItemIcon(ammo) or self.ICONS.ammo,
-            text = tostring(have), detail = ("%d left (want %d)"):format(have, min) }
+            text = tostring(have), detail = ("%d left (want %d)"):format(have, min) .. (name and self:BankLine({ name }) or "") }
     end
 end
 
@@ -2107,6 +2371,7 @@ function TO:BuildReminders()
     self:UpdateAutoItems()
     -- Row 1: buffs
     self:CheckBuffs(list)
+    self:CheckWrongBuffs(list)
     self:CheckPartyBuffs(list)
     self:CheckPartyBlessings(list)
     self:CheckWeapons(list)
@@ -2115,6 +2380,7 @@ function TO:BuildReminders()
     self:CheckElixirs(list)
     self:CheckPet(list)
     self:CheckSoulstone(list)
+    self:CheckResurrect(list)
     -- Row 2: things to top off
     self:CheckReagents(list)
     self:CheckConjures(list)
@@ -2207,6 +2473,12 @@ end
 
 function TO:CreateButton(i)
     local b = self:NewIconButton("ToppedOffForeverButton" .. i, self.bar)
+    -- Food and water light up when your health or mana is low (UpdateGlows)
+    b.glow = b:CreateTexture(nil, "OVERLAY")
+    b.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    b.glow:SetBlendMode("ADD")
+    b.glow:SetVertexColor(0.45, 1, 0.45)
+    b.glow:SetAlpha(0)
     -- Shift + right-click hides the reminder for a while instead of casting (an empty
     -- attribute is Blizzard's "do nothing", so the secure click skips it). A plain
     -- right-click casts or uses, like a left-click.
@@ -2269,10 +2541,10 @@ function TO:ApplyButton(b, r)
     b:SetAttribute("macrotext", attrs.macrotext)
     b:SetAttribute("item", attrs.item)
     b.icon:SetTexture(r.icon or self.ICONS.unknown)
-    if b.icon.SetDesaturated then b.icon:SetDesaturated(r.noItem ~= nil) end
+    if b.icon.SetDesaturated then b.icon:SetDesaturated(r.noItem ~= nil or r.noMana == true) end
     b.text:SetText(r.text or "")
     -- Running out: orange border at the warning time, red in its last 20%
-    local warn = self.db.warnMinutes * 60
+    local warn = r.warn or self:WarnSecs(nil)
     local color, thick = self.COLORS.border, 1
     if r.urgentNow then
         color, thick = self.COLORS.urgent, 3
@@ -2348,6 +2620,10 @@ function TO:Layout(list)
             local b = self.buttons[idx] or self:CreateButton(idx)
             self:ApplyButton(b, r)
             b:SetSize(size, size)
+            local g = math.floor(size * 0.36)   -- the border texture's glow sits outside its middle
+            b.glow:ClearAllPoints()
+            b.glow:SetPoint("TOPLEFT", -g, g)
+            b.glow:SetPoint("BOTTOMRIGHT", g, -g)
             b:ClearAllPoints()
             b:SetPoint("TOPLEFT", self.bar, "TOPLEFT", (col - 1) * (size + gap), y)
             b:Show()
@@ -2394,10 +2670,63 @@ function TO:Layout(list)
     self.bar:SetAllPoints(self.main)
     self.bar:SetShown(#shownList > 0)
     self.shownCount = #shownList
+    self:UpdateGlows()
     self:UpdateHeader()
     -- In case the position couldn't be read at login yet
     if self.char.point[1] ~= "TOPLEFT" then self:PinTopLeft() end
     self:LayoutCombatBar()
+end
+
+---------------------------------------------------------------------------
+-- Low health or mana: your food and water icons light up, so after a fight the next
+-- click is the one you need. Forever hides your health and mana from addons, so the
+-- game works out the glow itself: a curve turns the hidden percentage into the glow's
+-- strength (full below half, none from 70% up), and only the texture ever sees it.
+---------------------------------------------------------------------------
+TO.GLOW_SLOTS = { food = "health", water = "mana" }
+TO.GLOW_POINTS = { { 0, 1 }, { 0.5, 1 }, { 0.7, 0 }, { 1, 0 } }
+TO.DRINKING_AURAS = { "drink", "food & drink", "refreshment" }
+local POWER_MANA = 0   -- Enum.PowerType.Mana
+
+local function GlowCurve()
+    if TO.glowCurve ~= nil then return TO.glowCurve or nil end
+    TO.glowCurve = false
+    if not (C_CurveUtil and C_CurveUtil.CreateCurve) then return nil end
+    local ok, curve = pcall(C_CurveUtil.CreateCurve)
+    if not ok or not curve then return nil end
+    for _, p in ipairs(TO.GLOW_POINTS) do pcall(curve.AddPoint, curve, p[1], p[2]) end
+    TO.glowCurve = curve
+    return curve
+end
+
+-- How strongly an icon glows: the curve's result for your health or mana (a hidden
+-- value the texture can take), or 0 when the game can't say or you're eating already
+function TO:GlowAlpha(kind)
+    local curve = GlowCurve()
+    if not curve then return 0 end
+    local busy = kind == "mana" and self.DRINKING_AURAS or self.EATING_AURAS
+    for _, a in ipairs(busy) do
+        if self.buffs and self.buffs[a] then return 0 end
+    end
+    local ok, v
+    if kind == "health" and UnitHealthPercent then
+        ok, v = pcall(UnitHealthPercent, "player", true, curve)
+    elseif kind == "mana" and UnitPowerPercent then
+        ok, v = pcall(UnitPowerPercent, "player", POWER_MANA, false, curve)
+    end
+    if ok then return v end   -- hidden: never compared or tested, only handed to the texture
+    return 0
+end
+
+function TO:UpdateGlows()
+    for _, b in ipairs(self.buttons or {}) do
+        if b.glow then
+            local kind = b.reminder and b.reminder.glow
+            local alpha = 0
+            if kind then alpha = self:GlowAlpha(kind) end
+            if not pcall(b.glow.SetAlpha, b.glow, alpha) then b.glow:SetAlpha(0) end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -2682,8 +3011,8 @@ TO.DIVIDER_SPACE = 14      -- room between the buff row and the top-off row
 TO.DIVIDER_THICKNESS = 4   -- the gold divider line
 
 -- Buffs (row 1) vs things to top off (row 2)
-local BUFF_ROW = { "^buff:", "^party:", "^weapon:", "^elixir:", "^wellfed$", "^rested$", "^pet:summon$", "^pet:happy$",
-    "^soulstone$" }
+local BUFF_ROW = { "^buff:", "^wrong:", "^party:", "^weapon:", "^elixir:", "^wellfed$", "^rested$", "^pet:summon$",
+    "^pet:happy$", "^soulstone$", "^rez$" }
 function TO:IsBuffReminder(r)
     local id = r.id or ""
     for _, pat in ipairs(BUFF_ROW) do
@@ -2989,6 +3318,30 @@ function TO:Check()
     end
     local pct = self:LowestDurability()
     if pct then print("  " .. Colored(pct >= self.db.durabilityPct, ("Durability: %d%%"):format(math.floor(pct)))) end
+    self:ShoppingList()
+end
+
+-- Everything you're short on, all together, and how much of it is in your bank
+function TO:ShoppingList()
+    self:ScanBags()
+    self:UpdateAutoItems()
+    local needs = self:RestockNeeds()
+    if #needs == 0 then
+        Print("shopping list: nothing, you're topped off.")
+        return
+    end
+    Print("shopping list:")
+    for _, need in ipairs(needs) do
+        local bank = self:BankCount(need.any or need.names)
+        local where = ""
+        if bank >= need.need then
+            where = " |cff40ff40(all in your bank)|r"
+        elseif bank > 0 then
+            where = " (" .. bank .. " in your bank)"
+        end
+        local name = #need.names == 1 and need.names[1] or need.label
+        print("  " .. need.need .. " " .. name .. where)
+    end
 end
 
 local function Help()
@@ -2997,6 +3350,7 @@ local function Help()
     print("  /topoff show | hide | toggle — show or hide the reminders")
     print("  /topoff lock | unlock — lock or unlock the reminders' position")
     print("  /topoff check — list what's checked for your class")
+    print("  /topoff shop — list everything you're short on, and what's in your bank")
     print("  /topoff add <count> <item> — remind you when you have fewer than <count> of an item")
     print("  /topoff remove <item> — stop checking an item you added")
     print("  /topoff unhide — bring back reminders you hid (Shift + right-click)")
@@ -3023,6 +3377,8 @@ SlashCmdList.TOPPEDOFFFOREVER = function(msg)
         Print(cmd == "lock" and "locked." or "unlocked — drag the ToppedOff header to move.")
     elseif cmd == "check" then
         TO:Check()
+    elseif cmd == "shop" or cmd == "shopping" then
+        TO:ShoppingList()
     elseif cmd == "add" then
         local count, name = rest:match("^(%d+)%s+(.+)$")
         if TO:AddCustom(name, count) then
@@ -3072,6 +3428,10 @@ events:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
 events:RegisterEvent("READY_CHECK")
 events:RegisterEvent("UNIT_AURA")   -- every unit; WatchesUnit picks the ones that matter
 events:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+-- Your health and mana: only the food and water glow follows them
+for _, e in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER" }) do
+    pcall(events.RegisterUnitEvent, events, e, "player")
+end
 events:RegisterEvent("GROUP_ROSTER_UPDATE")
 events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 -- If WoW ever blocks something and blames ToppedOff, say exactly what in chat
@@ -3146,6 +3506,9 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
     elseif event == "SPELLS_CHANGED" then
         TO:ScanSpellbook()
         TO:RequestSoonUpdate()
+    elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_POWER_UPDATE"
+        or event == "UNIT_MAXPOWER" then
+        if arg1 == "player" then TO:UpdateGlows() end
     elseif event == "UNIT_AURA" then
         if TO:WatchesUnit(arg1) then TO:RequestSoonUpdate() end
     elseif event == "READY_CHECK" then

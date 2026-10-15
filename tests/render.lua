@@ -198,7 +198,9 @@ local function Dump(name, root, unclip)
             if o.__checked then fields[#fields + 1] = '"checked":true' end
             if o.__texture then fields[#fields + 1] = '"texture":"' .. Esc(o.__texture) .. '"' end
             if o.__desat then fields[#fields + 1] = '"desat":true' end
-            if o.__alpha then fields[#fields + 1] = '"alpha":' .. tostring(o.__alpha) end
+            -- (a hidden value, like the food glow's, is drawn as what it hides)
+            local alpha = issecretvalue(o.__alpha) and o.__alpha.v or o.__alpha
+            if alpha then fields[#fields + 1] = '"alpha":' .. tostring(alpha) end
             local clip = not unclip and ScrollClip(o)
             if clip then
                 local cr = Resolve(clip, cache)

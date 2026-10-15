@@ -1,3 +1,15 @@
+## 1.13.0
+
+- **Wrong buffs.** A red icon when a buff is doing you harm: Aspect of the Cheetah or the Pack in a dungeon or raid, Righteous Fury in a group when you aren't the tank, and Blessing of Salvation when you are. Click to take it off; Hunters cast their own Aspect over it. Turn each one off on the Buffs tab. Druids count as the tank when they pick the Tank role.
+- **Resurrect.** Priests, Paladins and Shamans get an icon after a fight when someone in the group is dead. It names them, and a click casts Resurrection, Redemption or Ancestral Spirit on the next one in range.
+- **Not enough mana.** A buff, party buff, blessing, Shaman weapon buff or resurrect you can't afford yet is greyed out, and its tooltip says what the spell costs. When you're short for the group version (Prayer of Fortitude, Arcane Brilliance, Gift of the Wild) but not the single one, the click buffs your party one at a time instead.
+- **A warning time for each buff.** A new **Warn** box beside each buff on the Buffs tab: how many minutes before it runs out that it shows. Give Soulstone or a flask more warning than a 5-minute weapon buff. Left as it is, it follows the Display tab, as before. 0 means only once it's gone.
+- **Food and water light up after a fight.** When your health is low your food glows, and when your mana is low your water does: full below half, fading out by 70%. Not while you're already eating or drinking. Turn it off on the Supplies tab (Quick-use bar).
+- **Your bank is remembered.** Each time you open it, ToppedOff notes what's inside, so a reminder for something you're low on says "12 more in your bank" wherever you are.
+- **Shopping list.** `/topoff shop` lists everything you're short on and how much of it is in your bank. `/topoff check` ends with it too.
+- **Soul Shard Max.** Warlocks get a reminder when they carry more than 30 Soul Shards, since they fill your bags. Change the number (or 0 for no most) on the Supplies tab.
+- **Food, water, bandages and potions in other languages.** On a game in another language they're now recognised by what they do, where before they were only recognised in English. Stat food is still only recognised in English.
+
 ## 1.12.0
 
 - **Position and lock are saved per character.** Move or lock the reminders on one character and your others stay where you put them. Each character starts from where the reminders were before this update.
