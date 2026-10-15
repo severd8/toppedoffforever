@@ -218,7 +218,6 @@ TO.LOGO_TEXT = "|T" .. TO.ICONS.addon .. ":0|t"
 ---------------------------------------------------------------------------
 local DEFAULTS = {            -- account-wide: display
     shown = true,
-    locked = false,
     iconSize = 40,
     showHeader = true,
     hideInCombat = true,
@@ -232,10 +231,11 @@ local DEFAULTS = {            -- account-wide: display
     sound = false,
     minimap = true,
     minimapAngle = 200,
-    point = { "CENTER", "CENTER", 0, -150 },
 }
 
-local CHAR_DEFAULTS = {       -- per character: what to check
+local CHAR_DEFAULTS = {       -- per character: what to check, and where the reminders sit
+    locked = false,
+    point = { "CENTER", "CENTER", 0, -150 },
     checks = {},              -- check id -> true/false (missing = class default)
     prefs = {},               -- buff id -> preferred spell name
     mins = {},                -- reagent/ammo id -> minimum count
@@ -2396,7 +2396,7 @@ function TO:Layout(list)
     self.shownCount = #shownList
     self:UpdateHeader()
     -- In case the position couldn't be read at login yet
-    if self.db.point[1] ~= "TOPLEFT" then self:PinTopLeft() end
+    if self.char.point[1] ~= "TOPLEFT" then self:PinTopLeft() end
     self:LayoutCombatBar()
 end
 
@@ -2506,7 +2506,7 @@ function TO:LayoutCombatBar()
     end
     f.count = #items
     f:SetSize(math.max(#items * (size + gap) - gap, self.HEADER_MIN_WIDTH), size)
-    f.box:SetShown(not self.db.locked or self.db.showHeader)
+    f.box:SetShown(not self.char.locked or self.db.showHeader)
     self:UpdateCombatCounts()
     local driver = #items > 0 and "[combat] show; hide" or "hide"
     if driver ~= f.driver then
@@ -2610,7 +2610,7 @@ function TO:PinTopLeft()
     if not left or not top then return false end
     self.main:ClearAllPoints()
     self.main:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
-    self.db.point = { "TOPLEFT", "BOTTOMLEFT", left, top }
+    self.char.point = { "TOPLEFT", "BOTTOMLEFT", left, top }
     return true
 end
 
@@ -2623,8 +2623,8 @@ function TO:ShowHeaderMenu(owner)
     MenuUtil.CreateContextMenu(owner, function(_, root)
         root:CreateTitle("ToppedOff Forever")
         root:CreateCheckbox("Lock",
-            function() return TO.db.locked end,
-            function() TO:SetLocked(not TO.db.locked) end)
+            function() return TO.char.locked end,
+            function() TO:SetLocked(not TO.char.locked) end)
         root:CreateButton("Settings", function()
             if not (TO.config and TO.config:IsShown()) then TO:OpenConfig() end
         end)
@@ -2634,7 +2634,7 @@ end
 function TO:SavePosition()
     if self:PinTopLeft() then return end
     local p, _, rp, x, y = self.main:GetPoint()
-    self.db.point = { p, rp, x, y }
+    self.char.point = { p, rp, x, y }
 end
 
 -- Ends a drag of the window and saves where it is. WoW doesn't let the window be
@@ -2651,7 +2651,7 @@ function TO:StopMoving()
 end
 
 function TO:RestorePosition()
-    local pt = self.db.point
+    local pt = self.char.point
     self.main:ClearAllPoints()
     self.main:SetPoint(pt[1], UIParent, pt[2], pt[3], pt[4])
     -- Older saves (and the default) use the center: switch to the top-left corner
@@ -2698,12 +2698,12 @@ TO.STOCKED_ALPHA = 0.6     -- topped-off items shown for quick use are dimmed
 -- dragged, or whenever there are reminders if "Show header and frame" is on.
 function TO:UpdateHeader()
     if not self.box then return end
-    local unlocked = not self.db.locked
+    local unlocked = not self.char.locked
     self.box:SetShown(unlocked or (self.db.showHeader and (self.shownCount or 0) > 0))
 end
 
 function TO:SetLocked(locked)
-    self.db.locked = locked
+    self.char.locked = locked
     self:UpdateHeader()
     if self.RefreshSettings then self:RefreshSettings() end   -- an open options window shows it
 end
@@ -2711,7 +2711,7 @@ end
 function TO:ApplySettings()
     if not self.built then return end
     self:ApplyVisibility()
-    self:SetLocked(self.db.locked)
+    self:SetLocked(self.char.locked)
     self:UpdateMinimapButton()
     self:RequestUpdate()
     self:RunOutOfCombat("update", function() self:Update() end)
@@ -2762,7 +2762,7 @@ function TO:BuildFrames()
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
-        if TO.db.locked then return end
+        if TO.char.locked then return end
         if InCombatLockdown() then
             Print("The window can't be moved in combat.")
             return
@@ -2777,7 +2777,7 @@ function TO:BuildFrames()
     header:SetScript("OnEnter", function(f)
         GameTooltip:SetOwner(f, "ANCHOR_TOP")
         GameTooltip:AddLine(TO.LOGO_TEXT .. " ToppedOff Forever", unpack(TO.COLORS.gold))
-        if not TO.db.locked then
+        if not TO.char.locked then
             GameTooltip:AddLine("Drag to move", 1, 1, 1)
             GameTooltip:AddLine("Lock it in the options or with /topoff lock", 1, 1, 1)
         end
@@ -3041,7 +3041,7 @@ SlashCmdList.TOPPEDOFFFOREVER = function(msg)
     elseif cmd == "unhide" then
         Print(TO:ClearSnoozes() and "hidden reminders are back." or "nothing is hidden.")
     elseif cmd == "reset" then
-        TO.db.point = { unpack(DEFAULTS.point) }
+        TO.char.point = { unpack(CHAR_DEFAULTS.point) }
         TO:RunOutOfCombat("position", function() TO:RestorePosition() end)
         Print(InCombatLockdown() and "position will reset when combat ends." or "position reset.")
     else
@@ -3095,6 +3095,10 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
             TO.db.schema = 2
         end
         if type(ToppedOffForeverCharDB) ~= "table" then ToppedOffForeverCharDB = {} end
+        -- Position and lock used to be account-wide: a character that has none yet starts from those
+        local char = ToppedOffForeverCharDB
+        if char.point == nil and type(TO.db.point) == "table" then char.point = { unpack(TO.db.point) } end
+        if char.locked == nil and type(TO.db.locked) == "boolean" then char.locked = TO.db.locked end
         FillDefaults(ToppedOffForeverCharDB, CHAR_DEFAULTS)
         TO.char = ToppedOffForeverCharDB
         KeepValid(TO.char.custom, function(c)
