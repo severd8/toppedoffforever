@@ -30,16 +30,15 @@ Found a bug, or want something added? Please [submit it on GitHub](https://githu
 
 ToppedOff Forever is free. If it has saved you a wipe, you can [leave a small tip on Ko-fi](https://ko-fi.com/tauntmasterforever). Thank you!
 
-## Also by me
+## All addons by me
 
 - **TauntMaster Forever**: one-click taunts off your healers and DPS, for tanks.
-- **Outfitter Forever**: the classic Outfitter gear manager, ported to WoW Forever.
+- **ToppedOff Forever**: reminds you when buffs, food, reagents, ammo or gear need topping off.
+- **Outfitter Forever**: save your gear as outfits and switch between them with one click, or let them change by themselves.
 - **BattleText Forever**: scrolling combat text for your hits, heals and the damage you take.
 - **AuctionHouse Forever**: a bigger Auction House window, so long item names stop getting cut off.
-- **GatherPath Forever**: the shortest route through your herb and ore nodes, drawn on your map.
+- **GatherPath Forever**: the shortest gathering route through your GatherMate2 herb and ore nodes, on the world map and minimap.
 - **ARS Forever** (Azeroth Revenue Service): see how much gold a player has made and the most they've ever held, for you and anyone you inspect.
-
-All free on CurseForge.
 
 ## License
 
