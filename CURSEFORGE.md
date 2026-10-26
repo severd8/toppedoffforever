@@ -36,9 +36,11 @@ ToppedOff Forever is free. If it has saved you a wipe, you can [leave a small ti
 - **Outfitter Forever**: the classic Outfitter gear manager, ported to WoW Forever.
 - **BattleText Forever**: scrolling combat text for your hits, heals and the damage you take.
 - **AuctionHouse Forever**: a bigger Auction House window, so long item names stop getting cut off.
+- **GatherPath Forever**: the shortest route through your herb and ore nodes, drawn on your map.
+- **ARS Forever** (Azeroth Revenue Service): see how much gold a player has made and the most they've ever held, for you and anyone you inspect.
 
 All free on CurseForge.
 
 ## License
 
-MIT — see [LICENSE](https://github.com/severd8/toppedoffforever/blob/main/LICENSE).
+MIT
