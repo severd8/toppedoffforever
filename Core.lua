@@ -2667,6 +2667,7 @@ function TO:Layout(list)
     -- Always room for at least two icons, so the frame keeps one tidy size and only
     -- grows once a third reminder shows up. A second row makes it taller.
     self.main:SetSize(width, height)
+    self.mainSize = { width, height }   -- the combat bar keeps this size
     self.bar:SetAllPoints(self.main)
     self.bar:SetShown(#shownList > 0)
     self.shownCount = #shownList
@@ -2834,7 +2835,10 @@ function TO:LayoutCombatBar()
         b:Hide()
     end
     f.count = #items
-    f:SetSize(math.max(#items * (size + gap) - gap, self.HEADER_MIN_WIDTH), size)
+    -- The same size as the reminders' frame, so it doesn't jump in and out of combat
+    local main = self.mainSize or {}
+    f:SetSize(math.max(#items * (size + gap) - gap, self.HEADER_MIN_WIDTH, main[1] or 0),
+        math.max(size, main[2] or 0))
     f.box:SetShown(not self.char.locked or self.db.showHeader)
     self:UpdateCombatCounts()
     local driver = #items > 0 and "[combat] show; hide" or "hide"

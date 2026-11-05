@@ -1669,6 +1669,9 @@ assertEq(cbItem(3), "item:143", "then Healthstone")
 assertEq(cbItem(4), "item:144", "then bandage")
 assertEq(CB.buttons[1]:GetAttribute("type"), "item", "click uses the item")
 assertEq(CB.buttons[1].text:GetText(), 3, "count shown")
+-- The same size as the reminders' frame, so nothing jumps in and out of combat
+assertEq(CB.__size[1], TO.main.__size[1], "combat bar: same width as the reminders")
+assertEq(CB.__size[2], TO.main.__size[2], "combat bar: same height as the reminders")
 -- In combat: counts update, nothing protected is touched
 COMBAT = true; BLOCKED = {}
 fire("PLAYER_REGEN_DISABLED")

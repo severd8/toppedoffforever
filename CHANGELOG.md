@@ -1,3 +1,7 @@
+## 1.13.1
+
+- **The frame keeps its size in combat.** The combat bar is now the same size as the reminders' frame, so it no longer shrinks when combat starts and grows back when it ends.
+
 ## 1.13.0
 
 - **Wrong buffs.** A red icon when a buff is doing you harm: Aspect of the Cheetah or the Pack in a dungeon or raid, Righteous Fury in a group when you aren't the tank, and Blessing of Salvation when you are. Click to take it off; Hunters cast their own Aspect over it. Turn each one off on the Buffs tab. Druids count as the tank when they pick the Tank role.
