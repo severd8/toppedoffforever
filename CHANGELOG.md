@@ -1,3 +1,7 @@
+## 1.13.2
+
+- **Party buffs wait until someone is in range.** A party buff or blessing (Thorns, Fortitude, Blessing of Might...) no longer shows when nobody who needs it is in range. It comes back as soon as someone who needs it is, checked every second.
+
 ## 1.13.1
 
 - **The frame keeps its size in combat.** The combat bar is now the same size as the reminders' frame, so it no longer shrinks when combat starts and grows back when it ends.

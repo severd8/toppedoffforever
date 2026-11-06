@@ -1525,9 +1525,11 @@ function TO:CheckPartyBuffs(list)
                     end
                     self:MarkMana(r, spell)
                 else
-                    r.detail = r.detail .. "\nNobody who needs it is in range"
+                    -- Nobody who needs it is in range: hidden until someone is
+                    r = nil
+                    self.waitingForRange = true
                 end
-                list[#list + 1] = r
+                if r then list[#list + 1] = r end
             end
         end
     end
@@ -1607,13 +1609,14 @@ function TO:CheckPartyBlessings(list)
         icon = SpellIcon(targetSpell or anySpell),
         text = tostring(#names + #soon), detail = table.concat(lines, "\n"), warn = warn }
     if #names == 0 then r.expires = soonest end
-    if target then
-        r.action = { spell = targetSpell, unit = target }
-        r.clickText = "Click to cast " .. targetSpell .. " on " .. (Str(UnitName(target)) or "them")
-        self:MarkMana(r, targetSpell)
-    else
-        r.detail = r.detail .. "\nNobody who needs one is in range"
+    if not target then
+        -- Nobody who needs one is in range: hidden until someone is
+        self.waitingForRange = true
+        return
     end
+    r.action = { spell = targetSpell, unit = target }
+    r.clickText = "Click to cast " .. targetSpell .. " on " .. (Str(UnitName(target)) or "them")
+    self:MarkMana(r, targetSpell)
     list[#list + 1] = r
 end
 
@@ -2886,6 +2889,7 @@ function TO:Update()
     self.lastUpdate = GetTime()
     -- If the game refuses a read (Forever errors on some hidden data), keep the last
     -- reminders and report the error once per session instead of every refresh
+    self.waitingForRange = false
     local ok, list = pcall(self.BuildReminders, self)
     if not ok then
         self.errorsSeen = self.errorsSeen or {}
@@ -3132,7 +3136,10 @@ end
 -- countdowns and "runs out soon" warnings stay current.
 function TO:OnTick()
     if InCombatLockdown() then return end
-    if self.dirty or not self.lastUpdate or GetTime() - self.lastUpdate >= 5 then
+    -- A party buff hidden because nobody who needs it is in range: checked every second,
+    -- so it shows as soon as someone comes in range
+    local every = self.waitingForRange and 1 or 5
+    if self.dirty or not self.lastUpdate or GetTime() - self.lastUpdate >= every then
         self:Update()
     end
 end

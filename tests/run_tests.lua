@@ -979,9 +979,10 @@ STATE.partyBuffs = { party1 = { ["Power Word: Fortitude"] = 900, ["Divine Spirit
 STATE.outOfRange = { party3 = true }
 refresh()
 local pf = ids()["party:fortitude"]
-assertEq(pf and pf.text, "1", "one party member missing Fortitude")
-assertEq(pf.action, nil, "the one missing it is out of range: no click")
+assertEq(pf, nil, "the one missing it is out of range: no icon")
+assertEq(TO.waitingForRange, true, "and range is checked every second")
 STATE.outOfRange = {}; refresh()
+assertEq(TO.waitingForRange, false, "in range again: back to the usual checks")
 pf = ids()["party:fortitude"]
 assertEq(pf.action.unit, "party3", "click buffs the member missing it")
 local pbtn
@@ -2068,7 +2069,9 @@ assertEq(bl and bl.text, "2", "both are missing a blessing")
 assertEq(bl.action.unit, "party2", "the click goes to the one in range")
 assertEq(bl.action.spell, "Blessing of Wisdom", "with that one's blessing")
 STATE.outOfRange = { party1 = true, party2 = true }; refresh()
-assertEq(ids()["party:blessing"].action, nil, "nobody in range: no click")
+assertEq(ids()["party:blessing"], nil, "nobody in range: no icon")
+STATE.outOfRange = { party1 = true }; refresh()
+assertEq(ids()["party:blessing"].action.unit, "party2", "back when someone comes in range")
 STATE.party, STATE.partyClass, STATE.partyBuffs, STATE.outOfRange = {}, {}, {}, {}
 -- A spell the spellbook scan missed still counts when the game says you know it
 SPELLS["Hidden Rank Spell"] = { id = 99001, icon = "icon" }
