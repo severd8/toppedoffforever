@@ -14,4 +14,4 @@ jobs:
       project_number: 1
       target_status: "Author Replied"
     secrets:
-      PROJECTS_TOKEN: ${{ secrets.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 }}
+      PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
