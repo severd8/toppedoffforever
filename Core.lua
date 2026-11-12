@@ -534,7 +534,9 @@ end
 -- Everything in your bags: bag[lowercase name] = { name, id, count, icon }
 function TO:ScanBags()
     local bag = {}
-    local last = NUM_BAG_SLOTS or 4
+    -- Your backpack, your four bags and the extra bag slot after them (Forever's client
+    -- has one, Enum.BagIndex.ReagentBag; a Soul Bag can sit there)
+    local last = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
     for b = 0, last do
         for s = 1, ContainerSlots(b) do
             local id, count, icon = ContainerItem(b, s)

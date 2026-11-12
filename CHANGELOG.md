@@ -1,3 +1,7 @@
+## 1.14.2
+
+- **Soul Shards in a Soul Bag count.** Items in the extra bag slot after your four bags (where a Soul Bag can go) weren't counted, so Warlocks saw 0 Soul Shards. Everything in that bag now counts for reminders, restocking and the combat bar.
+
 ## 1.14.1
 
 - **Attack power food.** Food that gives attack power when you're Well Fed (like Mithril Head Trout) now counts as stat food, where before it was taken for plain food. Rogues and Warriors pick it after their main stat (Agility, Strength), and so do melee Druids, Paladins and Shamans. **Attack power** is also a new choice under "Stat food for" on the Supplies tab.

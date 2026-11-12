@@ -2653,6 +2653,12 @@ TO.char.mins = {}
 TO.char.checks["reagent:shard"] = false; refresh()
 assertEq(ids()["reagent:shard:max"], nil, "off with the Soul Shard check")
 TO.char.checks = {}; STATE.bags = {}
+-- Shards in a Soul Bag in the extra bag slot (bag 5) count too
+STATE.extraBag = { { id = 6265, name = "Soul Shard", count = 3 }, { id = 6265, name = "Soul Shard", count = 2 } }
+refresh()
+assertEq(ids()["reagent:shard"], nil, "5 shards in the Soul Bag: not low")
+assertEq(TO:BagCount({ "Soul Shard" }), 5, "all counted")
+STATE.extraBag = nil
 
 step("what's in your bank, remembered")
 STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}

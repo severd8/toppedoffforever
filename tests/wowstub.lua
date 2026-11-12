@@ -222,6 +222,7 @@ C_CurrencyInfo = { GetCoinTextureString = function(copper) return "coins:" .. co
 -- An item by ID: one in your bags, or one the vendor sells (STATE.merchant[i] = { id =, tip = })
 local function stubItem(id)
     for _, e in ipairs(STATE.bags) do if e.id == id then return e end end
+    for _, e in ipairs(STATE.extraBag or {}) do if e.id == id then return e end end
     for _, tab in pairs(STATE.bank or {}) do for _, e in ipairs(tab) do if e.id == id then return e end end end
     -- STATE.itemNames[id]: an item the game knows by name but you don't carry
     if STATE.itemNames and STATE.itemNames[id] then return { id = id, name = STATE.itemNames[id] } end
@@ -386,6 +387,7 @@ C_Container = {
     GetItemCooldown = function(id) return (STATE.itemCD or {})[id] or 0, 0, 1 end,
     GetContainerNumSlots = function(bag)
         if bag == 0 then return 16 end
+        if bag == 5 and STATE.extraBag then return 16 end
         if STATE.bank and STATE.bank[bag] then return #STATE.bank[bag] end
         return 0
     end,
@@ -396,7 +398,9 @@ C_Container = {
     end,
     GetContainerItemInfo = function(bag, slot)
         local e
-        if bag == 0 then e = STATE.bags[slot] elseif STATE.bank and STATE.bank[bag] then e = STATE.bank[bag][slot] end
+        if bag == 0 then e = STATE.bags[slot]
+        elseif bag == 5 and STATE.extraBag then e = STATE.extraBag[slot]
+        elseif STATE.bank and STATE.bank[bag] then e = STATE.bank[bag][slot] end
         if not e or e.moved then return nil end
         return { itemID = e.id, stackCount = e.count, iconFileID = "item:" .. e.name }
     end,
@@ -441,6 +445,7 @@ C_Item = {
     end,
 }
 NUM_BAG_SLOTS = 4
+NUM_TOTAL_EQUIPPED_BAG_SLOTS = 5   -- the extra bag slot (STATE.extraBag: a Soul Bag there)
 
 -- Equipment: STATE.mh / STATE.oh = item ID or nil; STATE.enchant = { mh = ms left, oh = ms left }
 STATE.enchant = {}
