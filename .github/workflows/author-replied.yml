@@ -1,0 +1,136 @@
+name: Author Replied
+
+on:
+  workflow_call:
+    inputs:
+      project_number:
+        required: true
+        type: number
+      target_status:
+        required: true
+        type: string
+    secrets:
+      PROJECTS_TOKEN:
+        required: true
+
+jobs:
+  move-item:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Move issue to target status
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PROJECT_NUMBER: ${{ inputs.project_number }}
+          TARGET_STATUS: ${{ inputs.target_status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          QUERY='
+          query($owner:String!, $repo:String!, $issueNumber:Int!, $projectNumber:Int!) {
+            repository(owner:$owner, name:$repo) {
+              issue(number:$issueNumber) {
+                id
+                projectItems(first:50) {
+                  nodes {
+                    id
+                    project {
+                      id
+                    }
+                  }
+                }
+              }
+              projectV2(number:$projectNumber) {
+                id
+                fields(first:50) {
+                  nodes {
+                    ... on ProjectV2SingleSelectField {
+                      id
+                      name
+                      options {
+                        id
+                        name
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }'
+
+          RESPONSE=$(gh api graphql \
+            -F owner="$OWNER" \
+            -F repo="$REPO" \
+            -F issueNumber="$ISSUE_NUMBER" \
+            -F projectNumber="$PROJECT_NUMBER" \
+            -f query="$QUERY")
+
+          echo "$RESPONSE" > /tmp/project.json
+
+          ITEM_ID=$(python3 - <<'PY'
+import json
+with open('/tmp/project.json') as f:
+    data = json.load(f)
+repo = data["data"]["repository"]
+project = repo["projectV2"]
+issue = repo["issue"]
+
+for node in issue.get("projectItems", {}).get("nodes", []):
+    if node.get("project", {}).get("id") == project["id"]:
+        print(node["id"])
+        raise SystemExit
+PY
+)
+
+          FIELD_ID=$(python3 - <<'PY'
+import json
+with open('/tmp/project.json') as f:
+    data = json.load(f)
+for field in data["data"]["repository"]["projectV2"]["fields"]["nodes"]:
+    if field.get("name") == "Status":
+        print(field["id"])
+        raise SystemExit
+PY
+)
+
+          OPTION_ID=$(python3 - <<'PY'
+import json
+import os
+target = os.environ["TARGET_STATUS"]
+with open('/tmp/project.json') as f:
+    data = json.load(f)
+for field in data["data"]["repository"]["projectV2"]["fields"]["nodes"]:
+    if field.get("name") == "Status":
+        for option in field.get("options", []):
+            if option.get("name") == target:
+                print(option["id"])
+                raise SystemExit
+PY
+)
+
+          if [ -z "${ITEM_ID:-}" ] || [ -z "${FIELD_ID:-}" ] || [ -z "${OPTION_ID:-}" ]; then
+            echo "Issue not in this project or Status/option not found."
+            exit 0
+          fi
+
+          gh api graphql -f query='
+          mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!) {
+            updateProjectV2ItemFieldValue(input: {
+              projectId: $projectId,
+              itemId: $itemId,
+              fieldId: $fieldId,
+              value: { singleSelectOptionId: $optionId }
+            }) {
+              projectV2Item { id }
+            }
+          }' \
+            -F projectId="$PROJECT_NUMBER" \
+            -F itemId="$ITEM_ID" \
+            -F fieldId="$FIELD_ID" \
+            -F optionId="$OPTION_ID"
