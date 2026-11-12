@@ -5,11 +5,11 @@ on:
     types: [created]
 
 jobs:
-  call-shared-workflow:
+  call-local-workflow:
     if: >
       github.event.issue.pull_request == null &&
       github.event.comment.user.login == github.event.issue.user.login
-    uses: severd8/github-automation/.github/workflows/author-replied.yml@main
+    uses: ./.github/workflows/author-replied.yml
     with:
       project_number: 1
       target_status: "Author Replied"
