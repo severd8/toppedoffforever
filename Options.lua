@@ -404,6 +404,23 @@ local function Builder(c)
         return ctx.track(b, true)
     end
 
+    -- A whisper's text (a per-character setting; blank = the default message)
+    function ctx.messageBox(key, default, x, enabledWhen)
+        local l = ctx.text("Message", x)
+        local box = EditBox(c, LIST_W - PAD - PICK_X, PICK_X, ctx.y - 1, TO.char[key] ~= "" and TO.char[key] or default,
+            false, function(text, box)
+                text = strtrim and strtrim(text) or text
+                TO.char[key] = (text == default) and "" or text
+                if text == "" then box:SetText(default) end
+                TO:RequestUpdate()
+            end)
+        box:SetMaxLetters(200)
+        T.Tooltip(box, "Message", "What the whisper says. {buff} is replaced by the buff's name and "
+            .. "{name} by theirs. Clear it for the default.")
+        ctx.track(box, true, enabledWhen)
+        return box, l
+    end
+
     function ctx.row() ctx.y = ctx.y - ROW end
 
     -- Ends the list; returns its height
@@ -514,6 +531,13 @@ local function BuildBuffsTab(self, ctx, class)
             ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB,
                 "In a raid, look at everyone, not just your own group. Also for blessings and Soulstones.", anyOn)
             ctx.row()
+            ctx.charCheck("Ctrl + click whispers the ones who need it", "whisperOffer", SUB,
+                "Ctrl + click a party buff to whisper everyone who needs it. While nobody who needs it is "
+                .. "in range, its icon stays on screen, greyed out, so you can tell them to come closer.", anyOn)
+            ctx.row()
+            ctx.messageBox("offerMessage", self.OFFER_MESSAGE, SUB + 38,
+                function() return anyOn() and TO.char.whisperOffer end)
+            ctx.row()
             ctx.note("Shows how many party members need it. Click to buff the next one in range.")
         end
     end
@@ -553,6 +577,13 @@ local function BuildBuffsTab(self, ctx, class)
         ctx.charCheck("In raids, check the whole raid", "wholeRaid", SUB,
             "In a raid, look at everyone, not just your own group.", blessingOn)
         ctx.row()
+        ctx.charCheck("Ctrl + click whispers the ones who need one", "whisperOffer", SUB,
+            "Ctrl + click the blessings icon to whisper everyone who needs one. While nobody who needs one "
+            .. "is in range, the icon stays on screen, greyed out, so you can tell them to come closer.", blessingOn)
+        ctx.row()
+        ctx.messageBox("offerMessage", self.OFFER_MESSAGE, SUB + 38,
+            function() return blessingOn() and TO.char.whisperOffer end)
+        ctx.row()
         ctx.note("Shows how many party members are missing their blessing. Click to bless the next one in range. "
             .. "A Greater Blessing, or the same blessing from another Paladin, counts.")
     end
@@ -568,6 +599,17 @@ local function BuildBuffsTab(self, ctx, class)
         ctx.note("Click to cast " .. rez .. " on the next one in range. With \"In raids, check the whole raid\" "
             .. "on, the whole raid counts.")
     end
+
+    -- Ask for buffs from your group
+    ctx.card("Ask for buffs")
+    ctx.charCheck("Buffs someone in your group can give you", "askBuffs", PAD,
+        "An icon when you're missing Fortitude, Arcane Intellect, Mark of the Wild or a Blessing and a "
+        .. "Priest, Mage, Druid or Paladin is in your group. Click it to whisper them.")
+    ctx.row()
+    ctx.messageBox("askMessage", self.ASK_MESSAGE, PAD + 38, function() return TO.char.askBuffs end)
+    ctx.row()
+    ctx.note("Click the icon to whisper them. After you ask, it hides for 2 minutes to give them time. "
+        .. "Nothing is ever sent without your click.")
 
     -- Weapon enhancement
     ctx.card("Weapon enhancement", "Warn")

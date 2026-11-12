@@ -1,3 +1,9 @@
+## 1.14.0
+
+- **Whisper the ones who need your buff.** Turn on "Ctrl + click whispers the ones who need it" under Party buffs (or Party blessings), then Ctrl + click the icon to whisper everyone missing it, or with it running out. While nobody who needs it is in range, the icon stays on screen greyed out, so you can tell them to come closer. Write your own message; {buff} is the buff's name and {name} theirs.
+- **Ask for buffs.** A new card on the Buffs tab, off until you turn it on: an icon when you're missing Fortitude, Arcane Intellect, Mark of the Wild or a Blessing and someone in your group can cast it. Click it to whisper them ("Could I get {buff}, please?", or your own message). After you ask, it hides for 2 minutes.
+- Nothing is ever whispered without your click, and the same person isn't whispered about the same buff twice within a minute.
+
 ## 1.13.2
 
 - **Party buffs wait until someone is in range.** A party buff or blessing (Thorns, Fortitude, Blessing of Might...) no longer shows when nobody who needs it is in range. It comes back as soon as someone who needs it is, checked every second.

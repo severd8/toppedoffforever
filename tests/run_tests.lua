@@ -2193,6 +2193,96 @@ SlashCmdList.TOPPEDOFFFOREVER("unhide"); runAfter()
 assert(ids()["buff:intellect"], "back with /topoff unhide")
 assert(lastLog("hidden reminders are back"), "and says so")
 
+step("whispers: Ctrl + click a party buff, and asking for buffs")
+STATE.class = "PRIEST"; SPELLBOOK, FUTURE = {}, {}
+LEARN("Power Word: Fortitude"); fire("SPELLS_CHANGED")
+TO.char.checks = {}; TO.char.partyExpiring = false; TO.char.groupBuffs = false; STATE.bags = {}
+STATE.buffs = { ["Power Word: Fortitude"] = 1800 }
+STATE.party = { "party1", "party2" }
+STATE.partyClass = { party1 = "WARRIOR", party2 = "MAGE" }
+STATE.partyBuffs = { party1 = {}, party2 = {} }
+TO.char.whisperOffer, TO.char.offerMessage, TO.char.askBuffs, TO.char.askMessage = false, "", false, ""
+WHISPERS = {}
+local function btnFor(id)
+    for _, b in ipairs(TO.buttons) do if b.reminder and b.reminder.id == id then return b end end
+end
+refresh()
+local wb = btnFor("party:fortitude")
+assertEq(wb.reminder.whisper, nil, "whispers off: nothing to whisper")
+assertEq(wb.__attrs["ctrl-type1"], nil, "and Ctrl + click casts as before")
+STATE.outOfRange = { party1 = true, party2 = true }; refresh()
+assertEq(ids()["party:fortitude"], nil, "whispers off: hidden while nobody is in range")
+TO.char.whisperOffer = true; refresh()
+wb = btnFor("party:fortitude")
+assert(wb, "whispers on: shown while nobody is in range")
+assertEq(wb.reminder.outOfRange, true, "greyed out")
+assertEq(wb.icon.__desat, true, "the icon is grey")
+assertEq(wb.reminder.action, nil, "no cast")
+assertEq(TO.waitingForRange, true, "range still checked every second")
+assertEq(wb.__attrs["ctrl-type1"], "", "Ctrl + left-click doesn't cast")
+assertEq(wb.__attrs["ctrl-type2"], "", "Ctrl + right-click doesn't cast")
+wb.__scripts.PostClick(wb, "LeftButton", false)
+assertEq(#WHISPERS, 0, "a plain click doesn't whisper")
+CTRL = true
+wb.__scripts.PostClick(wb, "LeftButton", true)
+assertEq(#WHISPERS, 0, "nothing on the press")
+wb.__scripts.PostClick(wb, "LeftButton", false)
+CTRL = false
+assertEq(#WHISPERS, 2, "both who need it are whispered")
+assertEq(WHISPERS[1].chatType, "WHISPER", "as a whisper")
+assertEq(WHISPERS[1].target, "Name_party1", "to them")
+assertEq(WHISPERS[1].text, "I have Power Word: Fortitude for you. Come in range and I'll cast it.", "default message")
+assert(lastLog("whispered Name_party1, Name_party2"), "says so in chat")
+CTRL = true; wb.__scripts.PostClick(wb, "RightButton", false); CTRL = false
+assertEq(#WHISPERS, 2, "not again within a minute")
+assert(lastLog("less than a minute ago"), "says why")
+FAKE_TIME = FAKE_TIME + 61
+TO.char.offerMessage = "{name}, {buff} is up!"
+STATE.outOfRange = {}; refresh()
+wb = btnFor("party:fortitude")
+assertEq(wb.reminder.outOfRange, nil, "in range: not grey")
+assertEq(wb.reminder.action.unit, "party1", "and a click casts")
+assertEq(wb.__attrs["ctrl-type1"], "", "Ctrl + click still whispers")
+CTRL = true; wb.__scripts.PostClick(wb, "LeftButton", false); CTRL = false
+assertEq(WHISPERS[3].text, "Name_party1, Power Word: Fortitude is up!", "your own message, filled in")
+wb.__scripts.OnEnter(wb)
+TO.char.whisperOffer, TO.char.offerMessage = false, ""
+STATE.partyBuffs = { party1 = { ["Power Word: Fortitude"] = 1800 }, party2 = { ["Power Word: Fortitude"] = 1800 } }
+-- Asking: a Mage is in the party and you're missing Arcane Intellect
+WHISPERS = {}
+refresh()
+assertEq(ids()["ask:intellect"], nil, "asking off: no icon")
+TO.char.askBuffs = true; refresh()
+local ab = btnFor("ask:intellect")
+assert(ab, "missing Arcane Intellect with a Mage along: an icon")
+assertEq(ab.reminder.label, "Ask for Arcane Intellect", "named")
+assertEq(TO:IsBuffReminder(ab.reminder), true, "on the buff row")
+assertEq(ids()["ask:fortitude"], nil, "your own class's buff: you cast it yourself")
+assertEq(ids()["ask:motw"], nil, "no Druid along: nobody to ask")
+ab.__scripts.OnEnter(ab)
+ab.__scripts.PostClick(ab, "LeftButton", true)
+assertEq(#WHISPERS, 0, "nothing on the press")
+ab.__scripts.PostClick(ab, "LeftButton", false)
+assertEq(#WHISPERS, 1, "a click asks")
+assertEq(WHISPERS[1].target, "Name_party2", "the Mage")
+assertEq(WHISPERS[1].text, "Could I get Arcane Intellect, please?", "default message")
+assert(lastLog("asked Name_party2 for Arcane Intellect"), "says so in chat")
+runAfter()
+assertEq(ids()["ask:intellect"], nil, "hidden for a while after asking")
+FAKE_TIME = FAKE_TIME + 121; refresh()
+assert(ids()["ask:intellect"], "back after 2 minutes if you still don't have it")
+STATE.buffs["Arcane Brilliance"] = 3600; refresh()
+assertEq(ids()["ask:intellect"], nil, "the group version counts")
+STATE.buffs["Arcane Brilliance"] = nil
+STATE.partyClass.party2 = "WARRIOR"; STATE.partyClass.party1 = "PALADIN"; refresh()
+assertEq(ids()["ask:intellect"], nil, "no Mage: nothing to ask")
+assertEq(ids()["ask:blessing"].label, "Ask for a Blessing", "a Paladin: ask for a Blessing")
+STATE.class = "WARRIOR"; STATE.partyClass.party2 = "MAGE"; refresh()
+assertEq(ids()["ask:intellect"], nil, "Warriors don't ask for Intellect")
+TO.char.askBuffs = false
+STATE.class = "PRIEST"; STATE.party, STATE.partyClass, STATE.partyBuffs, STATE.outOfRange = {}, {}, {}, {}
+WHISPERS = {}
+
 step("party buffs running out")
 TO.db.warnMinutes = 3
 TO.char.partyExpiring, TO.char.groupBuffs = true, true   -- (the options tests above click every switch)

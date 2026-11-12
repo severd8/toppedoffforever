@@ -263,6 +263,10 @@ local CHAR_DEFAULTS = {       -- per character: what to check, and where the rem
     warn = {},                -- check id -> minutes before it runs out to warn (missing = Display tab's)
     glowLow = true,           -- light up food and water when your health or mana is low
     bankItems = {},           -- what was in your bank when you last had it open: lowercase name -> count
+    whisperOffer = false,     -- Ctrl + click a party buff or blessing: whisper the ones who need it
+    offerMessage = "",        -- that whisper ("" = TO.OFFER_MESSAGE); {buff} is the buff's name
+    askBuffs = false,         -- an icon for buffs you're missing that someone in your group can cast
+    askMessage = "",          -- its whisper ("" = TO.ASK_MESSAGE)
 }
 
 -- Fills in missing settings. A saved value of the wrong type (a damaged or
@@ -1477,6 +1481,7 @@ function TO:CheckPartyBuffs(list)
         if spell and self:IsEnabled(id, not buff.off) then
             local warn = self:WarnSecs(id)
             local missing, expiring, target, soonest, soonTarget = {}, {}, nil, nil, nil
+            local needWho = {}   -- whispered on Ctrl + click
             for _, u in ipairs(units) do
                 local usable = CanBeBuffed(u)
                 if usable and buff.skip then
@@ -1490,9 +1495,11 @@ function TO:CheckPartyBuffs(list)
                     local name = Str(UnitName(u)) or u
                     if not left then
                         missing[#missing + 1] = name
+                        needWho[#needWho + 1] = { unit = u, buff = spell }
                         if not target and InSpellRange(spell, u) then target = u end
                     elseif watchExpiring and left > 0 and left < warn then
                         expiring[#expiring + 1] = name .. " (" .. FormatTime(left) .. ")"
+                        needWho[#needWho + 1] = { unit = u, buff = spell }
                         if not soonest or left < soonest then soonest = left end
                         if not soonTarget and InSpellRange(spell, u) then soonTarget = u end
                     end
@@ -1525,10 +1532,17 @@ function TO:CheckPartyBuffs(list)
                     end
                     self:MarkMana(r, spell)
                 else
-                    -- Nobody who needs it is in range: hidden until someone is
-                    r = nil
+                    -- Nobody who needs it is in range: hidden until someone is, or greyed
+                    -- out with whispers on (Ctrl + click asks them to come closer)
                     self.waitingForRange = true
+                    if self.char.whisperOffer then
+                        r.outOfRange = true
+                        r.detail = r.detail .. "\nNobody who needs it is in range"
+                    else
+                        r = nil
+                    end
                 end
+                if r and self.char.whisperOffer then r.whisper = needWho end
                 if r then list[#list + 1] = r end
             end
         end
@@ -1580,6 +1594,7 @@ function TO:CheckPartyBlessings(list)
     local warn = self:WarnSecs("party:blessing")
     local names, soon, target, targetSpell, anySpell = {}, {}, nil, nil, nil
     local soonest, soonTarget, soonSpell
+    local needWho = {}   -- whispered on Ctrl + click
     for _, u in ipairs(units) do
         local _, cls = UnitClass(u)
         cls = CanBeBuffed(u) and Str(cls)   -- hidden class: can't tell which blessing, skip
@@ -1591,10 +1606,12 @@ function TO:CheckPartyBlessings(list)
             if not left then
                 anySpell = anySpell or spell
                 names[#names + 1] = who .. ")"
+                needWho[#needWho + 1] = { unit = u, buff = spell }
                 if not target and InSpellRange(spell, u) then target, targetSpell = u, spell end
             elseif self.char.partyExpiring and left > 0 and left < warn then
                 anySpell = anySpell or spell
                 soon[#soon + 1] = who .. ", " .. FormatTime(left) .. ")"
+                needWho[#needWho + 1] = { unit = u, buff = spell }
                 if not soonest or left < soonest then soonest = left end
                 if not soonTarget and InSpellRange(spell, u) then soonTarget, soonSpell = u, spell end
             end
@@ -1609,15 +1626,125 @@ function TO:CheckPartyBlessings(list)
         icon = SpellIcon(targetSpell or anySpell),
         text = tostring(#names + #soon), detail = table.concat(lines, "\n"), warn = warn }
     if #names == 0 then r.expires = soonest end
+    if self.char.whisperOffer then r.whisper = needWho end
     if not target then
-        -- Nobody who needs one is in range: hidden until someone is
+        -- Nobody who needs one is in range: hidden until someone is, or greyed out
+        -- with whispers on (Ctrl + click asks them to come closer)
         self.waitingForRange = true
+        if not self.char.whisperOffer then return end
+        r.outOfRange = true
+        r.detail = r.detail .. "\nNobody who needs one is in range"
+        list[#list + 1] = r
         return
     end
     r.action = { spell = targetSpell, unit = target }
     r.clickText = "Click to cast " .. targetSpell .. " on " .. (Str(UnitName(target)) or "them")
     self:MarkMana(r, targetSpell)
     list[#list + 1] = r
+end
+
+---------------------------------------------------------------------------
+-- Whispers. Only ever sent by your click: Ctrl + click a party buff or blessing to tell
+-- the ones who need it (most useful when they're out of range), or click an "Ask for"
+-- icon to ask someone in your group for a buff you're missing. Each person is
+-- whispered about a buff at most once a minute.
+---------------------------------------------------------------------------
+TO.OFFER_MESSAGE = "I have {buff} for you. Come in range and I'll cast it."
+TO.ASK_MESSAGE = "Could I get {buff}, please?"
+TO.WHISPER_GAP = 60   -- seconds before the same person is whispered about the same buff again
+TO.ASK_WAIT = 120     -- after asking, the icon hides this long to give them time
+TO.whispered = {}
+
+-- Buffs you can ask for: the class that casts it, its buff (CLASS_BUFFS), and its spell ID
+-- (its name and icon, in the game's language, since it isn't in your own spellbook)
+TO.ASK_BUFFS = {
+    { class = "PRIEST", buff = "fortitude", spellID = 1243 },
+    { class = "MAGE", buff = "intellect", spellID = 1459 },
+    { class = "DRUID", buff = "motw", spellID = 1126 },
+    { class = "PALADIN", buff = "blessing", spellID = 19740, name = "a Blessing" },
+}
+
+function TO:WhisperText(key, default, buff, name)
+    local text = Str(self.char[key])
+    if not text or not text:find("%S") then text = default end
+    text = text:gsub("{buff}", function() return buff end)
+    return (text:gsub("{name}", function() return name end))
+end
+
+-- Whispers `unit`. Returns their name, or nil and why not ("recent": already whispered
+-- about this buff in the last minute).
+function TO:Whisper(unit, buff, key, default)
+    local name, realm = UnitName(unit)
+    name, realm = Str(name), Str(realm)
+    if not name then return nil end
+    local target = (realm and realm ~= "") and (name .. "-" .. realm) or name
+    local sent = target .. ":" .. buff
+    if self.whispered[sent] and GetTime() - self.whispered[sent] < self.WHISPER_GAP then return nil, "recent" end
+    local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
+    if not send or not pcall(send, self:WhisperText(key, default, buff, name), "WHISPER", nil, target) then
+        return nil
+    end
+    self.whispered[sent] = GetTime()
+    return name
+end
+
+-- Ctrl + click on a party buff or blessing
+function TO:WhisperNeeded(r)
+    local sent, recent = {}, false
+    for _, w in ipairs(r.whisper or {}) do
+        local name, why = self:Whisper(w.unit, w.buff, "offerMessage", self.OFFER_MESSAGE)
+        if name then sent[#sent + 1] = name elseif why == "recent" then recent = true end
+    end
+    if #sent > 0 then
+        Print("whispered " .. table.concat(sent, ", ") .. ".")
+    elseif recent then
+        Print("you whispered them less than a minute ago.")
+    end
+end
+
+-- A click on an "Ask for" icon
+function TO:AskFor(r)
+    local a = r.ask
+    local name, why = self:Whisper(a.unit, a.buff, "askMessage", self.ASK_MESSAGE)
+    if name then
+        Print("asked " .. name .. " for " .. a.buff .. ".")
+        self.snoozed[r.id] = GetTime() + self.ASK_WAIT
+        self:RequestSoonUpdate()
+    elseif why == "recent" then
+        Print("you asked less than a minute ago.")
+    end
+end
+
+-- Buffs you're missing that someone in your group can cast: an icon to ask them
+function TO:CheckAskBuffs(list)
+    if not self.char.askBuffs or Plain(UnitIsDeadOrGhost("player")) == true then return end
+    local units = self:GroupUnits()
+    if #units == 0 then return end
+    local me = self:PlayerClass()
+    for _, a in ipairs(self.ASK_BUFFS) do
+        local buff
+        for _, b in ipairs(a.class ~= me and self.CLASS_BUFFS[a.class] or {}) do
+            if b.id == a.buff then buff = b end
+        end
+        if buff and not (buff.skip and buff.skip[me]) and not LongestLeft(self.buffs, buff.auras or buff.cast) then
+            local caster
+            for _, u in ipairs(units) do
+                local _, cls = UnitClass(u)
+                if not caster and Str(cls) == a.class and Plain(UnitIsConnected(u)) ~= false
+                    and Plain(UnitIsDeadOrGhost(u)) ~= true and Str(UnitName(u)) then
+                    caster = u
+                end
+            end
+            if caster then
+                local spell = a.name or (C_Spell.GetSpellName and Str(C_Spell.GetSpellName(a.spellID))) or buff.label
+                local who = Str(UnitName(caster))
+                list[#list + 1] = { id = "ask:" .. a.buff, label = "Ask for " .. spell, icon = SpellIcon(a.spellID),
+                    detail = "You're missing " .. spell .. ". " .. who .. " can cast it.",
+                    clickText = "Click to whisper " .. who .. ": " .. self:WhisperText("askMessage", self.ASK_MESSAGE, spell, who),
+                    ask = { unit = caster, buff = spell } }
+            end
+        end
+    end
 end
 
 -- Elixirs and flasks: the ones you picked in the options, tracked like buffs
@@ -2069,7 +2196,8 @@ end
 TO.COPY_FIELDS = { "checks", "checksOutside", "splitProfiles", "prefs", "mins", "weapon", "custom",
     "customAlways", "statFocus", "wellFedInstanceOnly", "elixirs", "elixirInstanceOnly",
     "soulstoneInstanceOnly", "petFood", "blessings", "wholeRaid", "restockAtVendor", "repairAtVendor",
-    "partyExpiring", "groupBuffs", "bankRestock", "warn", "glowLow" }
+    "partyExpiring", "groupBuffs", "bankRestock", "warn", "glowLow",
+    "whisperOffer", "offerMessage", "askBuffs", "askMessage" }
 
 local function DeepCopy(v)
     if type(v) ~= "table" then return v end
@@ -2377,6 +2505,7 @@ function TO:BuildReminders()
     self:CheckWrongBuffs(list)
     self:CheckPartyBuffs(list)
     self:CheckPartyBlessings(list)
+    self:CheckAskBuffs(list)
     self:CheckWeapons(list)
     self:CheckWellFed(list)
     self:CheckRested(list)
@@ -2470,6 +2599,12 @@ local function Button_OnEnter(self)
         GameTooltip:AddLine("Click to use " .. r.action.item .. " on your " ..
             (r.action.slot == 17 and "off hand" or "main hand"), 0.4, 1, 0.4)
     end
+    if r.whisper and #r.whisper > 0 then
+        local n = #r.whisper
+        GameTooltip:AddLine("Ctrl + click to whisper " .. (n == 1 and (Str(UnitName(r.whisper[1].unit)) or "them")
+            or ("the " .. n .. " who need it")) .. ": "
+            .. TO:WhisperText("offerMessage", TO.OFFER_MESSAGE, r.whisper[1].buff, "Name"), 0.4, 1, 0.4, true)
+    end
     if r.id and self.snoozable then GameTooltip:AddLine("Shift + right-click to hide it for 10 minutes", 0.6, 0.6, 0.6) end
     GameTooltip:Show()
 end
@@ -2487,8 +2622,18 @@ function TO:CreateButton(i)
     -- right-click casts or uses, like a left-click.
     b:SetAttribute("shift-type2", "")
     b.snoozable = true
+    -- Ctrl + click whispers (party buffs and blessings with whispers on: their "ctrl-type"
+    -- is empty too, so it doesn't cast), and a click on an "Ask for" icon asks
     b:SetScript("PostClick", function(btn, button, down)
-        if button == "RightButton" and not down and IsShiftKeyDown() then TO:Snooze(btn.reminder) end
+        if down then return end
+        local r = btn.reminder
+        if button == "RightButton" and IsShiftKeyDown() then
+            TO:Snooze(r)
+        elseif r and r.whisper and IsControlKeyDown() then
+            TO:WhisperNeeded(r)
+        elseif r and r.ask then
+            TO:AskFor(r)
+        end
     end)
     self.buttons[i] = b
     return b
@@ -2543,8 +2688,12 @@ function TO:ApplyButton(b, r)
     b:SetAttribute("unit", attrs.unit)
     b:SetAttribute("macrotext", attrs.macrotext)
     b:SetAttribute("item", attrs.item)
+    b:SetAttribute("ctrl-type1", r.whisper and "" or nil)
+    b:SetAttribute("ctrl-type2", r.whisper and "" or nil)
     b.icon:SetTexture(r.icon or self.ICONS.unknown)
-    if b.icon.SetDesaturated then b.icon:SetDesaturated(r.noItem ~= nil or r.noMana == true) end
+    if b.icon.SetDesaturated then
+        b.icon:SetDesaturated(r.noItem ~= nil or r.noMana == true or r.outOfRange == true)
+    end
     b.text:SetText(r.text or "")
     -- Running out: orange border at the warning time, red in its last 20%
     local warn = r.warn or self:WarnSecs(nil)
@@ -3019,7 +3168,7 @@ TO.DIVIDER_SPACE = 14      -- room between the buff row and the top-off row
 TO.DIVIDER_THICKNESS = 4   -- the gold divider line
 
 -- Buffs (row 1) vs things to top off (row 2)
-local BUFF_ROW = { "^buff:", "^wrong:", "^party:", "^weapon:", "^elixir:", "^wellfed$", "^rested$", "^pet:summon$",
+local BUFF_ROW = { "^buff:", "^wrong:", "^party:", "^ask:", "^weapon:", "^elixir:", "^wellfed$", "^rested$", "^pet:summon$",
     "^pet:happy$", "^soulstone$", "^rez$" }
 function TO:IsBuffReminder(r)
     local id = r.id or ""

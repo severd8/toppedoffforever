@@ -14,8 +14,9 @@ Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhan
 
 - **Shows what's wrong, plus a quick-use bar.** Buffs, reagents and gear only show when something needs fixing. Your food, water, bandages and potions stay on screen as a dimmed bar you can click, and turn bright with a red count when they run low.
 - **Class buffs for every class** (Rogues get poisons instead). The icon gets an **orange border** when a buff is about to run out and turns **red** near the end. **Click to cast it on yourself.** Group versions and buffs from other players count, and you pick which Blessing, Aura, Aspect, Armor or weapon buff is cast. Paladins get the aura for their role until they pick one. A buff you haven't the mana for yet is greyed out, and says what it costs. Each buff can have its own warning time.
-- **Party buffs and blessings.** See how many party members are missing your buff, or have it running out, and **click to buff the next one in range**. The icon only shows while someone who needs it is in range. When 3 or more in your party need it and you carry the reagent, the click casts the group version (Prayer of Fortitude, Arcane Brilliance, Gift of the Wild); short of mana for that, it buffs them one at a time. Paladins choose a blessing for each class. The whole raid can be included.
+- **Party buffs and blessings.** See how many party members are missing your buff, or have it running out, and **click to buff the next one in range**. The icon only shows while someone who needs it is in range. When 3 or more in your party need it and you carry the reagent, the click casts the group version (Prayer of Fortitude, Arcane Brilliance, Gift of the Wild); short of mana for that, it buffs them one at a time. Paladins choose a blessing for each class. The whole raid can be included. Turn on whispers and **Ctrl + click** tells everyone who needs it, with your own message; while nobody who needs it is in range, the icon then stays on screen, greyed out.
 - **Wrong buffs.** A red icon when a buff is hurting you: Aspect of the Cheetah or the Pack in a dungeon, Righteous Fury when you aren't the tank, Blessing of Salvation when you are. Click to take it off (Hunters: to cast their own Aspect over it).
+- **Ask for buffs** (off until you turn it on). An icon when you're missing Fortitude, Arcane Intellect, Mark of the Wild or a Blessing and a Priest, Mage, Druid or Paladin is in your group. **Click to whisper them** your own message, like "Could I get {buff}, please?".
 - **Resurrect.** Priests, Paladins and Shamans see who in the group is dead after a fight. **Click to bring back the next one in range.**
 - **Weapon enhancements.** Shaman weapon buffs, Rogue poisons, and sharpening stones, weightstones and oils: any in your bags is picked up for the weapon it fits, or choose one yourself. **Click to apply it**; your best rank is used, and low poison charges are flagged.
 - **Food, water, bandages and potions, picked for you.** Each row follows your bags: it's the best of its kind you're carrying, plus the right **stat food for your class or role**. Swap one food for another, or run out of your best potion, and the row changes with it. After a fight your food **glows** when your health is low, and your water when your mana is. A **Well Fed** reminder (in dungeons and raids by default) eats your stat food with a click.
@@ -40,7 +41,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 ## Using it
 
 - **Move the icons.** They start unlocked, inside a frame with a "ToppedOff" header. Drag the header to move them, then lock it in the options or with `/topoff lock`. Clicking the icons works whether they're locked or not.
-- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Your buffs are cast on you, and party buffs and blessings on the party member shown. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you). **Shift + right-click** an icon to hide it for 10 minutes; `/topoff unhide` brings it back.
+- **Fix a reminder.** Hover over an icon to see what's wrong, then click it. Your buffs are cast on you, and party buffs and blessings on the party member shown. Poisons, oils and stones are used on your weapon. Your own items are used (bandages on you). **Shift + right-click** an icon to hide it for 10 minutes; `/topoff unhide` brings it back. With whispers on, **Ctrl + click** a party buff or blessing to whisper the ones who need it.
 - **Open the options.** Type `/topoff`, left-click the minimap button, or right-click the "ToppedOff" header and choose **Settings**. The header menu also has **Lock**.
 - **Show or hide.** Right-click the minimap button, or type `/topoff toggle`.
 
@@ -48,7 +49,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 
 | Tab | What's there |
 |---|---|
-| **Buffs** | Your buffs, which spell to cast and how long before it runs out to warn, wrong buffs, party buffs, party blessings (Paladins), whole-raid option, resurrect, weapon enhancements, Well Fed, Well-Rested (while you carry the sleeping bag), elixirs and flasks |
+| **Buffs** | Your buffs, which spell to cast and how long before it runs out to warn, wrong buffs, party buffs, party blessings (Paladins), whole-raid option, whispers, ask for buffs, resurrect, weapon enhancements, Well Fed, Well-Rested (while you carry the sleeping bag), elixirs and flasks |
 | **Supplies** | The best food, water, bandage and potions in your bags, Healthstone, stat food choice, conjured food, water and mana gem (Mages), your own items (and which go on the combat bar), the quick-use bar and its glow, reagents and ammo (and the most Soul Shards), vendor restock, repair and the bank list |
 | **Pet & gear** (Hunters and Warlocks), **Gear & bags** (everyone else) | Pet, Soulstone (Warlocks), durability and bag space |
 | **Profiles** | Separate checks outside dungeons, copy another character |
@@ -86,7 +87,7 @@ Go to **Options → Keybindings → ToppedOff Forever**:
 
 WoW: Forever limits what addons can do in combat. ToppedOff Forever is built around those rules:
 
-- **It never acts on its own.** Every buff, weapon enhancement, purchase and item use is your click.
+- **It never acts on its own.** Every buff, weapon enhancement, purchase, item use and whisper is your click.
 - **Reminders update out of combat.** They're hidden in combat by default (except the combat bar) and refresh as soon as it ends.
 - **Replacing a weapon enhancement** that hasn't run out makes the game ask you to confirm.
 - **Spell and item names** are the Classic ones. On a game in another language, ToppedOff asks the game for its own names, and recognises food, water, bandages and potions by what they do. Stat food is still only recognised in English. If something isn't found, `/topoff check` shows it in yellow. Please report it.

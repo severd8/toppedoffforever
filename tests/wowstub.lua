@@ -248,6 +248,13 @@ end }
 function InCombatLockdown() return COMBAT end
 SHIFT = false
 function IsShiftKeyDown() return SHIFT end
+CTRL = false
+function IsControlKeyDown() return CTRL end
+-- Whispers sent: { { text, chatType, target }, ... }
+WHISPERS = {}
+C_ChatInfo = { SendChatMessage = function(text, chatType, _, target)
+    WHISPERS[#WHISPERS + 1] = { text = text, chatType = chatType, target = target }
+end }
 FAKE_TIME = 1000
 function GetTime() return FAKE_TIME end
 function IsInInstance() return STATE.instance, STATE.instance and "party" or "none" end
