@@ -16,9 +16,6 @@ on:
 jobs:
   move-item:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
       - name: Move issue to target status
         env:
@@ -34,103 +31,77 @@ jobs:
 
           QUERY='
           query($owner:String!, $repo:String!, $issueNumber:Int!, $projectNumber:Int!) {
-            repository(owner:$owner, name:$repo) {
-              issue(number:$issueNumber) {
-                id
-                projectItems(first:50) {
-                  nodes {
-                    id
-                    project {
-                      id
-                    }
-                  }
-                }
-              }
+            user(login:$owner) {
               projectV2(number:$projectNumber) {
                 id
-                fields(first:50) {
+                fields(first:100) {
                   nodes {
                     ... on ProjectV2SingleSelectField {
                       id
                       name
-                      options {
-                        id
-                        name
-                      }
+                      options { id name }
                     }
+                  }
+                }
+              }
+            }
+            repository(owner:$owner, name:$repo) {
+              issue(number:$issueNumber) {
+                projectItems(first:100) {
+                  nodes {
+                    id
+                    project { id }
                   }
                 }
               }
             }
           }'
 
-          RESPONSE=$(gh api graphql \
+          gh api graphql \
             -F owner="$OWNER" \
             -F repo="$REPO" \
             -F issueNumber="$ISSUE_NUMBER" \
             -F projectNumber="$PROJECT_NUMBER" \
-            -f query="$QUERY")
+            -f query="$QUERY" > /tmp/project.json
 
-          echo "$RESPONSE" > /tmp/project.json
+          PROJECT_ID=$(jq -r '.data.user.projectV2.id // empty' /tmp/project.json)
+          FIELD_ID=$(jq -r '
+            .data.user.projectV2.fields.nodes[]?
+            | select(.name == "Status") | .id
+          ' /tmp/project.json | head -n 1)
+          OPTION_ID=$(jq -r --arg target "$TARGET_STATUS" '
+            .data.user.projectV2.fields.nodes[]?
+            | select(.name == "Status")
+            | .options[]?
+            | select(.name == $target) | .id
+          ' /tmp/project.json | head -n 1)
+          ITEM_ID=$(jq -r --arg project "$PROJECT_ID" '
+            .data.repository.issue.projectItems.nodes[]?
+            | select(.project.id == $project) | .id
+          ' /tmp/project.json | head -n 1)
 
-          ITEM_ID=$(python3 - <<'PY'
-import json
-with open('/tmp/project.json') as f:
-    data = json.load(f)
-repo = data["data"]["repository"]
-project = repo["projectV2"]
-issue = repo["issue"]
+          if [ -z "$PROJECT_ID" ] || [ -z "$FIELD_ID" ] || [ -z "$OPTION_ID" ]; then
+            echo "Could not find the user project, its Status field, or the target status option."
+            exit 1
+          fi
 
-for node in issue.get("projectItems", {}).get("nodes", []):
-    if node.get("project", {}).get("id") == project["id"]:
-        print(node["id"])
-        raise SystemExit
-PY
-)
-
-          FIELD_ID=$(python3 - <<'PY'
-import json
-with open('/tmp/project.json') as f:
-    data = json.load(f)
-for field in data["data"]["repository"]["projectV2"]["fields"]["nodes"]:
-    if field.get("name") == "Status":
-        print(field["id"])
-        raise SystemExit
-PY
-)
-
-          OPTION_ID=$(python3 - <<'PY'
-import json
-import os
-target = os.environ["TARGET_STATUS"]
-with open('/tmp/project.json') as f:
-    data = json.load(f)
-for field in data["data"]["repository"]["projectV2"]["fields"]["nodes"]:
-    if field.get("name") == "Status":
-        for option in field.get("options", []):
-            if option.get("name") == target:
-                print(option["id"])
-                raise SystemExit
-PY
-)
-
-          if [ -z "${ITEM_ID:-}" ] || [ -z "${FIELD_ID:-}" ] || [ -z "${OPTION_ID:-}" ]; then
-            echo "Issue not in this project or Status/option not found."
-            exit 0
+          if [ -z "$ITEM_ID" ]; then
+            echo "This issue is not in the user project."
+            exit 1
           fi
 
           gh api graphql -f query='
           mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $optionId:String!) {
             updateProjectV2ItemFieldValue(input: {
-              projectId: $projectId,
-              itemId: $itemId,
-              fieldId: $fieldId,
-              value: { singleSelectOptionId: $optionId }
+              projectId:$projectId,
+              itemId:$itemId,
+              fieldId:$fieldId,
+              value:{singleSelectOptionId:$optionId}
             }) {
               projectV2Item { id }
             }
           }' \
-            -F projectId="$PROJECT_NUMBER" \
+            -F projectId="$PROJECT_ID" \
             -F itemId="$ITEM_ID" \
             -F fieldId="$FIELD_ID" \
             -F optionId="$OPTION_ID"
