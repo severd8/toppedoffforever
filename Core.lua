@@ -963,19 +963,19 @@ TO.MANA_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PR
     SHAMAN = true, WARLOCK = true }
 
 -- Stat food: which Well Fed stats matter, best first
-TO.STAT_KEYS = { "str", "agi", "sta", "int", "spi", "mp5", "sp", "heal" }
-TO.STAT_LABELS = { str = "Strength", agi = "Agility", sta = "Stamina", int = "Intellect",
+TO.STAT_KEYS = { "str", "agi", "ap", "sta", "int", "spi", "mp5", "sp", "heal" }
+TO.STAT_LABELS = { str = "Strength", agi = "Agility", ap = "Attack power", sta = "Stamina", int = "Intellect",
     spi = "Spirit", mp5 = "Mana regen", sp = "Spell power", heal = "Healing" }
 TO.CLASS_STATS = {
-    WARRIOR = { "str", "sta", "agi" },
-    ROGUE   = { "agi", "str", "sta" },
+    WARRIOR = { "str", "ap", "sta", "agi" },
+    ROGUE   = { "agi", "ap", "str", "sta" },
     HUNTER  = { "agi", "int", "mp5", "sta" },
     MAGE    = { "sp", "int", "mp5", "spi", "sta" },
     WARLOCK = { "sp", "int", "sta", "spi", "mp5" },
     PRIEST  = { "heal", "mp5", "int", "spi", "sp", "sta" },
-    SHAMAN  = { "heal", "mp5", "int", "sta", "str" },
-    PALADIN = { "sta", "str", "heal", "mp5", "int" },
-    DRUID   = { "sta", "agi", "str", "heal", "int" },
+    SHAMAN  = { "heal", "mp5", "int", "sta", "str", "ap" },
+    PALADIN = { "sta", "str", "ap", "heal", "mp5", "int" },
+    DRUID   = { "sta", "agi", "str", "ap", "heal", "int" },
 }
 local STAT_WORDS = { strength = "str", agility = "agi", stamina = "sta", intellect = "int", spirit = "spi" }
 
@@ -989,11 +989,11 @@ TO.SPEC_ROLES = {
 TO.ROLE_STATS = {
     PRIEST  = { healer = { "heal", "mp5", "int", "spi", "sta" }, caster = { "sp", "int", "sta", "spi", "mp5" } },
     SHAMAN  = { healer = { "heal", "mp5", "int", "sta" }, caster = { "sp", "int", "mp5", "sta" },
-                melee = { "str", "agi", "sta", "int" } },
+                melee = { "str", "ap", "agi", "sta", "int" } },
     DRUID   = { healer = { "heal", "mp5", "int", "spi" }, caster = { "sp", "int", "mp5", "sta" },
-                tank = { "sta", "agi", "str" }, melee = { "agi", "str", "sta" } },
-    PALADIN = { healer = { "heal", "mp5", "int", "sta" }, tank = { "sta", "str", "agi" },
-                melee = { "str", "sta", "agi" } },
+                tank = { "sta", "agi", "str", "ap" }, melee = { "agi", "str", "ap", "sta" } },
+    PALADIN = { healer = { "heal", "mp5", "int", "sta" }, tank = { "sta", "str", "ap", "agi" },
+                melee = { "str", "ap", "sta", "agi" } },
 }
 TO.ROLE_LABELS = { healer = "Healer", caster = "Caster", tank = "Tank", melee = "Melee" }
 
@@ -1202,6 +1202,12 @@ function TO:EnglishKind(text, k)
         local sp = wellFed:match("(%d+) spell damage") or wellFed:match("(%d+) spell power")
             or wellFed:match("spell damage[^%d]*(%d+)") or wellFed:match("spell power[^%d]*(%d+)")
         if sp then stats.sp = tonumber(sp); any = true end
+        -- Attack power ("gain 40 attack power", "attack power by 40"). Ranged attack power
+        -- only helps Hunters' shots, so food that gives just that isn't counted.
+        if not wellFed:find("ranged attack power", 1, true) then
+            local ap = wellFed:match("(%d+) attack power") or wellFed:match("attack power by (%d+)")
+            if ap then stats.ap = tonumber(ap); any = true end
+        end
         local heal = wellFed:match("(%d+) bonus healing") or wellFed:match("(%d+) healing")
             or wellFed:match("healing done[^%d]*(%d+)")
         if heal then stats.heal = tonumber(heal); any = true end

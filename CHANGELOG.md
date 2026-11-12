@@ -1,3 +1,7 @@
+## 1.14.1
+
+- **Attack power food.** Food that gives attack power when you're Well Fed (like Mithril Head Trout) now counts as stat food, where before it was taken for plain food. Rogues and Warriors pick it after their main stat (Agility, Strength), and so do melee Druids, Paladins and Shamans. **Attack power** is also a new choice under "Stat food for" on the Supplies tab.
+
 ## 1.14.0
 
 - **Whisper the ones who need your buff.** Turn on "Ctrl + click whispers the ones who need it" under Party buffs (or Party blessings), then Ctrl + click the icon to whisper everyone missing it, or with it running out. While nobody who needs it is in range, the icon stays on screen greyed out, so you can tell them to come closer. Write your own message; {buff} is the buff's name and {name} theirs.
