@@ -1,0 +1,17 @@
+name: Trigger Author Replied
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  call-shared-workflow:
+    if: >
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.login == github.event.issue.user.login
+    uses: severd8/github-automation/.github/workflows/author-replied.yml@main
+    with:
+      project_number: 1
+      target_status: "Author Replied"
+    secrets:
+      PROJECTS_TOKEN: ${{ secrets.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 }}
