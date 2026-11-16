@@ -492,3 +492,11 @@ function RepairAllItems() REPAIRED = true end
 StaticPopupDialogs = {}
 UISpecialFrames = UISpecialFrames or {}
 SlashCmdList = SlashCmdList or {}
+
+-- Destroying the item on the cursor (the test takes it out of STATE.bags itself)
+function DeleteCursorItem() end
+-- Post-hook a global function, as the game does: the original runs first, then the hook
+function hooksecurefunc(name, hook)
+    local orig = _G[name]
+    _G[name] = function(...) local r = { orig(...) } hook(...) return unpack(r) end
+end

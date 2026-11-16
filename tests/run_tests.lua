@@ -2736,4 +2736,40 @@ assertEq(TO.char.auto.healing and TO.char.auto.healing.score, 520, "a potion: th
 assertEq(TO:ItemKind(7965).food, nil, "stat food isn't taken for plain food")
 STATE.locale, STATE.spellNames, ITEM_SPELL_TRIGGER_ONUSE, ITEM_MIN_LEVEL = nil, nil, nil, nil
 STATE.bags = {}; TO.char.auto = {}
+step("destroying the last of a food stops its reminder")
+-- You destroyed your only Haunch of Meat: the row named it at 0/20 until 1.14.3
+local HAUNCH = "Use: Restores 243 health over 21 sec." .. EAT
+STATE.class = "WARRIOR"; STATE.level = 20; TO.char.checks = {}; TO.char.custom = {}
+TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = true
+STATE.bags = { { id = 9140, name = "Haunch of Meat", count = 1, tip = HAUNCH } }
+refresh()
+assertEq(TO.char.auto.food and TO.char.auto.food.name, "Haunch of Meat", "(tracked)")
+TO.char.auto.food.min = 15
+-- Eaten: it stays, that's when you need the reminder
+STATE.bags = {}; refresh()
+assertEq(ids()["auto:food"] and ids()["auto:food"].text, "0/15", "eaten: still reminds you, 0/15")
+-- Destroyed: the confirm names it, then the item goes
+STATE.bags = { { id = 9140, name = "Haunch of Meat", count = 1, tip = HAUNCH } }; refresh()
+fire("DELETE_ITEM_CONFIRM", "Haunch of Meat", 1, 0, 0)
+DeleteCursorItem()
+STATE.bags = {}; fire("BAG_UPDATE_DELAYED"); refresh()
+assertEq(TO.char.auto.food, nil, "destroyed the last one: not tracked any more")
+assertEq(ids()["auto:food"], nil, "and not shown")
+assertEq(TO.char.autoMins.food, 15, "your Min is kept for the next food")
+STATE.bags = { { id = 9141, name = "Wild Hog Shank", count = 3, tip = "Use: Restores 294 health over 21 sec." .. EAT } }
+refresh()
+assertEq(TO.char.auto.food and TO.char.auto.food.min, 15, "the next food takes your Min")
+-- Destroying some of a stack keeps it; and the mark wears off, so eating the rest later doesn't drop it
+fire("DELETE_ITEM_CONFIRM", "Wild Hog Shank", 1, 0, 0); DeleteCursorItem()
+STATE.bags[1].count = 1; refresh()
+assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wild Hog Shank", "some left: still tracked")
+FAKE_TIME = FAKE_TIME + TO.DESTROY_WINDOW + 1
+STATE.bags = {}; refresh()
+assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wild Hog Shank", "eaten later: still tracked")
+-- A confirm you cancelled doesn't count for a later destroy without one
+fire("DELETE_ITEM_CONFIRM", "Wild Hog Shank", 1, 0, 0)
+FAKE_TIME = FAKE_TIME + 200; DeleteCursorItem(); refresh()
+assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wild Hog Shank", "an old confirm doesn't count")
+STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = false; STATE.level = nil
+
 print("ALL TESTS PASSED")

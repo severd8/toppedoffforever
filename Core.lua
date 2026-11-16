@@ -1357,6 +1357,13 @@ function TO:UpdateAutoItems()
             self.char.auto[slot.key] = nil
             cur = nil
         end
+        -- You destroyed the last of it: you don't want it, so stop reminding you to restock it
+        -- (eaten, drunk or sold, it stays: that's when you need the reminder)
+        if cur and self:WasDestroyed(cur.name) and not (self.bag and self.bag[cur.name:lower()]) then
+            if cur.min then self.char.autoMins[slot.key] = cur.min end
+            self.char.auto[slot.key] = nil
+            cur = nil
+        end
         if cur and rescore and slot.key == "statfood" then
             local k = itemKinds[cur.id]
             cur.score = k and self:AutoScore("statfood", k) or 0
@@ -1380,6 +1387,29 @@ function TO:UpdateAutoItems()
     parts[#parts + 1] = (self.bag and self.bag[self.RESTED.item]) and "rested" or ""
     local sig = table.concat(parts, " ")
     if sig ~= self.autoSig then self.autoSig, self.autoChanged = sig, true end
+end
+
+-- Destroying an item: the game asks to confirm (DELETE_ITEM_CONFIRM names it), then
+-- DeleteCursorItem destroys it. Names destroyed in the last DESTROY_WINDOW seconds are
+-- kept in self.destroyed (lowercase name -> time), for UpdateAutoItems.
+TO.DESTROY_WINDOW = 10
+function TO:OnDeleteConfirm(name)
+    name = Str(name)
+    self.deleting = name and { name = name:lower(), at = GetTime() } or nil
+end
+
+function TO:OnItemDestroyed()
+    local d = self.deleting
+    self.deleting = nil
+    if not d or GetTime() - d.at > 120 then return end   -- a confirm left open that long isn't this one
+    self.destroyed = self.destroyed or {}
+    self.destroyed[d.name] = GetTime()
+    if self.built then self:RequestSoonUpdate() end
+end
+
+function TO:WasDestroyed(name)
+    local at = self.destroyed and name and self.destroyed[name:lower()]
+    return at and GetTime() - at <= self.DESTROY_WINDOW or false
 end
 
 -- You picked a stat: choose the stat food again (your Min is kept)
@@ -3602,6 +3632,11 @@ for _, e in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT
 end
 events:RegisterEvent("GROUP_ROSTER_UPDATE")
 events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+-- Destroying an item: its name comes with the confirm, and the hook runs once it's gone
+pcall(events.RegisterEvent, events, "DELETE_ITEM_CONFIRM")
+if hooksecurefunc and DeleteCursorItem then
+    hooksecurefunc("DeleteCursorItem", function() TO:OnItemDestroyed() end)
+end
 -- If WoW ever blocks something and blames ToppedOff, say exactly what in chat
 events:RegisterEvent("ADDON_ACTION_BLOCKED")
 events:RegisterEvent("ADDON_ACTION_FORBIDDEN")
@@ -3658,6 +3693,9 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
             TO.pendingItems[arg1] = nil
             if TO.built then TO:RequestUpdate() end
         end
+        return
+    elseif event == "DELETE_ITEM_CONFIRM" then
+        TO:OnDeleteConfirm(arg1)
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
         TO:FlushPending()

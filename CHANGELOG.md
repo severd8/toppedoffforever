@@ -1,3 +1,7 @@
+## 1.14.3
+
+- **Destroyed food stops showing.** When you destroy the last of your food, water, bandages or potions, ToppedOff stops tracking that item, so it no longer sits on screen at 0/20 asking you to restock something you threw away. Your Min is kept for the next one you carry. Eating, drinking or selling the last one still reminds you, as before.
+
 ## 1.14.2
 
 - **Soul Shards in a Soul Bag count.** Items in the extra bag slot after your four bags (where a Soul Bag can go) weren't counted, so Warlocks saw 0 Soul Shards. Everything in that bag now counts for reminders, restocking and the combat bar.
