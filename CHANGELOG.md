@@ -1,3 +1,8 @@
+## 1.15.0
+
+- **Food you've run out of is greyed out.** When you eat, drink or sell the last of your food, water, bandages or potions, it still shows at 0/20 to remind you to buy more, but now greyed out, so it doesn't look like you still have some.
+- **Shift + right-click it to stop tracking it.** Don't want that food again? Shift + right-click the greyed icon and it goes away for good. The next food (or water, or potion) of that kind you pick up is tracked instead, with the same Min.
+
 ## 1.14.3
 
 - **Destroyed food stops showing.** When you destroy the last of your food, water, bandages or potions, ToppedOff stops tracking that item, so it no longer sits on screen at 0/20 asking you to restock something you threw away. Your Min is kept for the next one you carry. Eating, drinking or selling the last one still reminds you, as before.

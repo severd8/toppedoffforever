@@ -2772,4 +2772,38 @@ FAKE_TIME = FAKE_TIME + 200; DeleteCursorItem(); refresh()
 assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wild Hog Shank", "an old confirm doesn't count")
 STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = false; STATE.level = nil
 
+step("food you've run out of is greyed, and Shift + right-click forgets it")
+-- You ate your last Dwarven Mild: it stays as a reminder, but greyed out
+local MILD = "Use: Restores 1392 health over 27 sec." .. EAT
+STATE.class = "WARRIOR"; STATE.level = 40; TO.char.checks = {}; TO.char.custom = {}
+TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = true
+STATE.bags = { { id = 9150, name = "Dwarven Mild", count = 3, tip = MILD } }
+refresh()
+local function foodButton()
+    for _, b in ipairs(TO.buttons) do
+        if b:IsShown() and b.reminder and b.reminder.id == "auto:food" then return b end
+    end
+end
+assertEq(foodButton().reminder.forget, nil, "(carrying some: a Shift + right-click hides it for a while, as before)")
+assertEq(foodButton().icon.__desat and true or false, false, "(and it's in colour)")
+STATE.bags = {}; refresh()
+local fb = foodButton()
+assert(fb, "ate the last one: still shown, to remind you")
+assertEq(fb.reminder.text, "0/20", "at 0")
+assertEq(fb.icon.__desat and true or false, true, "greyed out")
+assertEq(fb.reminder.forget, "food", "and can be forgotten")
+assert(fb.reminder.detail:find("Shift + right-click to stop tracking it", 1, true), "the tooltip says how")
+TO.char.auto.food.min = 12
+SHIFT = true; fb.__scripts.PostClick(fb, "RightButton", false); SHIFT = false
+refresh()
+assertEq(TO.char.auto.food, nil, "Shift + right-click: no longer tracked")
+assertEq(TO.snoozed["auto:food"], nil, "(forgotten, not just hidden for 10 minutes)")
+assertEq(foodButton(), nil, "and gone from the bar")
+assertEq(TO.char.autoMins.food, 12, "your Min is kept")
+STATE.bags = { { id = 9151, name = "Wild Hog Shank", count = 3, tip = "Use: Restores 294 health over 21 sec." .. EAT } }
+refresh()
+assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wild Hog Shank", "the next food you carry is picked")
+assertEq(TO.char.auto.food.min, 12, "with your Min")
+STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = false; STATE.level = nil
+
 print("ALL TESTS PASSED")

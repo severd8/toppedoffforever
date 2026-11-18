@@ -2216,6 +2216,12 @@ function TO:CheckAutoItems(list)
                     icon = (e and e.icon) or ItemIcon(e and e.id or a.id) or self:ItemIconByName(name),
                     text = have .. "/" .. min, low = low, stocked = not low, ownItem = true,
                     detail = detail .. "\nAuto-tracked: best " .. slot.label:lower() }
+                if not e then
+                    -- None of the kind left: greyed out, so it doesn't look like you carry it,
+                    -- and Shift + right-click stops tracking it for good (TO:ForgetAuto)
+                    r.noItem, r.forget = a.name, slot.key
+                    r.detail = r.detail .. "\nYou're out. Buy more, or Shift + right-click to stop tracking it"
+                end
                 if e then
                     r.action = { use = "item:" .. e.id, useName = e.name }
                     -- Lights up when your health (food) or mana (water) is low: see UpdateGlows
@@ -2577,6 +2583,17 @@ function TO:Snooze(r)
     self:RequestSoonUpdate()
 end
 
+-- An auto slot you've run out of: stop tracking its item (your Min is kept for the next
+-- one). The next food, water or potion of that kind you carry is picked as usual.
+function TO:ForgetAuto(key)
+    local a = self.char.auto[key]
+    if not a then return end
+    if a.min then self.char.autoMins[key] = a.min end
+    self.char.auto[key] = nil
+    Print(a.name .. " is no longer tracked. The next one of its kind you carry is.")
+    self:RequestSoonUpdate()
+end
+
 function TO:ClearSnoozes()
     if next(self.snoozed) == nil then return false end
     self.snoozed = {}
@@ -2643,7 +2660,11 @@ local function Button_OnEnter(self)
             or ("the " .. n .. " who need it")) .. ": "
             .. TO:WhisperText("offerMessage", TO.OFFER_MESSAGE, r.whisper[1].buff, "Name"), 0.4, 1, 0.4, true)
     end
-    if r.id and self.snoozable then GameTooltip:AddLine("Shift + right-click to hide it for 10 minutes", 0.6, 0.6, 0.6) end
+    if r.forget and self.snoozable then
+        GameTooltip:AddLine("Shift + right-click to stop tracking it", 0.6, 0.6, 0.6)
+    elseif r.id and self.snoozable then
+        GameTooltip:AddLine("Shift + right-click to hide it for 10 minutes", 0.6, 0.6, 0.6)
+    end
     GameTooltip:Show()
 end
 
@@ -2666,7 +2687,7 @@ function TO:CreateButton(i)
         if down then return end
         local r = btn.reminder
         if button == "RightButton" and IsShiftKeyDown() then
-            TO:Snooze(r)
+            if r and r.forget then TO:ForgetAuto(r.forget) else TO:Snooze(r) end
         elseif r and r.whisper and IsControlKeyDown() then
             TO:WhisperNeeded(r)
         elseif r and r.ask then
