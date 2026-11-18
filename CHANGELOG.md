@@ -1,8 +1,3 @@
-## 1.15.0
-
-- **Food you've run out of goes away.** When you eat, drink, sell or use the last of your food, water, bandages or potions, it no longer stays on screen at 0/20. It comes back as soon as you carry some again, and a vendor still restocks it for you.
-- **Want the old way?** Turn on "Show food, water and potions you've run out of" on the Supplies tab (Quick-use bar) to keep it on screen at 0 as a reminder to buy more.
-
 ## 1.14.3
 
 - **Destroyed food stops showing.** When you destroy the last of your food, water, bandages or potions, ToppedOff stops tracking that item, so it no longer sits on screen at 0/20 asking you to restock something you threw away. Your Min is kept for the next one you carry. Eating, drinking or selling the last one still reminds you, as before.

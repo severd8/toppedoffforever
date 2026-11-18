@@ -2740,7 +2740,7 @@ step("destroying the last of a food stops its reminder")
 -- You destroyed your only Haunch of Meat: the row named it at 0/20 until 1.14.3
 local HAUNCH = "Use: Restores 243 health over 21 sec." .. EAT
 STATE.class = "WARRIOR"; STATE.level = 20; TO.char.checks = {}; TO.char.custom = {}
-TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = true; TO.char.showEmpty = true
+TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = true
 STATE.bags = { { id = 9140, name = "Haunch of Meat", count = 1, tip = HAUNCH } }
 refresh()
 assertEq(TO.char.auto.food and TO.char.auto.food.name, "Haunch of Meat", "(tracked)")
@@ -2771,25 +2771,5 @@ fire("DELETE_ITEM_CONFIRM", "Wild Hog Shank", 1, 0, 0)
 FAKE_TIME = FAKE_TIME + 200; DeleteCursorItem(); refresh()
 assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wild Hog Shank", "an old confirm doesn't count")
 STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = false; STATE.level = nil
-
-step("food you've run out of goes away unless you want it shown")
--- You ate your last Dwarven Mild: until 1.15.0 it stayed on screen at 0/20
-local MILD = "Use: Restores 1392 health over 27 sec." .. EAT
-STATE.class = "WARRIOR"; STATE.level = 40; TO.char.checks = {}; TO.char.custom = {}
-TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = true; TO.char.showEmpty = false
-STATE.bags = { { id = 9150, name = "Dwarven Mild", count = 3, tip = MILD } }
-refresh()
-assertEq(ids()["auto:food"] and ids()["auto:food"].text, "3/20", "(shown while you carry some)")
-STATE.bags = {}; refresh()
-assertEq(ids()["auto:food"], nil, "ate the last one: not on screen")
-assertEq(TO.char.auto.food and TO.char.auto.food.name, "Dwarven Mild", "but remembered")
-local wanted = {}
-for _, n in ipairs(TO:RestockNeeds()) do wanted[n.label] = n.need end
-assertEq(wanted["Dwarven Mild"], 20, "so a vendor still restocks it")
-TO.char.showEmpty = true; refresh()
-assertEq(ids()["auto:food"] and ids()["auto:food"].text, "0/20", "with the setting on, it shows at 0")
-TO.char.showEmpty = false; TO.char.customAlways = false; refresh()
-assertEq(ids()["auto:food"], nil, "and with the quick-use bar off, still not shown")
-STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}; STATE.level = nil
 
 print("ALL TESTS PASSED")

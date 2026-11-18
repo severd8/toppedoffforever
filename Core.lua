@@ -262,7 +262,6 @@ local CHAR_DEFAULTS = {       -- per character: what to check, and where the rem
     repairAtVendor = true,    -- repair button at vendors
     warn = {},                -- check id -> minutes before it runs out to warn (missing = Display tab's)
     glowLow = true,           -- light up food and water when your health or mana is low
-    showEmpty = false,        -- keep showing food, water and potions you've run out of (0/20)
     bankItems = {},           -- what was in your bank when you last had it open: lowercase name -> count
     whisperOffer = false,     -- Ctrl + click a party buff or blessing: whisper the ones who need it
     offerMessage = "",        -- that whisper ("" = TO.OFFER_MESSAGE); {buff} is the buff's name
@@ -2198,9 +2197,6 @@ function TO:CheckAutoItems(list)
         -- Skip items you've also added yourself, so they don't show twice
         if a and (not slot.mana or hasMana) and self:IsEnabled(id, true) and not own[a.name:lower()] then
             local e, nextBest = self:AutoItemInBags(slot.key, own)
-            -- None of that kind in your bags: not shown unless you asked to be told you've run
-            -- out (the item is still remembered, for the vendor and the Supplies tab)
-            local hidden = not e and not self.char.showEmpty
             local name = e and e.name or a.name
             local have = e and e.count or 0
             -- Others in your bags that are just as good count too
@@ -2211,7 +2207,7 @@ function TO:CheckAutoItems(list)
             end
             local min = a.min or slot.min
             local low = have < min
-            if not hidden and (low or self.char.customAlways) then
+            if low or self.char.customAlways then
                 local detail = low and (("%d in your bags (want %d)"):format(have, min) .. self:BankLine({ a.name }))
                     or ("%d in your bags. Topped off."):format(have)
                 if others > 0 then detail = detail .. "\n" .. others .. " of them are others just as good" end
@@ -2238,7 +2234,7 @@ end
 TO.COPY_FIELDS = { "checks", "checksOutside", "splitProfiles", "prefs", "mins", "weapon", "custom",
     "customAlways", "statFocus", "wellFedInstanceOnly", "elixirs", "elixirInstanceOnly",
     "soulstoneInstanceOnly", "petFood", "blessings", "wholeRaid", "restockAtVendor", "repairAtVendor",
-    "partyExpiring", "groupBuffs", "bankRestock", "warn", "glowLow", "showEmpty",
+    "partyExpiring", "groupBuffs", "bankRestock", "warn", "glowLow",
     "whisperOffer", "offerMessage", "askBuffs", "askMessage" }
 
 local function DeepCopy(v)
