@@ -842,6 +842,10 @@ local function BuildSuppliesTab(self, ctx, class)
         "After a fight, your food glows green when your health is low, and your water when your mana is. "
         .. "Full glow below half, none from 70% up. Not while you're already eating or drinking.")
     ctx.row()
+    ctx.charCheck("Show food, water and potions you've run out of", "showEmpty", PAD,
+        "With none of a kind left, keep the last one you had on screen at 0 so you remember to buy more. "
+        .. "Off: it goes away until you carry some again.")
+    ctx.row()
     ctx.note("With the first one off, they only show when you're low, so they can't light up either.")
 
     local reagents = self.CLASS_REAGENTS[class] or {}
