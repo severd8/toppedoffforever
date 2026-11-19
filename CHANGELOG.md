@@ -1,3 +1,7 @@
+## 1.15.1
+
+- **No poison reminder before you can use poisons.** New Rogues were asked to put Instant Poison on their weapons, which they can't do until level 20. Below 20 the poison reminder is gone; a sharpening stone in your bags is suggested instead, like for any other class. At 20 the poison reminder comes back.
+
 ## 1.15.0
 
 - **Food you've run out of is greyed out.** When you eat, drink or sell the last of your food, water, bandages or potions, it still shows at 0/20 to remind you to buy more, but now greyed out, so it doesn't look like you still have some.

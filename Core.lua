@@ -642,7 +642,7 @@ function TO:AutoWeaponItem(slot)
     local weapon = Num(GetInventoryItemID("player", slot))
     if not weapon then return nil end
     local sub = Num(select(7, C_Item.GetItemInfoInstant(weapon)))
-    local rogue = self:PlayerClass() == "ROGUE"
+    local rogue = self:CanUsePoisons()
     local best, bestOil
     for key, e in pairs(self.bag or {}) do
         for _, w in ipairs(self.WEAPON_ITEMS) do
@@ -669,6 +669,15 @@ function TO:AutoWeaponItem(slot)
     end
     if oilFirst then return bestOil or best end
     return best or bestOil
+end
+
+-- Rogues learn Poisons at level 20, and poisons can't be used before then. Below that,
+-- a poison set for a weapon (the default, Instant Poison) is ignored, and the weapon
+-- gets a stone or oil from your bags like any other class.
+TO.POISON_LEVEL = 20
+function TO:CanUsePoisons()
+    if self:PlayerClass() ~= "ROGUE" then return false end
+    return (Num(UnitLevel("player")) or 60) >= self.POISON_LEVEL
 end
 
 local function FormatTime(sec)
@@ -846,6 +855,9 @@ function TO:CheckWeapons(list)
                     end
                 else
                     local want = cfg[h.key]
+                    if want:lower():find("poison", 1, true) and not self:CanUsePoisons() then
+                        want = ""   -- a low-level Rogue: no poisons yet
+                    end
                     if want == "" then
                         -- Nothing set: whatever stone, oil or poison you carry for this weapon
                         local item = self:AutoWeaponItem(h.slot)

@@ -259,6 +259,25 @@ refresh()
 r = ids()
 assertEq(r["weapon:mh"].noItem, "Instant Poison", "no poison in bags")
 assertEq(r["weapon:mh"].action, nil, "nothing to click without the item")
+-- A new Rogue (below 20) can't use poisons yet: no poison reminder
+STATE.level = 5
+refresh()
+r = ids()
+assertEq(r["weapon:mh"], nil, "no poison reminder below level 20")
+assertEq(r["weapon:oh"], nil, "no off-hand poison reminder below level 20")
+STATE.bags = { { id = 10, name = "Instant Poison", count = 5 } }
+refresh()
+assertEq(ids()["weapon:mh"], nil, "a poison in your bags isn't suggested below level 20 either")
+STATE.weaponTypes = { [900] = 15 }   -- daggers
+STATE.bags = { { id = 10, name = "Instant Poison", count = 5 }, { id = 2862, name = "Rough Sharpening Stone", count = 2 } }
+refresh()
+assertEq(ids()["weapon:mh"] and ids()["weapon:mh"].action.item, "Rough Sharpening Stone",
+    "a low-level Rogue gets the sharpening stone instead")
+STATE.level = 20
+refresh()
+assertEq(ids()["weapon:mh"].action.item, "Instant Poison", "at 20 the poison is back")
+STATE.level, STATE.weaponTypes, STATE.bags = nil, nil, {}
+refresh()
 
 step("weapon: shield in off hand is skipped")
 STATE.oh = 901
