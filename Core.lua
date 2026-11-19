@@ -2186,6 +2186,45 @@ function TO:CheckRested(list)
     list[#list + 1] = r
 end
 
+-- Gathering tracking: Find Minerals (Mining) and Find Herbs (Herbalism). Forever shows
+-- tracking on the minimap (C_Minimap), not as a buff. Reminded when you know one and
+-- none of them is on; not inside dungeons and raids, where there's nothing to gather.
+TO.TRACKING = { id = "track", label = "Tracking", cast = { "Find Minerals", "Find Herbs" } }
+
+-- Lowercase names of the minimap tracking types that are on (and your auras, in case a
+-- client shows tracking as a buff). nil when the game can't tell us.
+function TO:ActiveTracking()
+    local on = {}
+    for name in pairs(self.buffs or {}) do on[name] = true end
+    if not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo) then return on end
+    local ok, n = pcall(C_Minimap.GetNumTrackingTypes)
+    n = ok and Num(n) or 0
+    for i = 1, n do
+        local okInfo, info = pcall(C_Minimap.GetTrackingInfo, i)
+        if okInfo and type(info) == "table" and not IsSecret(info.active) and info.active then
+            local name = Str(info.name)
+            if name then on[name:lower()] = true end
+            local id = Num(info.spellID)
+            local spellName = id and C_Spell and C_Spell.GetSpellName and Str(C_Spell.GetSpellName(id))
+            if spellName then on[spellName:lower()] = true end
+        end
+    end
+    return on
+end
+
+function TO:CheckTracking(list)
+    local t = self.TRACKING
+    if not self:IsEnabled(t.id, true) or self:InInstance() then return end
+    local spell = self:BuffPreference(t)
+    if not spell then return end
+    local on = self:ActiveTracking()
+    for _, name in ipairs(t.cast) do
+        if on[name:lower()] then return end
+    end
+    list[#list + 1] = { id = t.id, label = spell, icon = SpellIcon(spell),
+        detail = "Not tracking anything to gather", action = { spell = spell } }
+end
+
 -- The item to show and use for an auto-tracked slot: the tracked one while you
 -- have any, otherwise the next best of that kind in your bags. (The tracked one
 -- is still what gets restocked at a vendor.) Returns the bag entry, or nil.
@@ -2565,6 +2604,7 @@ function TO:BuildReminders()
     self:CheckWeapons(list)
     self:CheckWellFed(list)
     self:CheckRested(list)
+    self:CheckTracking(list)
     self:CheckElixirs(list)
     self:CheckPet(list)
     self:CheckSoulstone(list)
@@ -3239,7 +3279,7 @@ TO.DIVIDER_SPACE = 14      -- room between the buff row and the top-off row
 TO.DIVIDER_THICKNESS = 4   -- the gold divider line
 
 -- Buffs (row 1) vs things to top off (row 2)
-local BUFF_ROW = { "^buff:", "^wrong:", "^party:", "^ask:", "^weapon:", "^elixir:", "^wellfed$", "^rested$", "^pet:summon$",
+local BUFF_ROW = { "^buff:", "^wrong:", "^party:", "^ask:", "^weapon:", "^elixir:", "^wellfed$", "^rested$", "^track$", "^pet:summon$",
     "^pet:happy$", "^soulstone$", "^rez$" }
 function TO:IsBuffReminder(r)
     local id = r.id or ""
@@ -3675,6 +3715,7 @@ events:RegisterEvent("ADDON_ACTION_BLOCKED")
 events:RegisterEvent("ADDON_ACTION_FORBIDDEN")
 -- Pet events; guarded in case this client doesn't have them
 pcall(events.RegisterUnitEvent, events, "UNIT_PET", "player")
+pcall(events.RegisterEvent, events, "MINIMAP_UPDATE_TRACKING")
 pcall(events.RegisterUnitEvent, events, "UNIT_HAPPINESS", "pet")
 -- Talent / spec changes (stat food follows your role), and items the game finishes loading
 for _, e in ipairs({ "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE", "ACTIVE_TALENT_GROUP_CHANGED",
@@ -3750,6 +3791,8 @@ events:SetScript("OnEvent", function(_, event, arg1, ...)
         if arg1 == "player" then TO:UpdateGlows() end
     elseif event == "UNIT_AURA" then
         if TO:WatchesUnit(arg1) then TO:RequestSoonUpdate() end
+    elseif event == "MINIMAP_UPDATE_TRACKING" then
+        TO:RequestSoonUpdate()
     elseif event == "READY_CHECK" then
         if TO.db.readyCheck then TO:Remind("Ready check") end
     elseif event == "ZONE_CHANGED_NEW_AREA" then

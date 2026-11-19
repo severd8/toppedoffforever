@@ -2825,4 +2825,49 @@ assertEq(TO.char.auto.food and TO.char.auto.food.name, "Wild Hog Shank", "the ne
 assertEq(TO.char.auto.food.min, 12, "with your Min")
 STATE.bags = {}; TO.char.auto = {}; TO.char.autoMins = {}; TO.char.customAlways = false; STATE.level = nil
 
+step("gathering tracking: Find Minerals and Find Herbs")
+STATE.class = "WARRIOR"; STATE.buffs = {}; STATE.bags = {}; TO.char.checks = {}
+SPELLBOOK, FUTURE = {}, {}
+LEARN("Battle Shout")
+fire("SPELLS_CHANGED"); refresh()
+assertEq(ids().track, nil, "no gathering skill: no tracking reminder")
+LEARN("Find Minerals")
+STATE.tracking = { { name = "Find Minerals", active = false, spellID = 2580 }, { name = "Track Humanoids", active = true } }
+fire("SPELLS_CHANGED"); refresh()
+local tr = ids().track
+assert(tr, "a Miner not tracking minerals is reminded")
+assertEq(tr.label, "Find Minerals", "named after the spell")
+assertEq(tr.action.spell, "Find Minerals", "the click casts it")
+assertEq(TO:IsBuffReminder(tr), true, "on the buff row")
+local tb
+for _, b in ipairs(TO.buttons) do if b.reminder and b.reminder.id == "track" then tb = b end end
+assertEq(tb.__attrs.spell, "Find Minerals", "the button casts Find Minerals")
+STATE.tracking[1].active = true
+fire("MINIMAP_UPDATE_TRACKING"); refresh()
+assertEq(ids().track, nil, "tracking minerals: no reminder")
+STATE.tracking[1].active = false
+STATE.instance = true; refresh()
+assertEq(ids().track, nil, "nothing to gather in a dungeon")
+STATE.instance = nil; refresh()
+assert(ids().track, "back outside: reminded again")
+-- Both skills: one tracking at a time, either counts; you pick which the click turns on
+LEARN("Find Herbs")
+STATE.tracking[2] = { name = "Find Herbs", active = true, spellID = 2383 }
+fire("SPELLS_CHANGED"); refresh()
+assertEq(ids().track, nil, "tracking herbs counts too")
+STATE.tracking[2].active = false; refresh()
+assertEq(ids().track.action.spell, "Find Minerals", "both known: the first by default")
+TO.char.prefs.track = "Find Herbs"; refresh()
+assertEq(ids().track.action.spell, "Find Herbs", "your pick")
+-- A client that shows tracking as a buff
+STATE.tracking = nil; STATE.buffs = { ["Find Herbs"] = 0 }; refresh()
+assertEq(ids().track, nil, "tracking shown as a buff counts")
+STATE.buffs = {}
+TO:SetEnabled("track", false); refresh()
+assertEq(ids().track, nil, "can be turned off")
+TO:SetEnabled("track", true)
+TO:OpenConfig(); TO:BuildChecksList()
+TO.char.prefs.track = nil; STATE.tracking = nil
+SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED"); refresh()
+
 print("ALL TESTS PASSED")

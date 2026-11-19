@@ -260,6 +260,16 @@ FAKE_TIME = 1000
 function GetTime() return FAKE_TIME end
 function IsInInstance() return STATE.instance, STATE.instance and "party" or "none" end
 function PlaySound(k) print("SOUND", k) end
+-- Minimap tracking: STATE.tracking = { { name = "Find Herbs", active = true, spellID = 2383 }, ... }
+C_Minimap = {
+    GetNumTrackingTypes = function() return #(STATE.tracking or {}) end,
+    GetTrackingInfo = function(i)
+        local t = (STATE.tracking or {})[i]
+        if not t then return nil end
+        return { name = t.name, texture = 1, active = t.active and true or false, type = "spell", subType = 0,
+            spellID = t.spellID }
+    end,
+}
 SOUNDKIT = { RAID_WARNING = 8959 }
 function RegisterStateDriver(f, k, v) f.__driver = v end
 function UnregisterStateDriver(f, k) f.__driver = nil end

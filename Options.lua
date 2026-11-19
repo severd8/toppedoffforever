@@ -672,6 +672,24 @@ local function BuildBuffsTab(self, ctx, class)
             .. self.RESTED.stacks .. " stacks. Click the icon to unfurl the bag.")
     end
 
+    -- Gathering tracking, for Miners and Herbalists
+    local tracking = self:KnownOptions(self.TRACKING.cast)
+    if #tracking > 0 then
+        local t = self.TRACKING
+        ctx.card("Gathering")
+        local sw = ctx.toggle(t.id, "Tracking", true)
+        if #tracking > 1 then
+            ctx.fit(sw, PICK_X)
+            ctx.spellPick(tracking, function() return TO:BuffPreference(t) end,
+                function(v) TO.char.prefs[t.id] = v TO:RequestUpdate() end, nil, PICK_SHORT_W)
+        else
+            ctx.fit(sw)
+        end
+        ctx.row()
+        ctx.note("Reminds you when " .. table.concat(tracking, " or ") .. " isn't on. Not in dungeons and "
+            .. "raids. Click the icon to turn it on.")
+    end
+
     -- Elixirs and flasks
     ctx.card("Elixirs and flasks", #self.char.elixirs > 0 and "Warn" or nil)
     local shown = {}

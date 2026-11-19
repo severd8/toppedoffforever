@@ -1,3 +1,7 @@
+## 1.16.0
+
+- **Gathering tracking reminder.** Miners and Herbalists now get a reminder when Find Minerals or Find Herbs isn't on. Click the icon to turn it on. It doesn't show in dungeons and raids, where there's nothing to gather. If you know both, pick which one the click turns on in the options (Buffs tab, Gathering); either one being on counts. You can turn the reminder off there too.
+
 ## 1.15.1
 
 - **No poison reminder before you can use poisons.** New Rogues were asked to put Instant Poison on their weapons, which they can't do until level 20. Below 20 the poison reminder is gone; a sharpening stone in your bags is suggested instead, like for any other class. At 20 the poison reminder comes back.

@@ -7,6 +7,8 @@ local _, ns = ...
 local TO = ns.TO
 
 TO.SPELL_IDS = {
+    -- Gathering
+    ["Find Minerals"] = 2580, ["Find Herbs"] = 2383,
     -- Mage
     ["Arcane Intellect"] = 1459, ["Arcane Brilliance"] = 23028,
     ["Frost Armor"] = 168, ["Ice Armor"] = 7302, ["Mage Armor"] = 6117,
@@ -99,6 +101,7 @@ function TO:NameRefs()
         end
     end
     for _, w in ipairs(self.WRONG_BUFFS) do list(w.auras, spells) end
+    list(self.TRACKING.cast, spells)
     map(self.REZ_SPELLS, spells)
     list(self.WARLOCK_PETS, spells)
     list(self.SOULSTONE_SPELLS, spells)
