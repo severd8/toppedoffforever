@@ -2847,9 +2847,9 @@ fire("MINIMAP_UPDATE_TRACKING"); refresh()
 assertEq(ids().track, nil, "tracking minerals: no reminder")
 STATE.tracking[1].active = false
 STATE.instance = true; refresh()
-assertEq(ids().track, nil, "nothing to gather in a dungeon")
+assert(ids().track, "in dungeons too: they have herbs and nodes")
 STATE.instance = nil; refresh()
-assert(ids().track, "back outside: reminded again")
+assert(ids().track, "and outside")
 -- Both skills: one tracking at a time, either counts; you pick which the click turns on
 LEARN("Find Herbs")
 STATE.tracking[2] = { name = "Find Herbs", active = true, spellID = 2383 }

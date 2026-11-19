@@ -686,8 +686,8 @@ local function BuildBuffsTab(self, ctx, class)
             ctx.fit(sw)
         end
         ctx.row()
-        ctx.note("Reminds you when " .. table.concat(tracking, " or ") .. " isn't on. Not in dungeons and "
-            .. "raids. Click the icon to turn it on.")
+        ctx.note("Reminds you when " .. table.concat(tracking, " or ") .. " isn't on. Click the icon to turn "
+            .. "it on.")
     end
 
     -- Elixirs and flasks

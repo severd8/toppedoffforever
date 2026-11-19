@@ -2188,7 +2188,7 @@ end
 
 -- Gathering tracking: Find Minerals (Mining) and Find Herbs (Herbalism). Forever shows
 -- tracking on the minimap (C_Minimap), not as a buff. Reminded when you know one and
--- none of them is on; not inside dungeons and raids, where there's nothing to gather.
+-- none of them is on, dungeons and raids included (they have nodes and herbs too).
 TO.TRACKING = { id = "track", label = "Tracking", cast = { "Find Minerals", "Find Herbs" } }
 
 -- Lowercase names of the minimap tracking types that are on (and your auras, in case a
@@ -2214,7 +2214,7 @@ end
 
 function TO:CheckTracking(list)
     local t = self.TRACKING
-    if not self:IsEnabled(t.id, true) or self:InInstance() then return end
+    if not self:IsEnabled(t.id, true) then return end
     local spell = self:BuffPreference(t)
     if not spell then return end
     local on = self:ActiveTracking()
