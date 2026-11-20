@@ -227,6 +227,7 @@ local DEFAULTS = {            -- account-wide: display
     warnMinutes = 3,
     durabilityPct = 25,
     iconsPerRow = 8,
+    iconAlign = "left",       -- "left", "center" or "right": where each row of icons sits in the frame
     readyCheck = true,
     instanceReminder = true,
     sound = false,
@@ -2829,6 +2830,17 @@ function TO:ApplyButton(b, r)
     b.icon:SetAlpha(r.stocked and self.STOCKED_ALPHA or 1)
 end
 
+-- Where a row of n icons starts in a frame this wide, by "Icon alignment": 0 for Left
+-- (the default, and anything unknown), half the spare room for Center, all of it for
+-- Right. Whole pixels, so icons stay sharp.
+function TO:RowOffset(width, n, size, gap)
+    local align = self.db.iconAlign
+    if (align ~= "center" and align ~= "right") or n < 1 then return 0 end
+    local spare = math.max(0, width - (n * (size + gap) - gap))
+    if align == "right" then return spare end
+    return math.floor(spare / 2)
+end
+
 -- Places the icons in a row. Must run out of combat (the icons are secure buttons).
 function TO:Layout(list)
     if InCombatLockdown() then self.dirty = true return end
@@ -2876,8 +2888,15 @@ function TO:Layout(list)
         end
         self.divider = d
     end
-    local idx, y, cols = 0, 0, 0
+    -- The frame is as wide as its longest row (at least two icons and the header).
+    -- Shorter rows start at the left, or sit in the middle or at the right (RowOffset).
+    local cols = 0
+    for _, line in ipairs(lines) do cols = math.max(cols, #line) end
+    local slots = math.max(cols, self.MIN_SLOTS)
+    local width = math.max(slots * (size + gap) - gap, self.HEADER_MIN_WIDTH)
+    local idx, y = 0, 0
     for n, line in ipairs(lines) do
+        local x0 = self:RowOffset(width, #line, size, gap)
         for col, r in ipairs(line) do
             idx = idx + 1
             local b = self.buttons[idx] or self:CreateButton(idx)
@@ -2888,10 +2907,9 @@ function TO:Layout(list)
             b.glow:SetPoint("TOPLEFT", -g, g)
             b.glow:SetPoint("BOTTOMRIGHT", g, -g)
             b:ClearAllPoints()
-            b:SetPoint("TOPLEFT", self.bar, "TOPLEFT", (col - 1) * (size + gap), y)
+            b:SetPoint("TOPLEFT", self.bar, "TOPLEFT", x0 + (col - 1) * (size + gap), y)
             b:Show()
         end
-        cols = math.max(cols, #line)
         if n < #lines then
             if n == split then
                 self.divider.y = y - size - math.floor((self.DIVIDER_SPACE - self.DIVIDER_THICKNESS) / 2)
@@ -2902,8 +2920,6 @@ function TO:Layout(list)
         end
     end
     local height = #lines > 0 and (-y + size) or size
-    local slots = math.max(cols, self.MIN_SLOTS)
-    local width = math.max(slots * (size + gap) - gap, self.HEADER_MIN_WIDTH)
     local d = self.divider
     d:ClearAllPoints()
     for _, e in ipairs(d.edges) do e:ClearAllPoints() end
@@ -3078,6 +3094,10 @@ function TO:LayoutCombatBar()
         and not (self.db.onlyInInstance and not self:InInstance())
     if use then items = self:CombatItems() end
     local size, gap = self.db.iconSize, 4
+    -- The same size as the reminders' frame, so it doesn't jump in and out of combat
+    local main = self.mainSize or {}
+    local width = math.max(#items * (size + gap) - gap, self.HEADER_MIN_WIDTH, main[1] or 0)
+    local x0 = self:RowOffset(width, #items, size, gap)
     for i, it in ipairs(items) do
         local b = self:CombatButton(i)
         b.itemID = it.id
@@ -3088,7 +3108,7 @@ function TO:LayoutCombatBar()
         b.icon:SetTexture(it.icon or ItemIcon(it.id) or self.ICONS.unknown)
         b:SetSize(size, size)
         b:ClearAllPoints()
-        b:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * (size + gap), 0)
+        b:SetPoint("TOPLEFT", f, "TOPLEFT", x0 + (i - 1) * (size + gap), 0)
         b:Show()
     end
     for i = #items + 1, #f.buttons do
@@ -3098,10 +3118,7 @@ function TO:LayoutCombatBar()
         b:Hide()
     end
     f.count = #items
-    -- The same size as the reminders' frame, so it doesn't jump in and out of combat
-    local main = self.mainSize or {}
-    f:SetSize(math.max(#items * (size + gap) - gap, self.HEADER_MIN_WIDTH, main[1] or 0),
-        math.max(size, main[2] or 0))
+    f:SetSize(width, math.max(size, main[2] or 0))
     f.box:SetShown(not self.char.locked or self.db.showHeader)
     self:UpdateCombatCounts()
     local driver = #items > 0 and "[combat] show; hide" or "hide"

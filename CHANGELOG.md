@@ -1,3 +1,7 @@
+## 1.17.0
+
+- **Center or right-align your icons.** New "Icon alignment" choice on the Display tab (Size and layout): Left, Center or Right. Left is the default, so nothing moves unless you change it. With Center, each row of icons sits in the middle of the frame, so a short row of buffs lines up neatly over a longer row of supplies; with Right, rows end at the right edge. The in-combat potion bar follows the same setting.
+
 ## 1.16.0
 
 - **Gathering tracking reminder.** Miners and Herbalists now get a reminder when Find Minerals or Find Herbs isn't on. Click the icon to turn it on. It shows in dungeons and raids too, since they have herbs and nodes. If you know both, pick which one the click turns on in the options (Buffs tab, Gathering); either one being on counts. You can turn the reminder off there too.

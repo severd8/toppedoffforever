@@ -60,6 +60,7 @@ assert(TO.built, "frames not built")
 assertEq(TO.char.customAlways, true, "quick-use bar on by default")
 TO.char.customAlways = false   -- most scenarios below test the "only when low" behavior
 assertEq(TO.db.iconSize, 40, "old default icon size upgraded")
+assertEq(TO.db.iconAlign, "left", "icons line up on the left by default, so nothing moves for anyone")
 assert(lastLog("ToppedOff Forever|r loaded"), "login message")
 fire("PLAYER_ENTERING_WORLD")
 tick()
@@ -2869,5 +2870,70 @@ TO:SetEnabled("track", true)
 TO:OpenConfig(); TO:BuildChecksList()
 TO.char.prefs.track = nil; STATE.tracking = nil
 SPELLBOOK, FUTURE = {}, {}; fire("SPELLS_CHANGED"); refresh()
+
+step("icon alignment: left by default, or centered")
+TO.db.iconAlign = "left"   -- the options test above clicked through the choices
+TO.char.locked, TO.db.onlyInInstance, TO.db.iconSize, TO.db.iconsPerRow = false, false, 40, 2
+local three = { { id = "a", label = "A" }, { id = "b", label = "B" }, { id = "c", label = "C" } }
+local function xOf(i) return TO.buttons[i].__pos[1] end
+TO:Layout(three)
+assertEq(TO.main.__size[1], 84, "two per row: two icons wide")
+assertEq(xOf(1) .. "," .. xOf(2) .. "," .. xOf(3), "0,44,0", "left: each row starts at the left edge")
+TO.db.iconAlign = "center"
+TO:Layout(three)
+assertEq(TO.main.__size[1], 84, "centering doesn't change the frame's size")
+assertEq(xOf(1) .. "," .. xOf(2) .. "," .. xOf(3), "0,44,22", "center: the short row sits in the middle")
+TO.db.iconAlign = "right"
+TO:Layout(three)
+assertEq(xOf(1) .. "," .. xOf(2) .. "," .. xOf(3), "0,44,44", "right: the short row ends at the right edge")
+TO.db.iconAlign = "center"
+TO.db.iconsPerRow = 8
+TO:Layout({ { id = "a", label = "A" } })
+assertEq(xOf(1), 22, "center: one icon in the middle of the two-icon-wide frame")
+TO:Layout({ { id = "a", label = "A" }, { id = "b", label = "B" } })
+assertEq(xOf(1) .. "," .. xOf(2), "0,44", "a full row is the same either way")
+-- Buffs and things to top off are separate rows: each is centered on its own
+local mixed = { { id = "buff:x", label = "X", kind = "buff" }, { id = "b", label = "B" }, { id = "c", label = "C" },
+    { id = "d", label = "D" } }
+local isBuff = TO.IsBuffReminder
+TO.IsBuffReminder = function(_, r) return r.kind == "buff" end
+TO:Layout(mixed)
+TO.IsBuffReminder = isBuff
+assertEq(TO.main.__size[1], 128, "three to top off: three icons wide")
+assertEq(xOf(1), 44, "the lone buff is centered over them")
+assertEq(xOf(2) .. "," .. xOf(3) .. "," .. xOf(4), "0,44,88", "the full row fills the width")
+TO.db.iconAlign = "middle"   -- not a choice: treated as left
+TO:Layout({ { id = "a", label = "A" } })
+assertEq(xOf(1), 0, "an unknown value lines up on the left")
+-- The combat bar follows the setting too
+TO.db.iconAlign = "center"; TO.db.shown = true; TO.db.hideInCombat = true; TO.db.combatBar = true
+TO.mainSize = { 172, 40 }
+local combatItems = TO.CombatItems
+TO.CombatItems = function() return { { id = 141, name = "Healing Potion", slot = { label = "Healing potion" } } } end
+TO:LayoutCombatBar()
+assertEq(TO.combat.__size[1], 172, "combat bar: as wide as the reminders")
+assertEq(TO.combat.buttons[1].__pos[1], 66, "combat bar: its potion is centered")
+TO.db.iconAlign = "right"; TO:LayoutCombatBar()
+assertEq(TO.combat.buttons[1].__pos[1], 132, "combat bar: on the right")
+TO.db.iconAlign = "left"; TO:LayoutCombatBar()
+assertEq(TO.combat.buttons[1].__pos[1], 0, "combat bar: left again")
+TO.CombatItems = combatItems
+-- The option on the Display tab
+if not TO.config:IsShown() then TO:OpenConfig() end
+TO:ShowOptionsTab("display")
+local alignDD
+for _, f in ipairs(ALL_FRAMES) do if f.isAlign then alignDD = f end end
+assert(alignDD, "Display tab has an Icon alignment choice")
+TO:OpenConfig(); TO:OpenConfig()
+assertEq(alignDD:GetText(), "Left", "shows Left by default")
+click(alignDD)
+assertEq(TO.db.iconAlign, "center", "picking Center saves it")
+assertEq(alignDD:GetText(), "Center", "and shows it")
+click(alignDD)
+assertEq(TO.db.iconAlign, "right", "then Right")
+assertEq(alignDD:GetText(), "Right", "and shows it")
+click(alignDD)
+assertEq(TO.db.iconAlign, "left", "and back to Left")
+TO.db.iconsPerRow = 8
 
 print("ALL TESTS PASSED")

@@ -1063,11 +1063,24 @@ local function BuildDisplayTab(p)
     reset:SetScript("OnClick", function() SlashCmdList.TOPPEDOFFFOREVER("reset") end)
     T.Note(rem, "Position changes wait until combat ends.", 154, -119)
 
-    local size = Card(p, "Size", 0, -160, PAGE_W, 80)
+    local size = Card(p, "Size and layout", 0, -160, PAGE_W, 110)
     Slider(size, "Icon size", 12, -30, "iconSize", 20, 64, nil, "How big the reminder icons are.")
     Slider(size, "Icons per row", 284, -30, "iconsPerRow", 4, 16, nil,
         "Buffs, and things to top off, each wrap onto a new row after this many.")
-    local warn = Card(p, "Warnings", 0, -250, PAGE_W, 80)
+    T.RowLabel(size, "Icon alignment", 12, -72)
+    local align = T.Dropdown(size, 120, { "left", "center", "right" },
+        { left = "Left", center = "Center", right = "Right" },
+        function()
+            local a = TO.db.iconAlign
+            return (a == "center" or a == "right") and a or "left"
+        end,
+        function(v) TO.db.iconAlign = v TO:ApplySettings() end)
+    align:SetPoint("TOPLEFT", 136, -72)
+    align.isAlign = true
+    T.Tooltip(align, "Icon alignment", "Left: icons fill each row from the left. Center: each row sits in the "
+        .. "middle of the frame. Right: each row ends at the right edge. The combat bar follows it too.")
+    AddRefresher(align.Refresh)
+    local warn = Card(p, "Warnings", 0, -280, PAGE_W, 80)
     Slider(warn, "Warn before buffs run out", 12, -30, "warnMinutes", 1, 10, " min",
         "Buffs, weapon enhancements, elixirs, Well Fed and party buffs get an orange border this long before "
         .. "they run out, and a red one near the end. Change it for one buff with its Warn box on the Buffs tab.")

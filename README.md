@@ -6,7 +6,7 @@
 
 ToppedOff Forever is a reminder addon for **World of Warcraft: Forever**. It watches your own character and shows a small icon only when something needs topping off: a buff that's missing or about to run out, a weapon without its poison or oil, low reagents, low ammo, or worn-out gear. Click the icon and it's fixed.
 
-Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhancements, Well Fed, Well-Rested, elixirs, pet, Soulstone), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, your own items, conjures, Healthstone, bag space, repairs). Long rows wrap after 8 icons (change it with "Icons per row").
+Icons sit in two groups: **buffs** on top (your buffs, party buffs, weapon enhancements, Well Fed, Well-Rested, elixirs, pet, Soulstone), and **things to top off** below a gold divider (reagents, ammo, food, water, bandages, potions, your own items, conjures, Healthstone, bag space, repairs). Long rows wrap after 8 icons (change it with "Icons per row"), and rows line up on the left, in the center or on the right ("Icon alignment").
 
 ---
 
@@ -53,7 +53,7 @@ Your class's checks are set up automatically. Type `/topoff check` to see them.
 | **Supplies** | The best food, water, bandage and potions in your bags, Healthstone, stat food choice, conjured food, water and mana gem (Mages), your own items (and which go on the combat bar), the quick-use bar and its glow, reagents and ammo (and the most Soul Shards), vendor restock, repair and the bank list |
 | **Pet & gear** (Hunters and Warlocks), **Gear & bags** (everyone else) | Pet, Soulstone (Warlocks), durability and bag space |
 | **Profiles** | Separate checks outside dungeons, copy another character |
-| **Display** | Show reminders, lock, show header and frame, show only in instances, hide in combat, keep potions in combat, Reset position, icon size, icons per row, warning time for buffs, durability warning % |
+| **Display** | Show reminders, lock, show header and frame, show only in instances, hide in combat, keep potions in combat, Reset position, icon size, icons per row, icon alignment (left, center or right), warning time for buffs, durability warning % |
 | **General** | Chat reminders and sound, minimap icon, List my checks, the slash commands |
 
 The first four tabs are saved per character. Display and General are shared by all your characters, except where the reminders sit and whether they're locked, which each character keeps for itself.
