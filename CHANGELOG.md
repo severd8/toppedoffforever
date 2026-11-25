@@ -1,3 +1,7 @@
+## 1.18.0
+
+- **Thorns on tanks only.** Druids can now limit the Thorns reminder to tanks: turn on "Only on tanks" under Thorns in the options (Buffs tab, Party buffs). The party reminder then only counts party members who picked the Tank role, and your own Thorns reminder only shows when you're the tank (you picked the Tank role in the group). It's off by default, so nothing changes unless you turn it on.
+
 ## 1.17.0
 
 - **Center or right-align your icons.** New "Icon alignment" choice on the Display tab (Size and layout): Left, Center or Right. Left is the default, so nothing moves unless you change it. With Center, each row of icons sits in the middle of the frame, so a short row of buffs lines up neatly over a longer row of supplies; with Right, rows end at the right edge. The in-combat potion bar follows the same setting.

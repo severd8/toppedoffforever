@@ -510,6 +510,15 @@ local function BuildBuffsTab(self, ctx, class)
                 end
                 if buff.group then anyGroup = true end
                 ctx.row()
+                if buff.tankOnly then
+                    -- Thorns: only on tanks (you too, on the Your buffs list)
+                    ctx.charCheck("Only on tanks", buff.tankOnly, SUB,
+                        "Only remind you to put " .. buff.label .. " on tanks: party members who picked the Tank "
+                        .. "role, and you when you're the tank (you picked the Tank role in the group). "
+                        .. "Covers your own " .. buff.label .. " reminder too.",
+                        function() return on("party:" .. buff.id, not buff.off) or on("buff:" .. buff.id, not buff.off) end)
+                    ctx.row()
+                end
             end
             local function anyOn()
                 for _, buff in ipairs(partyBuffs) do

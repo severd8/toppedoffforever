@@ -80,7 +80,8 @@ TO.CLASS_BUFFS = {
         { id = "motw", label = "Mark of the Wild", cast = { "Mark of the Wild" },
           auras = { "Mark of the Wild", "Gift of the Wild" }, party = true,
           group = { spell = "Gift of the Wild", items = { "Wild Thornroot", "Wild Berries" } } },
-        { id = "thorns", label = "Thorns", cast = { "Thorns" }, party = true },
+        -- tankOnly: the setting that limits it to tanks (you, and party members with the Tank role)
+        { id = "thorns", label = "Thorns", cast = { "Thorns" }, party = true, tankOnly = "thornsTankOnly" },
         { id = "omen", label = "Omen of Clarity", cast = { "Omen of Clarity" } },
     },
     WARLOCK = {
@@ -258,6 +259,7 @@ local CHAR_DEFAULTS = {       -- per character: what to check, and where the rem
     wholeRaid = false,        -- party buffs, blessings and Soulstone look at the whole raid
     partyExpiring = true,     -- party buffs and blessings also show when running out on someone
     groupBuffs = true,        -- cast the group version (Prayer of Fortitude...) when enough need it
+    thornsTankOnly = false,   -- Druid: Thorns only on tanks (you when you're the tank, Tank-role party members)
     restockAtVendor = true,   -- restock list at vendors
     bankRestock = true,       -- list of what to take from the bank, beside the bank window
     repairAtVendor = true,    -- repair button at vendors
@@ -735,11 +737,23 @@ function TO:WeaponConfig()
     return { kind = "item", mh = w.mh or def.mh or "", oh = w.oh or def.oh or "" }
 end
 
+-- A buff limited to tanks (Thorns with "Only on tanks"): is this unit one? You count when
+-- you're the tank (TO:IsTank); party members by the role they picked. A hidden role isn't
+-- a tank, so nothing is guessed.
+function TO:TankOnly(buff)
+    return buff.tankOnly ~= nil and self.char[buff.tankOnly] == true
+end
+function TO:BuffWantedOn(buff, unit)
+    if not self:TankOnly(buff) then return true end
+    if unit == "player" then return self:IsTank() end
+    return Str(UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)) == "TANK"
+end
+
 function TO:CheckBuffs(list)
     for _, buff in ipairs(self.CLASS_BUFFS[self:PlayerClass()] or {}) do
         local id = "buff:" .. buff.id
         local spell = self:BuffPreference(buff)
-        if spell and self:IsEnabled(id, not buff.off) then
+        if spell and self:IsEnabled(id, not buff.off) and self:BuffWantedOn(buff, "player") then
             local warn = self:WarnSecs(id)
             local left = LongestLeft(self.buffs, buff.auras or buff.cast)
             local r
@@ -1500,9 +1514,9 @@ function TO:PartyNeeding(buff, warn)
         local left = LongestLeft(buffs, buff.auras or buff.cast)
         return not left or (left > 0 and left < warn)
     end
-    if needs(self.buffs) then count = count + 1 end
+    if self:BuffWantedOn(buff, "player") and needs(self.buffs) then count = count + 1 end
     for _, u in ipairs(PartyUnits()) do
-        local usable = CanBeBuffed(u)
+        local usable = CanBeBuffed(u) and self:BuffWantedOn(buff, u)
         if usable and buff.skip then
             local _, cls = UnitClass(u)
             cls = Str(cls)
@@ -1534,7 +1548,7 @@ function TO:CheckPartyBuffs(list)
             local missing, expiring, target, soonest, soonTarget = {}, {}, nil, nil, nil
             local needWho = {}   -- whispered on Ctrl + click
             for _, u in ipairs(units) do
-                local usable = CanBeBuffed(u)
+                local usable = CanBeBuffed(u) and self:BuffWantedOn(buff, u)
                 if usable and buff.skip then
                     local _, cls = UnitClass(u)
                     cls = Str(cls)
@@ -2292,7 +2306,7 @@ end
 TO.COPY_FIELDS = { "checks", "checksOutside", "splitProfiles", "prefs", "mins", "weapon", "custom",
     "customAlways", "statFocus", "wellFedInstanceOnly", "elixirs", "elixirInstanceOnly",
     "soulstoneInstanceOnly", "petFood", "blessings", "wholeRaid", "restockAtVendor", "repairAtVendor",
-    "partyExpiring", "groupBuffs", "bankRestock", "warn", "glowLow",
+    "partyExpiring", "groupBuffs", "thornsTankOnly", "bankRestock", "warn", "glowLow",
     "whisperOffer", "offerMessage", "askBuffs", "askMessage" }
 
 local function DeepCopy(v)

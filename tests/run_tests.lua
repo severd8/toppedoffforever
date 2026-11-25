@@ -1600,6 +1600,26 @@ refresh()   -- must not error
 assertEq(TO.buffs["thorns"] ~= nil, true, "last readable buffs kept")
 assertEq(ids()["party:thorns"], nil, "party auras hidden: no guessing")
 STATE.aurasLocked = false; STATE.party = {}
+step("Thorns only on tanks")
+STATE.party = { "party1", "party2", "party3" }; STATE.partyClass = {}; STATE.roles = { party2 = "TANK" }
+STATE.partyBuffs = { party1 = { ["Mark of the Wild"] = 900 }, party2 = { ["Mark of the Wild"] = 900 },
+    party3 = { ["Mark of the Wild"] = 900 } }
+STATE.buffs = { ["Mark of the Wild"] = 1800 }
+TO.char.thornsTankOnly = false; refresh()
+assertEq(ids()["party:thorns"] and ids()["party:thorns"].text, "3", "setting off: everyone missing Thorns counts")
+assertEq(ids()["buff:thorns"] ~= nil, true, "setting off: your own Thorns reminder shows")
+TO.char.thornsTankOnly = true; refresh()
+local tth = ids()["party:thorns"]
+assertEq(tth and tth.text, "1", "tanks only: just the tank counts")
+assertEq(tth.action.unit, "party2", "click puts Thorns on the tank")
+assertEq(ids()["buff:thorns"], nil, "tanks only: no Thorns on yourself when you aren't the tank")
+assertEq(ids()["party:motw"], nil, "other party buffs aren't affected (all have Mark)")
+STATE.roles = { player = "TANK" }; refresh()
+assertEq(ids()["buff:thorns"] ~= nil, true, "you're the tank: your own Thorns reminder shows")
+assertEq(ids()["party:thorns"], nil, "no other tanks: no party Thorns reminder")
+STATE.roles = { party2 = "TANK" }; STATE.partyBuffs.party2["Thorns"] = 600; refresh()
+assertEq(ids()["party:thorns"], nil, "the tank has Thorns: nothing to do")
+TO.char.thornsTankOnly = false; STATE.roles = {}; STATE.party = {}; STATE.buffs = {}
 step("errors reported once")
 local reported = 0
 geterrorhandler = function() return function() reported = reported + 1 end end
