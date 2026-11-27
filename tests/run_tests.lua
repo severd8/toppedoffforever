@@ -2956,4 +2956,113 @@ click(alignDD)
 assertEq(TO.db.iconAlign, "left", "and back to Left")
 TO.db.iconsPerRow = 8
 
+step("Forever stat food: every Well Fed stat, from the game's own tooltips")
+-- Real WoW Forever "Use:" lines (Wowhead's WoW Forever item tooltips), one per wording
+local FS = "Must remain seated while eating. If you spend at least 10 sec eating, you will become well fed and gain "
+local XP = " for 15 min. Additionally, experience gained from kills is increased by 5%."
+local DRINK = "Must remain seated while drinking. If you spend at least 10 sec eating, you will become well fed and gain "
+local FOREVER_FOOD = {
+    -- id, name, use line, stat, amount (nil = not stat food)
+    { 13928, "Grilled Squid", "Restores 2065 health over 30 sec. " .. FS .. "1% Critical Strike chance" .. XP, "crit", 1 },
+    { 13929, "Hot Smoked Bass", "Restores 2065 health over 30 sec. " .. FS .. "1% Critical Strike chance" .. XP, "crit", 1 },
+    { 13934, "Mightfish Steak", "Restores 2065 health over 30 sec. " .. FS .. "40 Attack Power" .. XP, "ap", 40 },
+    { 13935, "Baked Salmon", "Restores 2065 health over 30 sec. " .. FS .. "28 Spell Damage" .. XP, "sp", 28 },
+    { 250071, "Steaming Stag Steak", "Restores 2065 health over 30 sec. " .. FS .. "20 Strength" .. XP, "str", 20 },
+    { 250072, "Swiftstrike Steak", "Restores 2065 health over 30 sec. " .. FS .. "20 Agility" .. XP, "agi", 20 },
+    { 250068, "Savory Turtle Stew", "Restores 2065 health over 30 sec. " .. FS .. "20 Stamina" .. XP, "sta", 20 },
+    { 250075, "Prehistoric Pulled Raptor", "Restores 2065 health over 30 sec. " .. FS .. "20 Intellect" .. XP, "int", 20 },
+    { 249870, "Sage's Tea", "Restores 2821 mana over 30 sec. " .. DRINK .. "44 Healing Power" .. XP, "heal", 44 },
+    { 249876, "Wicked Smoothie", "Restores 2821 mana over 30 sec. " .. DRINK .. "20 Spirit" .. XP, "spi", 20 },
+    { 286152, "Plated Armorfish", "Restores 1338 health over 30 sec. Must remain seated while eating. If you spend at least 10 sec eating you will become well fed and gain 150 Armor" .. XP, "armor", 150 },
+    { 238638, "Filet o' Flank", "Restores 2452 health over 30 sec. Must remain seated while eating. If you spend at least 10 sec eating you will become Well Fed and gain 25 Agility and 10 Stamina for 15 min.", "agi", 25 },
+    { 21023, "Dirge's Kickin' Chimaerok Chops", "Restores 2452 health over 30 sec. Must remain seated while eating. If you spend at least 10 seconds eating you will become well fed and gain 25 Stamina for 15 min.", "sta", 25 },
+    { 16971, "Clamlette Surprise", "Restores 1338 health over 30 sec. Must remain seated while eating. If you spend at least 10 seconds eating you will become well fed and gain 12 Stamina and Spirit for 15 min.", "spi", 12 },
+    -- Not stat food: profession skill or movement speed only
+    { 8957, "Spinefin Halibut", "Restores 1338 health over 30 sec. " .. FS .. "18 Fishing Skill" .. XP },
+    { 267341, "Sweetpaw Jam", "Restores 2065 health over 30 sec. " .. FS .. "15% movement speed while in Hyjal" .. XP },
+}
+STATE.class = "ROGUE"; STATE.level = 60; STATE.buffs = {}; STATE.talents = nil; STATE.roles = {}
+TO.char.auto = {}; TO.char.statFocus = nil
+STATE.bags = {}
+for _, f in ipairs(FOREVER_FOOD) do
+    STATE.bags[#STATE.bags + 1] = { id = f[1], name = f[2], count = 5, tip = "Requires Level 55\nUse: " .. f[3] }
+end
+refresh()
+for _, f in ipairs(FOREVER_FOOD) do
+    local k = TO:ItemKind(f[1])
+    if f[4] then
+        assert(k.stats, f[2] .. " is read as stat food")
+        assertEq(k.stats[f[4]], f[5], f[2] .. ": " .. f[4])
+        assertEq(k.food, nil, f[2] .. " isn't taken for plain food")
+        assertEq(k.water, nil, f[2] .. " isn't taken for water")
+    else
+        assertEq(k.stats, nil, f[2] .. " has no stat to track")
+    end
+end
+assertEq(TO:ItemKind(238638).stats.sta, 10, "Filet o' Flank: both stats")
+assertEq(TO:ItemKind(16971).stats.sta, 12, "Clamlette Surprise: Stamina and Spirit")
+assertEq(TO:ItemKind(8957).food, 1338, "Fishing food is still food")
+assertEq(TO.STAT_LABELS.crit, "Critical strike", "Critical strike in the stat food choice")
+assertEq(TO.STAT_LABELS.armor, "Armor", "Armor in the stat food choice")
+-- Rogue: Agility first, then critical strike
+assertEq(TO.char.auto.statfood.name, "Filet o' Flank", "rogue: the best Agility food")
+local function without(...)
+    local drop = {}
+    for _, id in ipairs({ ... }) do drop[id] = true end
+    local out = {}
+    for _, b in ipairs(STATE.bags) do if not drop[b.id] then out[#out + 1] = b end end
+    STATE.bags = out
+end
+without(238638, 250072)
+TO.char.auto = {}; refresh()
+assertEq(TO:ItemKind(13928).stats.crit, 1, "Grilled Squid read")
+assert(TO.char.auto.statfood.name == "Grilled Squid" or TO.char.auto.statfood.name == "Hot Smoked Bass",
+    "rogue without Agility food: the critical strike food")
+assertEq(TO.autoHave.statfood, 10, "Grilled Squid and Hot Smoked Bass count together")
+-- Critical strike can be picked; a Warrior takes it after Strength
+STATE.class = "WARRIOR"; TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.statfood.name, "Steaming Stag Steak", "warrior: Strength first")
+TO:SetStatFocus("crit"); refresh()
+assert(TO.char.auto.statfood.name == "Grilled Squid" or TO.char.auto.statfood.name == "Hot Smoked Bass",
+    "Critical strike picked: the squid")
+TO:SetStatFocus(nil)
+without(250071); TO.char.auto = {}; refresh()
+assert(TO.char.auto.statfood.name == "Grilled Squid" or TO.char.auto.statfood.name == "Hot Smoked Bass",
+    "warrior: critical strike before attack power")
+-- Healers take the tea; it isn't their water
+STATE.class = "PRIEST"; STATE.talents = { { "Discipline", 21 }, { "Holy", 30 }, { "Shadow", 0 } }
+TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.statfood.name, "Sage's Tea", "holy priest: the healing tea")
+assertEq(TO.char.auto.water, nil, "stat tea and smoothie aren't counted as water")
+-- Tanks: armor food counts
+STATE.class = "PALADIN"; STATE.talents = { { "Holy", 0 }, { "Protection", 31 }, { "Retribution", 5 } }
+STATE.bags = { { id = 286152, name = "Plated Armorfish", count = 5, tip = "Use: " .. FOREVER_FOOD[11][3] } }
+TO.char.auto = {}; refresh()
+assertEq(TO.char.auto.statfood.name, "Plated Armorfish", "protection paladin: armor food")
+STATE.talents = nil; STATE.bags = {}; TO.char.auto = {}; refresh()
+
+step("Forever elixirs and flasks without Elixir or Flask in their name")
+STATE.class = "WARRIOR"
+STATE.bags = { { id = 8410, name = "R.O.I.D.S.", count = 2, spell = "Rage of Ages" },
+    { id = 20079, name = "Spirit of Zanza", count = 1, spell = "Spirit of Zanza" },
+    { id = 246948, name = "Distilled Firewater", count = 3, spell = "Distilled Firewater" },
+    { id = 274274, name = "Flask of Natural Aggression", count = 1, spell = "Natural Aggression" },
+    { id = 2593, name = "Flask of Stormwind Tawny", count = 4 },
+    { id = 2287, name = "Haunch of Meat", count = 4 } }
+refresh()
+local names = {}
+for _, e in ipairs(TO:BagElixirs()) do names[e.name] = true end
+assert(names["R.O.I.D.S."], "R.O.I.D.S. listed")
+assert(names["Spirit of Zanza"], "Spirit of Zanza listed")
+assert(names["Distilled Firewater"], "Distilled Firewater listed")
+assert(names["Flask of Natural Aggression"], "Forever flask listed")
+assertEq(names["Flask of Stormwind Tawny"], nil, "Flask of Stormwind Tawny is just a drink")
+assertEq(names["Haunch of Meat"], nil, "food isn't an elixir")
+TO.char.elixirs = {}; TO.char.elixirInstanceOnly = false
+TO:TrackElixir("R.O.I.D.S.", true); refresh()
+assert(ids()["elixir:r.o.i.d.s."], "R.O.I.D.S. missing: reminder")
+STATE.buffs = { ["Rage of Ages"] = 3000 }; refresh()
+assertEq(ids()["elixir:r.o.i.d.s."], nil, "its buff found by its spell name")
+TO.char.elixirs = {}; TO.char.elixirInstanceOnly = true; STATE.buffs = {}; STATE.bags = {}; refresh()
+
 print("ALL TESTS PASSED")

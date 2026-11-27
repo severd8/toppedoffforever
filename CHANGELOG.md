@@ -1,3 +1,10 @@
+## 1.19.0
+
+- **Grilled Squid and every other Forever stat food.** In WoW Forever, Grilled Squid and Hot Smoked Bass give 1% critical strike chance instead of Agility. ToppedOff didn't understand that, so it treated them as plain food. Now critical strike food counts as stat food. Rogues, Hunters, Warriors and other melee pick it right after their main stat (Agility or Strength), and you can choose "Critical strike" in the stat food choice (Supplies tab).
+- **Checked against the whole Forever food list.** Every food and drink that makes you Well Fed in Forever is recognised: Strength, Agility, Stamina, Intellect and Spirit foods, attack power, spell damage and healing power foods, and Plated Armorfish's armor (picked for tanks, or choose "Armor").
+- **Healing teas and spirit smoothies.** Sage's Tea, Sunny Tea, Wicked Smoothie and the rest are tracked as stat food for healers. They no longer also take the place of your water.
+- **All elixirs and flasks are listed.** The Buffs tab now lists elixirs and flasks that don't have "Elixir" or "Flask" in their name, like R.O.I.D.S., Gizzard Gum, Ground Scorpok Assay, Spirit of Zanza and Distilled Firewater, so you can track them too. Flask of Stormwind Tawny (just a drink) is no longer listed.
+
 ## 1.18.0
 
 - **Thorns on tanks only.** Druids can now limit the Thorns reminder to tanks: turn on "Only on tanks" under Thorns in the options (Buffs tab, Party buffs). The party reminder then only counts party members who picked the Tank role, and your own Thorns reminder only shows when you're the tank (you picked the Tank role in the group). It's off by default, so nothing changes unless you turn it on.

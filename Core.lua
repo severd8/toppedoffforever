@@ -992,19 +992,21 @@ TO.MANA_CLASSES = { DRUID = true, HUNTER = true, MAGE = true, PALADIN = true, PR
     SHAMAN = true, WARLOCK = true }
 
 -- Stat food: which Well Fed stats matter, best first
-TO.STAT_KEYS = { "str", "agi", "ap", "sta", "int", "spi", "mp5", "sp", "heal" }
-TO.STAT_LABELS = { str = "Strength", agi = "Agility", ap = "Attack power", sta = "Stamina", int = "Intellect",
-    spi = "Spirit", mp5 = "Mana regen", sp = "Spell power", heal = "Healing" }
+-- (Forever's Grilled Squid and Hot Smoked Bass give 1% critical strike chance: "crit";
+-- Plated Armorfish gives armor.)
+TO.STAT_KEYS = { "str", "agi", "crit", "ap", "sta", "int", "spi", "mp5", "sp", "heal", "armor" }
+TO.STAT_LABELS = { str = "Strength", agi = "Agility", crit = "Critical strike", ap = "Attack power", sta = "Stamina",
+    int = "Intellect", spi = "Spirit", mp5 = "Mana regen", sp = "Spell power", heal = "Healing", armor = "Armor" }
 TO.CLASS_STATS = {
-    WARRIOR = { "str", "ap", "sta", "agi" },
-    ROGUE   = { "agi", "ap", "str", "sta" },
-    HUNTER  = { "agi", "int", "mp5", "sta" },
+    WARRIOR = { "str", "crit", "ap", "sta", "agi", "armor" },
+    ROGUE   = { "agi", "crit", "ap", "str", "sta" },
+    HUNTER  = { "agi", "crit", "int", "mp5", "sta" },
     MAGE    = { "sp", "int", "mp5", "spi", "sta" },
     WARLOCK = { "sp", "int", "sta", "spi", "mp5" },
     PRIEST  = { "heal", "mp5", "int", "spi", "sp", "sta" },
-    SHAMAN  = { "heal", "mp5", "int", "sta", "str", "ap" },
-    PALADIN = { "sta", "str", "ap", "heal", "mp5", "int" },
-    DRUID   = { "sta", "agi", "str", "ap", "heal", "int" },
+    SHAMAN  = { "heal", "mp5", "int", "sta", "str", "crit", "ap" },
+    PALADIN = { "sta", "str", "crit", "ap", "heal", "mp5", "int", "armor" },
+    DRUID   = { "sta", "agi", "str", "crit", "ap", "heal", "int", "armor" },
 }
 local STAT_WORDS = { strength = "str", agility = "agi", stamina = "sta", intellect = "int", spirit = "spi" }
 
@@ -1018,11 +1020,11 @@ TO.SPEC_ROLES = {
 TO.ROLE_STATS = {
     PRIEST  = { healer = { "heal", "mp5", "int", "spi", "sta" }, caster = { "sp", "int", "sta", "spi", "mp5" } },
     SHAMAN  = { healer = { "heal", "mp5", "int", "sta" }, caster = { "sp", "int", "mp5", "sta" },
-                melee = { "str", "ap", "agi", "sta", "int" } },
+                melee = { "str", "crit", "ap", "agi", "sta", "int" } },
     DRUID   = { healer = { "heal", "mp5", "int", "spi" }, caster = { "sp", "int", "mp5", "sta" },
-                tank = { "sta", "agi", "str", "ap" }, melee = { "agi", "str", "ap", "sta" } },
-    PALADIN = { healer = { "heal", "mp5", "int", "sta" }, tank = { "sta", "str", "ap", "agi" },
-                melee = { "str", "ap", "sta", "agi" } },
+                tank = { "sta", "agi", "str", "armor", "ap" }, melee = { "agi", "str", "crit", "ap", "sta" } },
+    PALADIN = { healer = { "heal", "mp5", "int", "sta" }, tank = { "sta", "str", "armor", "ap", "agi" },
+                melee = { "str", "crit", "ap", "sta", "agi" } },
 }
 TO.ROLE_LABELS = { healer = "Healer", caster = "Caster", tank = "Tank", melee = "Melee" }
 
@@ -1240,12 +1242,18 @@ function TO:EnglishKind(text, k)
         local heal = wellFed:match("(%d+) bonus healing") or wellFed:match("(%d+) healing")
             or wellFed:match("healing done[^%d]*(%d+)")
         if heal then stats.heal = tonumber(heal); any = true end
+        -- Forever: "gain 1% critical strike chance" (Grilled Squid), "gain 150 armor" (Plated Armorfish)
+        local crit = wellFed:match("(%d+)%% critical strike") or wellFed:match("(%d+)%% chance to critically")
+        if crit then stats.crit = tonumber(crit); any = true end
+        local armor = wellFed:match("(%d+) armor")
+        if armor then stats.armor = tonumber(armor); any = true end
         if any then k.stats = stats end
     end
     local hp = Amount(text:match("restores " .. AMOUNT .. " health over"))
     local mp = Amount(text:match("restores " .. AMOUNT .. " mana over"))
     if hp and text:find("eating", 1, true) and not k.stats then k.food = hp end
-    if mp and text:find("drinking", 1, true) then k.water = mp end
+    -- Forever's stat teas and smoothies restore mana too; like stat food, they're stat food only
+    if mp and text:find("drinking", 1, true) and not k.stats then k.water = mp end
     local bandage = Amount(text:match("heals " .. AMOUNT .. " damage over"))
     if bandage then k.bandage = bandage end
     -- Potions: "Restores 140 to 180 health." Rejuvenation-style potions (both) are skipped.
@@ -1812,12 +1820,41 @@ function TO:CheckAskBuffs(list)
     end
 end
 
--- Elixirs and flasks: the ones you picked in the options, tracked like buffs
+-- Elixirs and flasks: the ones you picked in the options, tracked like buffs.
+-- Forever's elixirs and flasks by item ID (Wowhead's WoW Forever Elixirs and Flasks
+-- lists), so the ones without "Elixir" or "Flask" in their name are listed too
+-- (R.O.I.D.S., Gizzard Gum, Spirit of Zanza, Distilled Firewater, the Draughts, ...).
+TO.ELIXIR_IDS = {
+    [2454] = true, [2457] = true, [2458] = true, [3382] = true, [3383] = true, [3388] = true,
+    [3389] = true, [3390] = true, [3391] = true, [3825] = true, [3826] = true, [3828] = true,
+    [5996] = true, [5997] = true, [6373] = true, [6662] = true, [8410] = true, [8411] = true,
+    [8412] = true, [8423] = true, [8424] = true, [8529] = true, [8827] = true, [8949] = true,
+    [8951] = true, [9088] = true, [9154] = true, [9155] = true, [9179] = true, [9187] = true,
+    [9206] = true, [9224] = true, [9233] = true, [9264] = true, [10592] = true, [12820] = true,
+    [13445] = true, [13447] = true, [13452] = true, [13453] = true, [13454] = true, [13510] = true,
+    [13511] = true, [13512] = true, [13513] = true, [17708] = true, [18294] = true, [20004] = true,
+    [20007] = true, [20079] = true, [20080] = true, [20081] = true, [21546] = true, [246948] = true,
+    [247754] = true, [247755] = true, [250327] = true, [250328] = true, [250329] = true, [250330] = true,
+    [250331] = true, [250332] = true, [250333] = true, [250334] = true, [250335] = true, [250336] = true,
+    [250337] = true, [250338] = true, [250339] = true, [250340] = true, [250341] = true, [250342] = true,
+    [250343] = true, [250344] = true, [250345] = true, [250346] = true, [250347] = true, [250348] = true,
+    [250349] = true, [250350] = true, [250351] = true, [250353] = true, [250354] = true, [274273] = true,
+    [274274] = true, [274275] = true, [274276] = true,
+}
+-- Named like a flask but just a drink
+TO.NOT_ELIXIR_IDS = { [2593] = true }   -- Flask of Stormwind Tawny
+
+function TO:IsElixirItem(id, name)
+    if id and self.NOT_ELIXIR_IDS[id] then return false end
+    if id and self.ELIXIR_IDS[id] then return true end
+    local n = (name or ""):lower()
+    return n:find("elixir", 1, true) ~= nil or n:find("flask", 1, true) ~= nil
+end
+
 function TO:BagElixirs()
     local out = {}
     for _, e in pairs(self.bag or {}) do
-        local n = e.name:lower()
-        if n:find("elixir", 1, true) or n:find("flask", 1, true) then out[#out + 1] = e end
+        if self:IsElixirItem(e.id, e.name) then out[#out + 1] = e end
     end
     table.sort(out, function(a, b) return a.name < b.name end)
     return out
